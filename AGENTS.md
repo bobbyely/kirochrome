@@ -36,6 +36,14 @@ Breaking one of these is a design regression, not a style nit.
    user's browser can open a socket to a local server otherwise.
 8. **Wire types live in `packages/shared`** and are imported by both sides.
    Never redeclare a message shape in `server` or `web`.
+9. **Errors are typed, never strings.** Every failure is a `KcError` with a
+   code from the closed enum and a remediation. No empty `catch`, no generic
+   "something went wrong", no discarded `cause`.
+10. **Every RPC has a timeout.** A hung request must become a typed error. A
+    permanent spinner is a bug, not a state.
+11. **A provider is usable only after its setup check passes.** The chat flow
+    does not re-diagnose; it trusts the check. Runtime failures mark the
+    provider `stale` and send the user back to setup.
 
 ## Conventions
 
@@ -64,6 +72,19 @@ Breaking one of these is a design regression, not a style nit.
   swap it for a native module to silence the warning.
 - **Never log `env`** when logging a spawn.
 
+## Debugging
+
+When something misbehaves, in this order:
+
+1. **Read the agent's stderr.** Its stdout is the JSON-RPC channel and carries
+   nothing human-readable; crashes and stack traces go to stderr. The ring
+   buffer is on the session, and its tail is attached to error reports.
+2. **Turn on the frame trace** — `KIROCHROME_TRACE=1` writes every JSON-RPC
+   message in both directions to JSONL. Use it before theorising.
+3. **Re-run the provider check.** It reports the exact rung that failed.
+
+Preserve these three. Removing diagnostics to "clean up" is a regression.
+
 ## Working style
 
 - Research → plan → implement. Read the existing code before adding to it.
@@ -73,3 +94,5 @@ Breaking one of these is a design regression, not a style nit.
   <https://agentclientprotocol.com>** rather than guessing. This project has
   already been rewritten once because of an assumption about a CLI's interface.
 - Verify claims about behaviour by running something. "Should work" is not done.
+- **When adding a failure path, add an error code and remediation with it.**
+  A new `throw` without a code is incomplete work.

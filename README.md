@@ -23,6 +23,7 @@ parser.
 
 - streaming responses with real markdown and code rendering
 - tool calls, file diffs and permission prompts as UI, not terminal scrollback
+- a setup page that verifies each configured agent before you rely on it
 - every session persisted, resumable and searchable
 - refresh or crash mid-turn without losing anything
 - hung commands killed cleanly, with no orphaned processes

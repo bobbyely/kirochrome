@@ -132,6 +132,8 @@ not the protocol's.
 
 ## Session lifecycle
 
+Only providers that passed their setup check (below) are offered.
+
 ```
 new chat
   → pick provider           → spawn subprocess, `initialize`
@@ -171,6 +173,109 @@ Two more rules that matter:
   server that died without cleaning up.
 - Stop in the UI maps to `session/cancel`, and must remain responsive even
   when the agent is busy.
+
+## Setup and preflight checks
+
+Failures must surface on a **setup page**, not as a mysterious hang inside a
+chat. Configuration is verified up front; once a provider passes, the chat flow
+trusts it and does not re-diagnose.
+
+### The check ladder
+
+A provider check is a **staged probe that reports which rung it fell off**, not
+a boolean. Each stage has its own error code and its own remediation:
+
+| # | Stage | Verifies | Failure code |
+|---|---|---|---|
+| 1 | `resolve` | binary exists at the configured path or on `PATH` | `AGENT_NOT_FOUND` |
+| 2 | `spawn` | the process actually starts | `AGENT_SPAWN_FAILED` |
+| 3 | `initialize` | handshake completes within a timeout | `AGENT_HANDSHAKE_TIMEOUT` |
+| 4 | `version` | agent's `protocolVersion` is one we support | `AGENT_PROTOCOL_MISMATCH` |
+| 5 | `authenticate` | `authMethods` satisfied, if the agent requires it | `AGENT_AUTH_REQUIRED` |
+| 6 | `session` | `session/new` succeeds | `AGENT_SESSION_FAILED` |
+| 7 | `capabilities` | record `loadSession`, prompt capabilities, config options | — |
+
+Then tear the probe session down. Stage 6 is what makes "assume the draft will
+work" safe — it exercises the exact call the draft flow depends on, and returns
+the model list as a side effect, so the setup page can show *which* models a
+provider offers.
+
+Stage 5 matters more than it looks: agents advertise `authMethods` in the
+`initialize` response and return JSON-RPC error **`-32000` (auth required)** if
+the client never calls `authenticate`. Skipping that step is a known way to
+break ACP clients against agents that require login. Catching it at setup turns
+"the chat silently does nothing" into "click Authenticate".
+
+### Persisting results
+
+```sql
+CREATE TABLE provider_checks (
+  provider_id TEXT PRIMARY KEY,
+  status      TEXT NOT NULL,   -- 'ok' | 'failed' | 'stale'
+  stage       TEXT,            -- rung reached
+  error_code  TEXT,
+  detail      TEXT,            -- JSON: capabilities, models, stderr tail
+  checked_at  INTEGER NOT NULL
+);
+```
+
+A provider must be `ok` before it appears in the new-chat provider list. If a
+runtime failure happens anyway — the binary was removed, a token expired — the
+provider is marked `stale` and the error links back to the setup page. Verified
+is a cached fact with a timestamp, not a permanent guarantee.
+
+First run with nothing configured lands on setup.
+
+## Errors and debugging
+
+The dominant failure mode of a project like this is an opaque hang. The design
+treats diagnosability as a feature, not an afterthought.
+
+### Typed errors, never strings
+
+```ts
+type KcError = {
+  code: KcErrorCode      // closed enum in packages/shared
+  stage?: CheckStage     // where in the ladder, if applicable
+  message: string        // what happened
+  remediation?: string   // what the user should do about it
+  detail?: unknown       // structured context
+  cause?: string         // underlying error, preserved
+}
+```
+
+Every code maps to a remediation string. `AGENT_NOT_FOUND` says which path was
+tried and notes that GUI apps often do not inherit shell `PATH` — the exact
+caveat [Kiro's own docs call out](https://kiro.dev/docs/cli/acp/).
+
+### Errors are events
+
+Failures are appended to the event log like any other event. They persist, they
+appear inline in the transcript where they happened, and they are still there
+after a restart. This follows from the log being the source of truth: an error
+the UI renders but never records is an error you cannot debug tomorrow.
+
+### Capture the agent's stderr
+
+**This is the single highest-value debugging lever.** The agent's stdout is the
+JSON-RPC channel and carries nothing human-readable; when it crashes, the stack
+trace goes to **stderr**. Keep a per-session ring buffer of the last ~64KB of
+stderr, attach its tail to any error report, and show it behind a details
+toggle on the setup page.
+
+### Optional protocol trace
+
+`KIROCHROME_TRACE=1` writes every JSON-RPC frame, both directions, to a JSONL
+file. Off by default, trivial to implement, and the difference between guessing
+and knowing when an agent misbehaves.
+
+### Rules
+
+- No empty `catch`. No generic "something went wrong".
+- Every RPC has a timeout; a hung request must become an error, never a
+  permanent spinner.
+- Preserve `cause` when wrapping. Never discard the underlying error.
+- Redact `env` from anything logged.
 
 ## Security
 
