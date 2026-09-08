@@ -1,0 +1,3 @@
+# KiroChrome
+
+@AGENTS.md

@@ -1,164 +1,203 @@
 # KiroChrome — Design
 
-**Status:** proposed, not yet implemented.
-**Date:** 2026-09-09
+**Status:** proposed
+**Last updated:** 2026-09-09
 
 ## Goal
 
 A browser chat UI with the ergonomics of Claude Code / Codex desktop apps —
 streaming output, real markdown and code rendering, tool-call and diff views,
-resumable history — driven by the Kiro CLI.
+and every past session searchable — driven by Kiro CLI and, ideally, any other
+CLI coding agent.
 
-## The constraint that shapes everything
+## Constraints
 
-Kiro CLI is only available on a work machine. Development happens on a personal
-Linux box without it. Therefore:
+1. **Kiro is only on a work machine.** Development happens on a personal Linux
+   box without it. The app must be buildable and testable against a different
+   agent, and switch to Kiro by configuration, not code.
+2. **macOS and Linux first-class**, Windows best-effort.
+3. **Localhost only** in v1. This process spawns things that execute commands.
 
-> The app must be fully buildable and testable against a **fake** agent, and
-> switch to the real Kiro with **configuration, not code**.
+## The key finding: ACP
 
-This is not a "nice to have for testing" — it is the primary development
-workflow. Every phase below must be demoable with the fake backend.
+There is an emerging standard for exactly this problem — the
+[Agent Client Protocol](https://agentclientprotocol.com) (ACP), deliberately
+"LSP, but for coding agents". **JSON-RPC 2.0 over stdio** to a subprocess.
 
-Targets: **macOS and Linux** first-class. Windows is best-effort — it works if
-the underlying CLI does, and we avoid anything that makes it hard (see
-Portability).
+**[Kiro CLI speaks it natively](https://kiro.dev/docs/cli/acp/):** `kiro-cli acp`.
 
-## Architecture
+This removes the largest risk in the project. We do not parse CLI output, strip
+ANSI, or wrap a PTY. We speak a documented protocol and get structured
+streaming, tool calls, permission requests and session loading for free.
+
+It also answers "can this work with any agent?" — Gemini CLI is native, Claude
+Code and Codex have adapters. Supporting a new agent is a config entry naming
+a command, not a new parser.
 
 ```
  browser (React + Vite)
-        │  WebSocket
+        │  WebSocket — our own small message set
         ▼
- server (Node + TypeScript)
-   ├─ SessionManager ─── Session ─── event log (JSONL on disk)
-   │                        │
-   │                        ▼
-   └────────────────── AgentBackend (interface)
-                            ├─ MockBackend   ← development, tests
-                            └─ CliBackend    ← Kiro, configured by a profile
+ server (Node + TypeScript)          ← implements the ACP *Client* role
+   ├─ SessionManager ── Session ── SQLite (append-only events)
+   │                       │
+   │                       │  JSON-RPC 2.0 over stdio
+   │                       ▼
+   │                  agent subprocess  (`kiro-cli acp`)
+   │
+   └─ TerminalRegistry ── child processes the agent asked us to run
 ```
 
-### Key decision 1 — the event log is the source of truth
+Note the server is the **ACP client**. Normally that role is played by an
+editor; here it is played by a web server, and the browser is its front end.
+That mapping is what makes tool-approval UX fall out of the protocol instead of
+being invented.
 
-Every session is an **append-only log of typed events**: user messages,
-assistant text deltas, tool calls, tool results, errors. The server appends;
+## Key decision 1 — the event log is the source of truth
+
+Every session is an **append-only log of typed events**. The server appends;
 the browser is a pure renderer of the log plus a live tail.
 
-Everything good falls out of this one choice:
+Everything good falls out of this one choice: refresh mid-turn and lose
+nothing, restart the server and resume, two tabs on one session, scrollback
+search, replay for debugging. The alternative — holding authoritative state in
+React — makes each of those a separate feature bolted on later, badly.
 
-- refresh the page mid-turn → replay the log, nothing lost
-- restart the server → sessions resume from disk
-- two tabs on one session → both render the same log
-- scrollback search, export, replay for debugging → just reading the log
+**Append-only is a discipline, not a file format.** We store it in SQLite.
 
-The alternative — pushing UI updates and holding state in React — makes each
-of those a separate feature you bolt on later, badly. Storage starts as JSONL
-files (trivial, greppable, human-readable); SQLite only if search demands it.
+## Key decision 2 — SQLite, built into Node
 
-### Key decision 2 — one generic CLI backend, configured by profiles
+Node 22 ships `node:sqlite` with no flag and no native module, with FTS5
+compiled in (verified on the dev machine). That removes the usual reason to
+reach for flat files, and one store beats two stores that must be kept in sync.
 
-Not a class per agent. A single `CliBackend` that takes a **profile**:
-
-```ts
-type Profile = {
-  command: string          // "kiro"
-  args: string[]           // ["chat", "--no-interactive", ...]
-  input: 'argv' | 'stdin'  // how the prompt is delivered
-  parser: 'jsonl' | 'text' // how output is interpreted
-  cwd?: string
-}
+```
+Linux   $XDG_DATA_HOME/kirochrome/kirochrome.db  (~/.local/share/…)
+macOS   ~/Library/Application Support/kirochrome/kirochrome.db
 ```
 
-Profiles live in a config file. Adding Kiro at work is editing config. Adding
-Claude Code or Codex later is editing config. This keeps the surface small
-(KISS) and makes the unknown-Kiro-interface risk cheap to absorb.
+```sql
+CREATE TABLE sessions (
+  id               TEXT PRIMARY KEY,   -- ours
+  agent_session_id TEXT,               -- the agent's, for session/load
+  provider         TEXT NOT NULL,      -- 'kiro' | 'claude-code' | …
+  cwd              TEXT NOT NULL,
+  title            TEXT,
+  status           TEXT NOT NULL,      -- 'draft' | 'active' | 'closed'
+  created_at       INTEGER NOT NULL,
+  updated_at       INTEGER NOT NULL
+);
 
-`PtyBackend` is the escape hatch if Kiro turns out to be interactive-only —
-same interface, added only if the probe proves it necessary.
-
-### The backend interface
-
-```ts
-interface AgentBackend {
-  start(): Promise<void>
-  send(text: string): void          // push user input
-  events: AsyncIterable<AgentEvent> // backend → server
-  interrupt(): void
-  stop(): Promise<void>
-}
-
-type AgentEvent =
-  | { type: 'turn_start';  turnId: string }
-  | { type: 'text_delta';  text: string }
-  | { type: 'tool_call';   id: string; name: string; input: unknown }
-  | { type: 'tool_result'; id: string; ok: boolean; output: string }
-  | { type: 'turn_end';    turnId: string; reason: string }
-  | { type: 'error';       message: string }
+CREATE TABLE events (
+  seq        INTEGER PRIMARY KEY AUTOINCREMENT,  -- global order
+  session_id TEXT NOT NULL REFERENCES sessions(id),
+  ts         INTEGER NOT NULL,
+  type       TEXT NOT NULL,
+  payload    TEXT NOT NULL   -- JSON: the ACP update or our own event
+);
+CREATE INDEX idx_events_session ON events(session_id, seq);
 ```
 
-Deliberately small. It is the *lowest common denominator* of every CLI agent,
-not a mirror of Kiro's feature set. A parser's job is to map messy CLI output
-onto these events; if it can only produce `text_delta`, the app still works.
+`events` is INSERT-only — never UPDATE, never DELETE. `sessions` is a derived
+index that could be rebuilt by replaying `events`, which means a corrupt or
+schema-changed index is a rebuild, not a migration.
 
-## The open question: how Kiro is driven
+`seq` is the resume mechanism: the browser reconnects saying "I have up to
+412", the server runs one query for everything after. That is the whole of
+reconnect.
 
-Unknown until probed. Three possibilities:
+**Do not write a row per token.** A turn emits thousands of
+`AgentMessageChunk` deltas; buffer in memory and flush a coalesced row every
+~250ms.
 
-1. **Structured streaming** (`--output-format json` or similar) — best case,
-   `parser: 'jsonl'`, we get real tool events.
-2. **Headless one-shot** (`kiro chat --no-interactive "prompt"`) — likely.
-   Stateless per turn, so *we* own conversation state and replay it. Clean.
-3. **Interactive TUI only** — needs `PtyBackend`, ANSI stripping,
-   screen-scraping. Brittle; avoid unless forced.
+**Two stores exist, and that is fine.** The agent keeps its own conversation
+state where we cannot see it; we persist its `sessionId` so `session/load` can
+re-hydrate it. Ours is the UI's truth, the agent's is the model's.
 
-`scripts/probe-agent-cli.sh` captures what's needed to decide. Run it on the
-work machine, review the output for anything work-sensitive, bring back the
-file.
+## Key decision 3 — never hardcode providers or models
 
-## Portability
+`session/new` returns the agent's available models and modes. Newer ACP
+generalises this to `configOptions`: a list of `{id, name, category, type,
+currentValue, options[]}` that the client renders as selectors, changeable at
+any point in a session.
 
-- `spawn` with an **args array**, never a shell string — avoids quoting bugs
-  and shell-injection, and behaves the same on all three platforms.
-- **No native modules in v1.** `node-pty` needs a toolchain and is the main
-  thing that breaks Windows installs; it only enters if the probe forces it.
-- Paths via `node:path`; session data under an OS-appropriate data dir.
-- Windows caveat: npm-installed CLIs are `.cmd` shims that `spawn` won't run
-  without `shell: true`. Handled in one place if we get there.
+So the composer's pickers are **data-driven**. We render whatever the agent
+advertises and send back `session/set_config_option` (falling back to
+`session/set_model` / `session/set_mode` for agents on the older API, which is
+what Kiro currently documents). One agent exposes models, another exposes
+reasoning level — same UI code, no per-agent branching.
 
-## Build order
+*Provider* is the exception: it is which binary to spawn, which is our config,
+not the protocol's.
 
-Each phase ends with something demoable against `MockBackend`.
+## Session lifecycle
 
-| Phase | Delivers | Done when |
-|---|---|---|
-| **0** | Probe Kiro; pick the parser strategy | We know which of the 3 modes applies |
-| **1** | Walking skeleton: server + WS + React, one session, plain text streaming | Type a prompt, see tokens arrive |
-| **2** | Event log on disk, reconnect and resume, markdown + syntax highlighting | Refresh mid-turn, lose nothing |
-| **3** | Tool-call cards, file diffs, approval prompts | A tool call renders as a card, not a text blob |
-| **4** | Multiple sessions, tabs, history, search | Switch between two live sessions |
+```
+new chat
+  → pick provider           → spawn subprocess, `initialize`
+                            → `session/new {cwd, mcpServers}`
+                            → returns sessionId + config options
+  → composer shows pickers  → `session/set_config_option` on change
+  → first message sent      → session promoted draft → active, persisted
+  → `session/prompt`        → stream session/update → append events → WS
+  → later: reopen           → `session/load` re-hydrates the agent
+```
 
-Phase 0 can run in parallel with 1 — phase 1 doesn't need real Kiro.
+**The wrinkle:** models are only known *after* `session/new`, so the picker
+cannot be populated before a session exists. Hence **draft sessions** — picking
+a provider creates one immediately so the pickers can populate; it is promoted
+to `active` on first message, and drafts are garbage-collected on startup.
+
+## Robustness: hanging processes
+
+Because we advertise `terminal: true`, the agent delegates command execution to
+us via `terminal/create` / `output` / `wait_for_exit` / `kill` / `release`.
+Process lifecycle is therefore **our** responsibility. Four distinct hazards,
+each needing its own answer:
+
+| Hazard | Answer |
+|---|---|
+| A command the agent asked us to run never exits | `TerminalRegistry` tracks every terminal with a wall-clock cap; on expiry `kill`, capture final output, mark it timed-out. Independent of the agent's own timeout. |
+| A command produces unbounded output | Honour `outputByteLimit`; truncate from the start at a character boundary and set `truncated`. Never buffer without a cap. |
+| Killing a shell leaves orphaned children | Spawn POSIX children `detached: true` and kill the **process group** (`process.kill(-pid, …)`), SIGTERM then SIGKILL after a grace period. Windows uses `taskkill /T /F`. This is the classic bug and the reason "it hangs" survives a naive kill. |
+| The agent subprocess wedges, crashes, or never answers | Timeout every JSON-RPC request. Surface `agent_exited` as an event so the UI shows a dead session instead of a spinner forever. Offer restart + `session/load`. |
+
+Two more rules that matter:
+
+- **A turn is owned by the server, not the socket.** If the browser
+  disconnects mid-turn the turn keeps running and keeps appending; this is the
+  main practical payoff of the event log.
+- **Every child PID is recorded.** On startup, reap orphans from a previous
+  server that died without cleaning up.
+- Stop in the UI maps to `session/cancel`, and must remain responsive even
+  when the agent is busy.
 
 ## Security
 
-v1 binds `127.0.0.1` with no auth. This process spawns an agent that executes
-commands, so:
+- Bind `127.0.0.1` explicitly, never `0.0.0.0`.
+- **Check the WebSocket `Origin` header even on localhost** — any page in your
+  browser can otherwise open a socket to a local server.
+- `chmod 0600` the database; it will hold work conversations and source code.
+- Never log environment variables when logging spawns.
 
-- bind loopback explicitly (not `0.0.0.0`)
-- check WebSocket `Origin` even on localhost — any page in your browser can
-  open a WS to localhost otherwise
-- no secrets in the event log; redact env before logging spawn details
+## Portability
 
-LAN/remote access is deliberately out of scope until after phase 4, and would
-need a shared token at minimum.
+- `spawn` with an **args array**, never a shell string.
+- **No native modules.** `node:sqlite` is built in; `node-pty` is not needed
+  because ACP removed the PTY requirement entirely.
+- Paths via `node:path`; data dir resolved per-OS.
+- `node:sqlite` prints an `ExperimentalWarning` on Node 22 and is stable on 24.
+  Pin via `.nvmrc`; `better-sqlite3` is a near drop-in escape hatch.
 
 ## Rejected alternatives
 
+- **Parsing CLI output / PTY wrapping** — obsolete once ACP exists. Was the
+  original plan; the research killed it.
+- **JSONL files for the event log** — one store beats two. SQLite is free here.
 - **SSE + POST instead of WebSocket** — traffic is genuinely bidirectional
-  (interrupts, approvals, input during a turn). SSE means two channels to keep
-  in sync.
-- **Python/FastAPI backend** — fine on merit, but a TS server shares event type
-  definitions with the React client, which removes a whole class of drift bugs.
-- **Browser talks to Kiro directly** — impossible; a page can't spawn processes.
-- **Electron/desktop wrapper** — the browser *is* the point.
+  (interrupts, approvals, config changes mid-turn).
+- **Python/FastAPI backend** — fine on merit, but a TS server shares event
+  types with the React client and removes a class of drift bugs.
+- **Browser talks to the CLI directly** — impossible; a page cannot spawn
+  processes.
+- **Electron wrapper** — the browser is the point.

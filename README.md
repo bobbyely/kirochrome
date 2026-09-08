@@ -1,24 +1,40 @@
 # KiroChrome
 
-A browser-based chat UI that brings the ergonomics of desktop agent apps
-(Claude Code, Codex) to the [Kiro CLI](https://kiro.dev).
+A browser-based chat UI for CLI coding agents — the ergonomics of desktop apps
+like Claude Code and Codex, in a browser, backed by [Kiro CLI](https://kiro.dev).
 
-**Status:** early — design phase.
+**Status:** design complete, implementation not started.
 
-## Idea
+## How it works
 
-Run a small local server that owns a Kiro CLI session and streams it to a
-browser client, so you get:
+Kiro CLI speaks the [Agent Client Protocol](https://agentclientprotocol.com)
+(ACP) — JSON-RPC 2.0 over stdio, the "LSP for coding agents". So KiroChrome is
+an ACP client with a web front end:
 
-- streaming responses with proper markdown/code rendering
-- tool-call and diff views instead of raw terminal scrollback
-- session history you can scroll, search and resume
-- multiple concurrent sessions/tabs
+```
+browser (React) ──WebSocket──▶ local server ──JSON-RPC/stdio──▶ kiro-cli acp
+```
+
+Because ACP is a standard, the same UI drives Gemini CLI natively, and Claude
+Code or Codex through adapters. Adding a provider is a config entry, not a
+parser.
+
+## What it gives you
+
+- streaming responses with real markdown and code rendering
+- tool calls, file diffs and permission prompts as UI, not terminal scrollback
+- every session persisted, resumable and searchable
+- refresh or crash mid-turn without losing anything
+- hung commands killed cleanly, with no orphaned processes
+
+## Docs
+
+- [docs/DESIGN.md](docs/DESIGN.md) — architecture and the reasoning behind it
+- [docs/PLAN.md](docs/PLAN.md) — phased implementation plan
+- [AGENTS.md](AGENTS.md) — steering rules for agents working on this repo
 
 ## Development
 
-Nothing to run yet. See `docs/` once the design lands.
+Nothing to run yet — see [docs/PLAN.md](docs/PLAN.md) phase 0.
 
-## Design
-
-See [docs/DESIGN.md](docs/DESIGN.md).
+Runs on macOS and Linux; Windows best-effort. Localhost only by design.
