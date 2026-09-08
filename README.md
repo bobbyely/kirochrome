@@ -18,3 +18,7 @@ browser client, so you get:
 ## Development
 
 Nothing to run yet. See `docs/` once the design lands.
+
+## Design
+
+See [docs/DESIGN.md](docs/DESIGN.md).
