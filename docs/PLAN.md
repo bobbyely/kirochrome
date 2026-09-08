@@ -43,17 +43,38 @@ you have not verified is how you end up debugging a spinner.
 A throwaway script: spawn an agent, `initialize`, `session/new`, one prompt,
 print every `session/update` raw.
 
-- [ ] `npm i @agentclientprotocol/sdk` (pin exact version)
-- [ ] Spawn `claude-code-acp`, complete `initialize`
-- [ ] Dump `protocolVersion`, `agentCapabilities`, `authMethods`
-- [ ] `session/new`, dump config options / `availableModels`
-- [ ] One `session/prompt`, print the raw update stream
+- [x] `npm i --save-exact @agentclientprotocol/sdk` (1.4.0)
+- [x] Spawn the Claude Code adapter, complete `initialize`
+- [x] Dump `protocolVersion`, `agentCapabilities`, `authMethods`
+- [x] `session/new`, dump config options / modes
+- [x] One `session/prompt`, print the raw update stream
+- [x] Mock ACP agent as an offline fixture
 - [ ] Run the same script against `kiro-cli acp` **on the work machine**, diff
 
-**Done when:** captured real output from both agents, and we know whether Kiro
-uses `configOptions` or the older `availableModels` API.
+### Findings
 
-**Risk retired:** every protocol assumption in DESIGN.md.
+- **ACP works as designed.** `initialize` against the real Claude Code adapter
+  returned `protocolVersion: 1`, `loadSession: true`, prompt capabilities, and
+  an `authMethods` entry — the whole basis of the check ladder, confirmed.
+- **The SDK client API** is `client({name})` → `.onNotification("session/update")`
+  / `.onRequest("session/request_permission")` → `connectWith(ndJsonStream(…))`.
+  `buildSession(cwd).start()` wraps `session/new`.
+- **The stderr buffer paid for itself immediately.** The adapter failed
+  `session/new` with `-32603 "Query closed before response received"` — useless
+  on its own. stderr held the real cause: it refuses to run nested inside
+  another Claude Code session. Keep this diagnostic; it is not optional.
+- **The package was renamed** to `@agentclientprotocol/claude-agent-acp`.
+- **Both config shapes exist at once.** The mock returns `configOptions` *and* a
+  legacy `modes` state, and the client read both — so phase 4's pickers must
+  handle either, as designed.
+- **Streaming shapes confirmed:** `agent_message_chunk`, `tool_call`,
+  `tool_call_update`, terminating with `stopReason`.
+
+**Open:** whether Kiro uses `configOptions` or the older `availableModels`.
+Needs a run on the work machine. Not blocking — the design handles both.
+
+**Risk retired:** every protocol assumption in DESIGN.md, except Kiro's exact
+config-option dialect.
 
 ---
 
