@@ -15,9 +15,22 @@ export class SessionManager {
 
   constructor(private readonly store: Store) {}
 
-  async open(provider: ProviderConfig): Promise<Session> {
-    const session = await Session.open(randomUUID(), provider, this.store);
+  async open(provider: ProviderConfig, cwd?: string): Promise<Session> {
+    const session = await Session.open(randomUUID(), provider, this.store, cwd);
     this.live.set(session.id, session);
+    return session;
+  }
+
+  /** Re-attaches an agent to a stored conversation so it can be continued. */
+  async resume(id: string, provider: ProviderConfig): Promise<Session> {
+    const existing = this.live.get(id);
+    if (existing) return existing;
+
+    const record = this.store.getSession(id);
+    if (!record) throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
+
+    const session = await Session.resume(record, provider, this.store);
+    this.live.set(id, session);
     return session;
   }
 
@@ -48,6 +61,7 @@ export class SessionManager {
       lastSeq: this.store.lastSeq(id),
       title: record.title,
       live: false,
+      configOptions: [],
     };
   }
 
@@ -68,6 +82,16 @@ export class SessionManager {
       });
     }
     throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
+  }
+
+  /** Distinct directories already worked in, most recent first. */
+  recentWorkspaces(limit = 10): string[] {
+    const seen: string[] = [];
+    for (const record of this.store.listSessions(200)) {
+      if (!seen.includes(record.cwd)) seen.push(record.cwd);
+      if (seen.length >= limit) break;
+    }
+    return seen;
   }
 
   closeAll(): void {

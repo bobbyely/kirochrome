@@ -5,11 +5,26 @@ import {
   type KcError,
   type KcEvent,
   type KcEventInput,
+  type ConfigOption,
   type ProviderConfig,
+  type SessionRecord,
   type SessionSummary,
 } from "@kirochrome/shared";
 import { resolveProvider, spawnAgent, type AgentProcess } from "./agentProcess.js";
+import { normaliseConfigOptions } from "./configOptions.js";
 import type { Store } from "./store.js";
+
+/**
+ * The older per-kind config methods, by option id.
+ *
+ * Note `session/set_model` is not in the SDK's v1 method registry — model
+ * selection moved to `session/set_config_option` — but Kiro's docs still list
+ * it, so it stays as a fallback. Outbound requests accept any method name.
+ */
+const LEGACY_SETTERS: Record<string, { method: string; param: string }> = {
+  model: { method: "session/set_model", param: "modelId" },
+  mode: { method: "session/set_mode", param: "modeId" },
+};
 
 /** Deltas are buffered this long before becoming one event. See docs/DESIGN.md. */
 const TEXT_FLUSH_MS = 250;
@@ -38,8 +53,17 @@ export class Session {
 
   private textBuffer = "";
   private flushTimer: NodeJS.Timeout | null = null;
+  /**
+   * True while `session/load` is replaying the agent's own history.
+   *
+   * The agent re-sends every past message as `session/update` before answering
+   * the load. We already hold that history in our log, so those updates must be
+   * discarded — appending them would duplicate the whole transcript.
+   */
+  private replaying = false;
 
   private title: string | null = null;
+  private configOptions: ConfigOption[] = [];
 
   private constructor(
     id: string,
@@ -51,8 +75,14 @@ export class Session {
   }
 
   /** Spawns the agent, completes the ACP handshake and records the session. */
-  static async open(id: string, provider: ProviderConfig, store: Store): Promise<Session> {
-    const cwd = provider.cwd ?? defaultCwd();
+  static async open(
+    id: string,
+    provider: ProviderConfig,
+    store: Store,
+    cwdOverride?: string,
+  ): Promise<Session> {
+    // Explicit choice wins, then the provider's pin, then the launch directory.
+    const cwd = cwdOverride ?? provider.cwd ?? defaultCwd();
     const session = new Session(id, provider, cwd, store);
     const now = Date.now();
     store.upsertSession({
@@ -70,7 +100,32 @@ export class Session {
     return session;
   }
 
-  private async connect(): Promise<void> {
+  /**
+   * Re-attaches an agent to a conversation restored from disk.
+   *
+   * Requires the agent to advertise `loadSession`; without it the transcript
+   * stays readable but cannot be continued.
+   */
+  static async resume(
+    record: SessionRecord,
+    provider: ProviderConfig,
+    store: Store,
+  ): Promise<Session> {
+    if (!record.agentSessionId) {
+      throw kcError("SESSION_NOT_LIVE", "This conversation has no agent session id recorded.", {
+        remediation: "It was created before its agent finished starting. Start a new chat instead.",
+      });
+    }
+    const session = new Session(record.id, provider, record.cwd, store);
+    session.title = record.title;
+    session.agentSessionId = record.agentSessionId;
+    session.seq = store.lastSeq(record.id);
+    session.log.push(...store.eventsSince(record.id, 0));
+    await session.connect({ loadSessionId: record.agentSessionId });
+    return session;
+  }
+
+  private async connect(opts: { loadSessionId?: string } = {}): Promise<void> {
     const resolved = resolveProvider(this.provider);
     if ("code" in resolved) throw resolved;
 
@@ -111,8 +166,35 @@ export class Session {
       );
     }
 
+    if (opts.loadSessionId) {
+      const capabilities = init.agentCapabilities as { loadSession?: boolean } | undefined;
+      if (!capabilities?.loadSession) {
+        throw kcError(
+          "SESSION_NOT_LIVE",
+          `'${this.provider.name}' cannot reopen past conversations.`,
+          { remediation: "This agent does not support session/load. Start a new chat instead." },
+        );
+      }
+      // Discard the agent's replay; our log is already the transcript.
+      this.replaying = true;
+      try {
+        await this.connection.agent.request("session/load", {
+          sessionId: opts.loadSessionId,
+          cwd: this.cwd,
+          mcpServers: [],
+        });
+      } finally {
+        this.replaying = false;
+        this.textBuffer = "";
+      }
+      this.append({ type: "resumed" });
+      return;
+    }
+
     const active = await this.connection.agent.buildSession(this.cwd).start();
     this.agentSessionId = active.sessionId;
+    const response = active.newSessionResponse as Record<string, unknown>;
+    this.configOptions = normaliseConfigOptions(response);
     this.persistMeta();
   }
 
@@ -158,6 +240,52 @@ export class Session {
     }
   }
 
+  /**
+   * Changes one of the agent's advertised settings.
+   *
+   * Writes back in whichever dialect the agent used: the generic
+   * `session/set_config_option`, or the older per-kind methods.
+   */
+  async setConfigOption(id: string, value: string | boolean): Promise<void> {
+    const connection = this.connection;
+    const agentSessionId = this.agentSessionId;
+    if (!connection || !agentSessionId) {
+      this.emitError(kcError("AGENT_EXITED", "The agent is not connected."));
+      return;
+    }
+
+    // `session/set_config_option` is the standard; the per-kind methods are the
+    // older dialect that Kiro still documents. Try the standard first and fall
+    // back on failure rather than guessing from the session/new response —
+    // agents mid-migration do not always answer both consistently.
+    try {
+      try {
+        await connection.agent.request("session/set_config_option", {
+          sessionId: agentSessionId,
+          configId: id,
+          value,
+        });
+      } catch (modernErr) {
+        const legacy = LEGACY_SETTERS[id];
+        if (!legacy) throw modernErr;
+        await connection.agent.request(legacy.method, {
+          sessionId: agentSessionId,
+          [legacy.param]: value,
+        });
+      }
+      this.configOptions = this.configOptions.map((o) =>
+        o.id === id ? { ...o, currentValue: value } : o,
+      );
+    } catch (err) {
+      this.emitError(
+        kcError("RPC_ERROR", `Could not change ${id}.`, {
+          cause: causeOf(err),
+          detail: { stderr: this.proc?.stderr.tail() },
+        }),
+      );
+    }
+  }
+
   async cancel(): Promise<void> {
     if (!this.connection || !this.agentSessionId) return;
     try {
@@ -169,6 +297,7 @@ export class Session {
 
   /** Handles one ACP session/update, coalescing text and passing the rest through. */
   private onUpdate(update: unknown): void {
+    if (this.replaying) return; // history we already have
     const u = update as { sessionUpdate?: string; content?: { type?: string; text?: string } };
 
     if (u.sessionUpdate === "agent_message_chunk" && u.content?.type === "text") {
@@ -250,6 +379,7 @@ export class Session {
       lastSeq: this.seq,
       title: this.title,
       live: true,
+      configOptions: this.configOptions,
     };
   }
 

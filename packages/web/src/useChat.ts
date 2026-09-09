@@ -14,6 +14,8 @@ export function useChat() {
   const [events, setEvents] = useState<KcEvent[]>([]);
   const [error, setError] = useState<KcError | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
+  const [workspaces, setWorkspaces] = useState<string[] | null>(null);
+  const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
 
   const ws = useRef<WebSocket | null>(null);
   const lastSeq = useRef(0);
@@ -69,6 +71,10 @@ export function useChat() {
         case "sessions":
           setSessions(msg.sessions);
           break;
+        case "workspaces":
+          setWorkspaces(msg.workspaces);
+          setCurrentWorkspace(msg.current);
+          break;
         case "error":
           setError(msg.error);
           break;
@@ -93,7 +99,10 @@ export function useChat() {
     };
   }, [connect]);
 
-  const openSession = useCallback((providerId: string) => send({ type: "open", providerId }), [send]);
+  const openSession = useCallback(
+    (providerId: string, cwd?: string) => send({ type: "open", providerId, ...(cwd ? { cwd } : {}) }),
+    [send],
+  );
 
   /** Attaches to a session that already exists, live or restored from disk. */
   const attachSession = useCallback(
@@ -108,6 +117,20 @@ export function useChat() {
   );
 
   const listSessions = useCallback(() => send({ type: "list_sessions" }), [send]);
+  const listWorkspaces = useCallback(() => send({ type: "list_workspaces" }), [send]);
+
+  const setConfigOption = useCallback(
+    (configId: string, value: string | boolean) => {
+      if (sessionId.current) send({ type: "set_config_option", sessionId: sessionId.current, configId, value });
+    },
+    [send],
+  );
+
+  /** Re-attaches an agent to a stored conversation so it can be continued. */
+  const resumeSession = useCallback(
+    (id: string) => send({ type: "resume", sessionId: id, sinceSeq: lastSeq.current }),
+    [send],
+  );
 
   const prompt = useCallback(
     (text: string) => {
@@ -121,5 +144,21 @@ export function useChat() {
     if (sessionId.current) send({ type: "cancel", sessionId: sessionId.current });
   }, [send]);
 
-  return { connected, session, sessions, events, error, openSession, attachSession, listSessions, prompt, cancel };
+  return {
+    connected,
+    session,
+    sessions,
+    workspaces,
+    currentWorkspace,
+    events,
+    error,
+    openSession,
+    attachSession,
+    resumeSession,
+    listSessions,
+    listWorkspaces,
+    setConfigOption,
+    prompt,
+    cancel,
+  };
 }

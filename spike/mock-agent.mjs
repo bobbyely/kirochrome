@@ -43,6 +43,20 @@ const app = agent({ name: "mock-agent" })
       },
     ],
   }))
+  // Replays history the way a real agent does, so the client's replay
+  // suppression can be tested.
+  .onRequest("session/set_config_option", ({ params }) => ({
+    configOptions: [{ id: params.configId, currentValue: params.value }],
+  }))
+  .onRequest("session/set_mode", () => ({}))
+  .onRequest("session/load", async ({ params, client }) => {
+    const notify = (update) =>
+      client.notify("session/update", { sessionId: params.sessionId, update });
+    for (const text of ["OLD ", "HISTORY"]) {
+      await notify({ sessionUpdate: "agent_message_chunk", content: { type: "text", text } });
+    }
+    return {};
+  })
   .onRequest("session/prompt", async ({ params, client }) => {
     const notify = (update) =>
       client.notify("session/update", { sessionId: params.sessionId, update });

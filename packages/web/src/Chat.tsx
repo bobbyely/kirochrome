@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { latestUsage, updateCategory } from "@kirochrome/shared";
-import type { KcEvent, SessionUsage } from "@kirochrome/shared";
+import type { ConfigOption, KcEvent, SessionUsage } from "@kirochrome/shared";
 import { MarkdownBody } from "./Markdown.js";
 import { useChat } from "./useChat.js";
 
@@ -66,6 +66,9 @@ function toBubbles(events: KcEvent[]): Bubble[] {
           remediation: event.error.remediation,
         });
         break;
+      case "resumed":
+        bubbles.push({ kind: "exit", seq: event.seq, label: "Agent re-attached" });
+        break;
       case "agent_exited":
         bubbles.push({
           kind: "exit",
@@ -85,14 +88,27 @@ function toBubbles(events: KcEvent[]): Bubble[] {
 
 export function Chat({
   providerId,
+  cwd,
   sessionId,
-  onBack,
+  onStarted,
 }: {
   providerId?: string;
+  cwd?: string;
   sessionId?: string;
-  onBack: () => void;
+  onStarted?: () => void;
 }) {
-  const { connected, session, events, error, openSession, attachSession, prompt, cancel } = useChat();
+  const {
+    connected,
+    session,
+    events,
+    error,
+    openSession,
+    attachSession,
+    resumeSession,
+    setConfigOption,
+    prompt,
+    cancel,
+  } = useChat();
   const [draft, setDraft] = useState("");
   const opened = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
@@ -101,8 +117,8 @@ export function Chat({
     if (!connected || opened.current) return;
     opened.current = true;
     if (sessionId) attachSession(sessionId);
-    else if (providerId) openSession(providerId);
-  }, [connected, openSession, attachSession, providerId, sessionId]);
+    else if (providerId) openSession(providerId, cwd);
+  }, [connected, openSession, attachSession, providerId, cwd, sessionId]);
 
   const bubbles = useMemo(() => toBubbles(events), [events]);
   const usage = useMemo(() => latestUsage(events), [events]);
@@ -112,8 +128,12 @@ export function Chat({
   }, [bubbles.length]);
 
   const busy = session?.busy ?? false;
-  // A session read back from disk has no agent attached; it is readable only.
+  // A session read back from disk has no agent attached until it is resumed.
   const readOnly = session !== null && !session.live;
+
+  useEffect(() => {
+    if (session?.live) onStarted?.();
+  }, [session?.live, onStarted]);
 
   const submit = () => {
     const text = draft.trim();
@@ -125,7 +145,6 @@ export function Chat({
   return (
     <div className="chat">
       <header className="chat-head">
-        <button onClick={onBack}>← Setup</button>
         <div className="chat-title">
           <strong>{session?.title ?? session?.providerName ?? providerId ?? "Conversation"}</strong>
           {session && <code className="cmd">{session.cwd}</code>}
@@ -155,9 +174,11 @@ export function Chat({
       {readOnly ? (
         <div className="composer readonly">
           <p className="muted">
-            This conversation was restored from disk and has no agent attached — it is read-only.
-            Start a new chat to continue.
+            This conversation was restored from disk. Re-attach an agent to continue it.
           </p>
+          <button className="primary" onClick={() => sessionId && resumeSession(sessionId)}>
+            Resume conversation
+          </button>
         </div>
       ) : (
       <div className="composer">
@@ -174,7 +195,15 @@ export function Chat({
           rows={3}
         />
         <div className="composer-actions">
-          <span className="muted hint">Enter to send · Shift+Enter for a newline</span>
+          <div className="composer-config">
+            {session?.configOptions.map((option) => (
+              <ConfigPicker
+                key={option.id}
+                option={option}
+                onChange={(value) => setConfigOption(option.id, value)}
+              />
+            ))}
+          </div>
           {busy ? (
             <button onClick={cancel}>Stop</button>
           ) : (
@@ -186,6 +215,45 @@ export function Chat({
       </div>
       )}
     </div>
+  );
+}
+
+/**
+ * One agent-advertised setting, rendered from whatever the agent offers.
+ * Never a hardcoded model list — see invariant 5 in AGENTS.md.
+ */
+function ConfigPicker({
+  option,
+  onChange,
+}: {
+  option: ConfigOption;
+  onChange: (value: string | boolean) => void;
+}) {
+  if (option.type === "boolean") {
+    return (
+      <label className="config-toggle" title={option.description ?? option.name}>
+        <input
+          type="checkbox"
+          checked={Boolean(option.currentValue)}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        {option.name}
+      </label>
+    );
+  }
+  return (
+    <select
+      className="config-select"
+      title={option.description ?? option.name}
+      value={String(option.currentValue)}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      {option.options?.map((choice) => (
+        <option key={choice.value} value={choice.value}>
+          {choice.name}
+        </option>
+      ))}
+    </select>
   );
 }
 

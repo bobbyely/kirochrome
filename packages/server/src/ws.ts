@@ -2,6 +2,7 @@ import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { causeOf, kcError, type ClientMessage, type KcError, type ServerMessage } from "@kirochrome/shared";
 import { loadConfig } from "./config.js";
+import { defaultCwd } from "./session.js";
 import { SessionManager } from "./sessionManager.js";
 
 /**
@@ -77,7 +78,7 @@ async function dispatch(
       if (!provider) {
         throw kcError("PROVIDER_UNKNOWN", `No provider configured with id '${msg.providerId}'.`);
       }
-      const session = await sessions.open(provider);
+      const session = await sessions.open(provider, msg.cwd);
       send({ type: "session_opened", session: session.summary() });
       return;
     }
@@ -99,10 +100,41 @@ async function dispatch(
       return;
     }
 
+    case "list_workspaces": {
+      // Directories previously worked in, so a new chat can be pointed at one.
+      send({ type: "workspaces", workspaces: sessions.recentWorkspaces(), current: defaultCwd() });
+      return;
+    }
+
+    case "resume": {
+      const record = sessions.summary(msg.sessionId);
+      const provider = loadConfig().providers.find((p) => p.id === record.providerId);
+      if (!provider) {
+        throw kcError(
+          "PROVIDER_UNKNOWN",
+          `'${record.providerName}' is no longer configured, so this conversation cannot be reopened.`,
+        );
+      }
+      const resumed = await sessions.resume(msg.sessionId, provider);
+      unsubscribers.push(
+        resumed.subscribe((events) => send({ type: "events", sessionId: resumed.id, events })),
+      );
+      send({ type: "events", sessionId: resumed.id, events: resumed.eventsSince(msg.sinceSeq) });
+      send({ type: "session_state", session: resumed.summary() });
+      return;
+    }
+
     case "prompt": {
       const session = sessions.requireLive(msg.sessionId);
       send({ type: "session_state", session: { ...session.summary(), busy: true } });
       await session.prompt(msg.text);
+      send({ type: "session_state", session: session.summary() });
+      return;
+    }
+
+    case "set_config_option": {
+      const session = sessions.requireLive(msg.sessionId);
+      await session.setConfigOption(msg.configId, msg.value);
       send({ type: "session_state", session: session.summary() });
       return;
     }

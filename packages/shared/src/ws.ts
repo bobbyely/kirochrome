@@ -3,11 +3,14 @@ import type { KcEvent, SessionSummary } from "./events.js";
 
 /** Browser → server. */
 export type ClientMessage =
-  | { type: "open"; providerId: string }
+  | { type: "open"; providerId: string; cwd?: string }
   | { type: "subscribe"; sessionId: string; sinceSeq: number }
   | { type: "prompt"; sessionId: string; text: string }
   | { type: "cancel"; sessionId: string }
-  | { type: "list_sessions" };
+  | { type: "resume"; sessionId: string; sinceSeq: number }
+  | { type: "list_sessions" }
+  | { type: "list_workspaces" }
+  | { type: "set_config_option"; sessionId: string; configId: string; value: string | boolean };
 
 /** Server → browser. */
 export type ServerMessage =
@@ -16,4 +19,5 @@ export type ServerMessage =
   | { type: "events"; sessionId: string; events: KcEvent[] }
   | { type: "session_state"; session: SessionSummary }
   | { type: "sessions"; sessions: SessionSummary[] }
+  | { type: "workspaces"; workspaces: string[]; current: string }
   | { type: "error"; error: KcError; sessionId?: string };

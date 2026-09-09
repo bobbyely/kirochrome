@@ -222,17 +222,47 @@ localhost.
 
 **Goal:** the full flow — new chat → provider → model → persisted session.
 
-- [ ] New-chat flow lists only providers whose check is `ok`
-- [ ] Draft sessions: spawn + `session/new` on provider select, promote to
-      `active` on first message, GC drafts at startup
-- [ ] Data-driven pickers from `configOptions`, falling back to
-      `session/set_model` / `set_mode`
-- [ ] Session list sidebar; reopen calls `session/load`
-- [ ] Session titles (first message, or agent-provided)
+- [x] Working directory is chosen per session, not fixed at server launch.
+      ACP sessions are workspace-scoped — `session/new` takes a `cwd`, and the
+      agent loads that directory's project context (`CLAUDE.md`/`AGENTS.md`,
+      git state). One global `cwd` means every conversation is stuck on
+      whichever project the server was started from.
+- [x] New-chat flow lists only providers whose check is `ok`
+- [x] Sessions persist on open and are titled from the first message
+- [x] Data-driven pickers, merging `configOptions` with the legacy
+      `availableModels` / `modes` dialects
+- [x] Session list sidebar; reopen calls `session/load`
+- [x] Session titles (first message, or agent-provided)
 - [ ] Runtime failures mark the provider `stale` and link back to setup
 
 **Done when:** two sessions on two different providers, both resumable after a
 server restart.
+
+### Verified
+
+- A conversation survives a restart and `session/load` re-attaches an agent to
+  it. **The agent's replay is discarded** — it re-sends its whole history as
+  `session/update` before answering the load, and our log already holds it, so
+  appending would duplicate the transcript. Confirmed: 0 duplicated rows.
+- Per-session `cwd` is honoured, and previously used directories are offered.
+- Both pickers drive the agent: mode and model switch live mid-session.
+
+### Layout
+
+Restructured to a persistent sidebar beside one main view: new chat and past
+conversations on the left, Setup as a page you visit rather than the landing
+screen.
+
+### Two protocol findings
+
+- **`session/set_model` is not in the SDK's v1 method registry**, though Kiro's
+  docs still list it — model selection moved to `session/set_config_option`.
+  So a config change tries the standard method and falls back to the per-kind
+  one, rather than guessing the dialect from the `session/new` response.
+- **Agents can emit both dialects at once**, and not with the same settings in
+  each. `configOptions` and the legacy `models`/`modes` are merged rather than
+  letting one hide the other — the mock exposed this by advertising a model in
+  one and a mode in the other.
 
 ---
 

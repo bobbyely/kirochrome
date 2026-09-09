@@ -20,6 +20,8 @@ export type KcEvent = KcEventBase &
     /** Any non-text ACP session update, kept raw until phase 5 renders it properly. */
     | { type: "agent_update"; update: unknown }
     | { type: "turn_start" }
+    /** Marks where an agent was re-attached to a restored conversation. */
+    | { type: "resumed" }
     | { type: "turn_end"; stopReason: string }
     | { type: "error"; error: KcError }
     | { type: "agent_exited"; code: number | null; signal: string | null }
@@ -53,6 +55,8 @@ export interface SessionSummary {
    * transcript is readable but it cannot be prompted until reopened.
    */
   live: boolean;
+  /** Selectable settings the agent advertises. Empty when it offers none. */
+  configOptions: ConfigOption[];
 }
 
 /**
@@ -117,4 +121,27 @@ export interface SessionRecord {
   status: "active" | "closed";
   createdAt: number;
   updatedAt: number;
+}
+
+/**
+ * One selectable setting an agent exposes for a session — a model, a mode, a
+ * reasoning level. Normalised from whichever dialect the agent speaks
+ * (`configOptions`, or the older `availableModels` / `availableModes`) so the
+ * UI renders one shape and never hardcodes a list.
+ */
+export interface ConfigOptionValue {
+  value: string;
+  name: string;
+  description?: string;
+}
+
+export interface ConfigOption {
+  id: string;
+  name: string;
+  description?: string;
+  /** e.g. "model", "mode", "thought_level". Used only for grouping and icons. */
+  category?: string;
+  type: "select" | "boolean";
+  currentValue: string | boolean;
+  options?: ConfigOptionValue[];
 }

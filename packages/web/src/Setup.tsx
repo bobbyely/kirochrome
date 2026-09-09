@@ -2,15 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { CHECK_STAGES } from "@kirochrome/shared";
 import type { CheckStage, ProviderCheckResult, ProviderView } from "@kirochrome/shared";
 import { ApiError, fetchProviders, runCheck } from "./api.js";
-import { RecentChats } from "./RecentChats.js";
 
-export function Setup({
-  onUseProvider,
-  onOpenSession,
-}: {
-  onUseProvider: (id: string) => void;
-  onOpenSession: (id: string) => void;
-}) {
+export function Setup() {
   const [providers, setProviders] = useState<ProviderView[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [running, setRunning] = useState<Set<string>>(new Set());
@@ -69,8 +62,6 @@ export function Setup({
 
       {!providers && !loadError && <p className="muted">Loading providers…</p>}
 
-      <RecentChats onOpen={onOpenSession} />
-
       <div className="cards">
         {providers?.map((provider) => (
           <ProviderCard
@@ -78,7 +69,6 @@ export function Setup({
             provider={provider}
             running={running.has(provider.id)}
             onCheck={() => void check(provider.id)}
-            onUse={() => onUseProvider(provider.id)}
           />
         ))}
       </div>
@@ -90,12 +80,10 @@ function ProviderCard({
   provider,
   running,
   onCheck,
-  onUse,
 }: {
   provider: ProviderView;
   running: boolean;
   onCheck: () => void;
-  onUse: () => void;
 }) {
   const check = provider.lastCheck;
   const status = running ? "running" : (check?.status ?? "unchecked");
@@ -114,12 +102,7 @@ function ProviderCard({
           <button onClick={onCheck} disabled={running}>
             {running ? "Checking…" : check ? "Re-check" : "Check"}
           </button>
-          {/* Only a provider that passed every rung can start a chat. */}
-          {check?.status === "ok" && (
-            <button className="primary" onClick={onUse}>
-              New chat
-            </button>
-          )}
+
         </div>
       </div>
 
