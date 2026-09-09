@@ -60,6 +60,22 @@ guarded against PID reuse.
 
 ### What is left
 
+0. **A side drawer for file and code changes.** A pull-out panel listing every
+   file the agent has touched in this conversation, with its diff — rather than
+   hunting through the transcript for the tool call that changed something.
+
+   Most of the data is already there: `ToolCallContent` diffs carry `path`,
+   `oldText` and `newText`, and `timeline.ts` already extracts them. The work is
+   aggregating them per file across the whole log (last write wins per path,
+   with a running +/− count), and a panel that slides over the transcript rather
+   than squeezing it. Kirodex does this as `DiffPanel` and
+   `ChangedFilesSummary`; the pieces to look at are noted in AGENTS.md.
+
+   Two things to decide when building it: whether it shows the agent's reported
+   diffs only, or reads the working tree (the former needs no filesystem access
+   and stays honest about what the agent claims it did), and whether it survives
+   a restart — it will, since the diffs live in the event log.
+
 1. True virtualisation, if the windowed transcript proves insufficient.
 2. Whatever the work machine turns up once Kiro is actually driving it —
    including the one protocol question still open since phase 0, below.
