@@ -784,3 +784,32 @@ kbd {
 .switch-label { font-size: var(--fs-sm); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .switch.on .switch-label { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .switch-knob { transition: none; } }
+
+/* ---------- slash commands ---------- */
+.commands {
+  max-width: 880px;
+  margin: 0 auto var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.command {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  text-align: left;
+  border: none;
+  border-radius: 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+}
+.command + .command { border-top: 1px solid var(--border); }
+.command:hover, .command.on { background: var(--accent-dim); color: var(--text); border: none; }
+.command.on { box-shadow: inset 2px 0 0 var(--accent); }
+.command-name { color: var(--accent); font-weight: 600; flex-shrink: 0; }
+.command-desc { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.command-hint { margin-left: auto; color: var(--muted); font-size: var(--fs-2xs); font-style: italic; flex-shrink: 0; }

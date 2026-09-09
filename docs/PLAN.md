@@ -58,6 +58,17 @@ sidebar with live per-conversation status.
 and are killed as groups; a ledger reaps anything a crashed server left behind,
 guarded against PID reuse.
 
+### Slash commands
+
+ACP advertises an agent's commands via `available_commands_update`, and they are
+run by sending their text as an ordinary prompt — no dedicated method, nothing
+agent-specific. We were receiving that notification and discarding it as noise.
+
+This is how Kiro's reasoning effort is reachable: `/effort low|medium|high|xhigh|max`.
+It is not a `configOption`, so it never appeared in a picker — which is why it
+looked missing. Kiro also persists the choice in `~/.kiro/settings/cli.json`, and
+`chat.modelDefaults` there sets a per-model default independently of any client.
+
 ### What is left
 
 0. **A side drawer for file and code changes.** A pull-out panel listing every

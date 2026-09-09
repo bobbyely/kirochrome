@@ -70,6 +70,10 @@ Breaking one of these is a design regression, not a style nit.
   Stop hang forever and appear to do nothing.
 - **`white-space: pre-wrap` must not reach markdown rows.** It renders the
   newlines between block elements literally, double-spacing every paragraph.
+- **Not every agent setting is a `configOption`.** Slash commands are the other
+  half: advertised by `available_commands_update` and run as ordinary prompt
+  text. Kiro exposes reasoning effort only that way, so a missing picker does
+  not mean a missing feature.
 - **`session/load` returns `modes` and `configOptions` too**, exactly as
   `session/new` does. Discarding its response leaves a resumed conversation
   with no pickers at all.

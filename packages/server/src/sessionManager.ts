@@ -138,6 +138,7 @@ export class SessionManager {
       queued: [],
       archived: record.status === "archived",
       supportsImages: false,
+      commands: [],
     };
   }
 

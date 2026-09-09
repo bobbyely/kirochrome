@@ -71,6 +71,8 @@ export interface SessionSummary {
   archived: boolean;
   /** Whether the agent said it accepts images in a prompt. */
   supportsImages: boolean;
+  /** Commands the agent advertises, for the composer's picker. */
+  commands: SlashCommand[];
 }
 
 /**
@@ -126,6 +128,20 @@ export function latestUsage(events: KcEvent[]): SessionUsage | null {
 export interface Attachment {
   id: string;
   mime: string;
+}
+
+/**
+ * A command the agent advertises via `available_commands_update`.
+ *
+ * Standard ACP: commands are executed by sending their text as an ordinary
+ * prompt, not through a dedicated method — so nothing agent-specific is needed
+ * to support them.
+ */
+export interface SlashCommand {
+  name: string;
+  description: string;
+  /** Present when the command takes an argument; `hint` describes it. */
+  input?: { hint?: string } | null;
 }
 
 export interface PermissionOption {

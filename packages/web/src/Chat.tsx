@@ -47,6 +47,8 @@ export function Chat({
   const [images, setImages] = useState<PendingImage[]>([]);
   /** Whether the view is following new output, or the reader has scrolled away. */
   const [following, setFollowing] = useState(true);
+  /** Index of the highlighted command while the slash picker is open. */
+  const [commandIndex, setCommandIndex] = useState(0);
   const transcript = useRef<HTMLDivElement>(null);
   const opened = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
@@ -115,6 +117,22 @@ export function Chat({
   };
 
   const canAttach = session?.supportsImages === true;
+
+  // The picker opens on a leading slash and filters as you type. Commands are
+  // ordinary prompt text in ACP, so choosing one just completes the input.
+  const slashQuery = /^\/(\S*)$/.exec(draft);
+  const matches = slashQuery
+    ? (session?.commands ?? []).filter((c) => c.name.startsWith(slashQuery[1] ?? ""))
+    : [];
+  const picking = matches.length > 0;
+
+  const chooseCommand = (name: string) => {
+    const command = session?.commands.find((c) => c.name === name);
+    // Leave the cursor after a trailing space when the command takes an
+    // argument, so the hint is actionable rather than decorative.
+    setDraft(`/${name}${command?.input ? " " : ""}`);
+    setCommandIndex(0);
+  };
 
   /** Collects images from a paste or drop, ignoring anything else. */
   const collect = async (files: FileList | File[] | null) => {
@@ -222,6 +240,22 @@ export function Chat({
               ))}
             </div>
           )}
+          {picking && (
+            <div className="commands">
+              {matches.map((command, i) => (
+                <button
+                  key={command.name}
+                  className={`command ${i === commandIndex ? "on" : ""}`}
+                  onMouseEnter={() => setCommandIndex(i)}
+                  onClick={() => chooseCommand(command.name)}
+                >
+                  <span className="command-name">/{command.name}</span>
+                  <span className="command-desc">{command.description}</span>
+                  {command.input?.hint && <span className="command-hint">{command.input.hint}</span>}
+                </button>
+              ))}
+            </div>
+          )}
           {images.length > 0 && (
             <div className="attachments">
               {images.map((image) => (
@@ -255,6 +289,23 @@ export function Chat({
             }}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
+              if (picking) {
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  const delta = e.key === "ArrowDown" ? 1 : -1;
+                  setCommandIndex((i) => (i + delta + matches.length) % matches.length);
+                  return;
+                }
+                if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+                  e.preventDefault();
+                  chooseCommand(matches[commandIndex]!.name);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  setDraft("");
+                  return;
+                }
+              }
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 submit();

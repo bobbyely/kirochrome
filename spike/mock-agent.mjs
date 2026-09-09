@@ -89,7 +89,14 @@ const app = agent({ name: "mock-agent" })
     }
 
     // Session-state updates: these must NOT become transcript rows.
-    await notify({ sessionUpdate: "available_commands_update", availableCommands: [] });
+    await notify({
+      sessionUpdate: "available_commands_update",
+      availableCommands: [
+        { name: "effort", description: "Set reasoning effort", input: { hint: "low|medium|high|xhigh|max" } },
+        { name: "compact", description: "Compact the conversation" },
+        { name: "model", description: "Change the model", input: { hint: "model id" } },
+      ],
+    });
     await notify({ sessionUpdate: "usage_update", used: 12_500, size: 200_000, cost: { amount: 0.42, currency: "USD" } });
     await notify({ sessionUpdate: "session_info_update", title: "Mock session" });
 

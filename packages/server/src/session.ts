@@ -9,6 +9,7 @@ import {
   type Attachment,
   type ConfigOption,
   type ProviderConfig,
+  type SlashCommand,
   type SessionRecord,
   type SessionSummary,
 } from "@kirochrome/shared";
@@ -88,6 +89,7 @@ export class Session {
   private titleLocked = false;
   private configOptions: ConfigOption[] = [];
   private supportsImages = false;
+  private commands: SlashCommand[] = [];
 
   private constructor(
     id: string,
@@ -502,6 +504,16 @@ export class Session {
       status?: string;
     };
 
+    // Agents advertise their slash commands, and may revise the list mid
+    // session as context changes.
+    if (t.sessionUpdate === "available_commands_update") {
+      const list = (update as { availableCommands?: unknown }).availableCommands;
+      if (Array.isArray(list)) {
+        this.commands = (list as SlashCommand[]).filter((c) => typeof c?.name === "string");
+        this.notifyState();
+      }
+    }
+
     // Agents name their own sessions. Prefer that over our first-message
     // fallback — it is better, and it costs nothing extra.
     if (t.sessionUpdate === "session_info_update" && t.title && !this.titleLocked) {
@@ -706,6 +718,7 @@ export class Session {
       queued: this.queue.map((q) => q.text),
       archived: false,
       supportsImages: this.supportsImages,
+      commands: this.commands,
     };
   }
 
