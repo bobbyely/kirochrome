@@ -10,7 +10,9 @@ export type ClientMessage =
   | { type: "resume"; sessionId: string; sinceSeq: number }
   | { type: "list_sessions" }
   | { type: "list_workspaces" }
-  | { type: "set_config_option"; sessionId: string; configId: string; value: string | boolean };
+  | { type: "set_config_option"; sessionId: string; configId: string; value: string | boolean }
+  | { type: "permission_response"; sessionId: string; requestId: string; optionId: string | null }
+  | { type: "set_auto_approve"; sessionId: string; enabled: boolean };
 
 /** Server → browser. */
 export type ServerMessage =

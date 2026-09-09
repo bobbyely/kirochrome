@@ -90,6 +90,7 @@ async function dispatch(
       const live = sessions.getLive(msg.sessionId);
       if (live) {
         unsubscribers.push(live.subscribe((events) => send({ type: "events", sessionId: live.id, events })));
+        unsubscribers.push(live.onStateChange(() => send({ type: "session_state", session: live.summary() })));
       }
       send({ type: "session_state", session: sessions.summary(msg.sessionId) });
       return;
@@ -135,6 +136,18 @@ async function dispatch(
     case "set_config_option": {
       const session = sessions.requireLive(msg.sessionId);
       await session.setConfigOption(msg.configId, msg.value);
+      send({ type: "session_state", session: session.summary() });
+      return;
+    }
+
+    case "permission_response": {
+      sessions.requireLive(msg.sessionId).resolvePermission(msg.requestId, msg.optionId);
+      return;
+    }
+
+    case "set_auto_approve": {
+      const session = sessions.requireLive(msg.sessionId);
+      session.setAutoApprove(msg.enabled);
       send({ type: "session_state", session: session.summary() });
       return;
     }

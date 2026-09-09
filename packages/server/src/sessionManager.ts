@@ -62,6 +62,7 @@ export class SessionManager {
       title: record.title,
       live: false,
       configOptions: [],
+      autoApprove: false,
     };
   }
 

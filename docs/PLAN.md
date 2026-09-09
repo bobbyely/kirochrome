@@ -270,12 +270,12 @@ screen.
 
 **Goal:** the desktop-app feel, and hanging processes handled properly.
 
-- [ ] Fold events into typed timeline rows (see Kirodex's row taxonomy in
-      AGENTS.md), replacing the phase-2 `toBubbles` stopgap
-- [ ] Render `ToolCall` / `ToolCallUpdate` as cards, collapsed by default and
-      expandable — an always-expanded transcript is unreadable
+- [x] Fold events into typed timeline rows (`timeline.ts`), replacing the
+      phase-2 `toBubbles` stopgap
+- [x] Render `ToolCall` / `ToolCallUpdate` as cards, collapsed by default and
+      expandable — all updates for one call fold into a single row
 - [ ] File diffs rendered as diffs; read output syntax-highlighted
-- [ ] Permission requests → approve/deny buttons, plus an auto-approve toggle
+- [x] Permission requests → approve/deny buttons, plus an auto-approve toggle
 - [ ] Queue messages typed during a turn, sending them when it ends
 - [ ] Advertise `terminal: true`; implement `terminal/create`, `output`,
       `wait_for_exit`, `kill`, `release`
@@ -286,6 +286,22 @@ screen.
 
 **Done when:** an infinite command (`sleep 99999`, `yes`) is killed cleanly by
 the timeout, leaves no orphan in the process table, and the UI reports why.
+
+### Verified so far
+
+A turn emitting one `tool_call` plus two `tool_call_update`s produces **one**
+row, not three: 15 raw events fold to 7 rows. The card's title upgrades from
+`Terminal` to the command actually run, which arrives on a later update.
+
+Permission requests block the agent until answered. The ACP request is held
+open, so the agent waits exactly as long as the human does, and the prompt is
+an ordinary log event — it survives a refresh mid-decision.
+
+### Session titles come from the agent
+
+`session_info_update` carries a title, so conversations name themselves and the
+first-message fallback is only used when an agent sends none. No summarisation
+call, no extra tokens.
 
 ---
 

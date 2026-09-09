@@ -1,90 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { latestUsage, updateCategory } from "@kirochrome/shared";
-import type { ConfigOption, KcEvent, SessionUsage } from "@kirochrome/shared";
+import { latestUsage } from "@kirochrome/shared";
+import type { ConfigOption, SessionUsage } from "@kirochrome/shared";
 import { MarkdownBody } from "./Markdown.js";
+import { buildRows, toolSubtitle, type Row } from "./timeline.js";
 import { useChat } from "./useChat.js";
-
-/**
- * Renders the event log. Deliberately a pure projection of `events` — no
- * message state of its own, so a reconnect or replay produces identical output.
- */
-type Bubble =
-  | { kind: "user"; seq: number; text: string }
-  | { kind: "agent"; seq: number; text: string }
-  | { kind: "tool"; seq: number; label: string }
-  | { kind: "thought"; seq: number; text: string }
-  | { kind: "divider"; seq: number }
-  | { kind: "error"; seq: number; code: string; message: string; remediation?: string }
-  | { kind: "exit"; seq: number; label: string };
-
-function toBubbles(events: KcEvent[]): Bubble[] {
-  const bubbles: Bubble[] = [];
-  for (const event of events) {
-    switch (event.type) {
-      case "user_message":
-        bubbles.push({ kind: "user", seq: event.seq, text: event.text });
-        break;
-      case "agent_text": {
-        // Merge consecutive agent text into one bubble so flush boundaries
-        // are invisible to the reader.
-        const last = bubbles.at(-1);
-        if (last?.kind === "agent") last.text += event.text;
-        else bubbles.push({ kind: "agent", seq: event.seq, text: event.text });
-        break;
-      }
-      case "agent_update": {
-        const u = event.update as {
-          sessionUpdate?: string;
-          title?: string;
-          status?: string;
-          content?: { text?: string };
-        };
-        // State updates describe the session, not the conversation. They stay
-        // in the log and feed the header; they are not transcript rows.
-        if (updateCategory(u.sessionUpdate) === "state") break;
-
-        if (u.sessionUpdate === "agent_thought_chunk") {
-          const last = bubbles.at(-1);
-          const text = u.content?.text ?? "";
-          if (last?.kind === "thought") last.text += text;
-          else bubbles.push({ kind: "thought", seq: event.seq, text });
-          break;
-        }
-        bubbles.push({
-          kind: "tool",
-          seq: event.seq,
-          label: [u.sessionUpdate, u.title, u.status].filter(Boolean).join(" · "),
-        });
-        break;
-      }
-      case "error":
-        bubbles.push({
-          kind: "error",
-          seq: event.seq,
-          code: event.error.code,
-          message: event.error.message,
-          remediation: event.error.remediation,
-        });
-        break;
-      case "resumed":
-        bubbles.push({ kind: "exit", seq: event.seq, label: "Agent re-attached" });
-        break;
-      case "agent_exited":
-        bubbles.push({
-          kind: "exit",
-          seq: event.seq,
-          label: `Agent exited (${event.signal ?? `code ${event.code}`})`,
-        });
-        break;
-      case "turn_end":
-        // A quiet rule between turns, so a long transcript stays readable.
-        if (bubbles.length > 0) bubbles.push({ kind: "divider", seq: event.seq });
-        break;
-      // turn_start drives the busy indicator, not the transcript.
-    }
-  }
-  return bubbles;
-}
 
 export function Chat({
   providerId,
@@ -106,9 +25,12 @@ export function Chat({
     attachSession,
     resumeSession,
     setConfigOption,
+    answerPermission,
+    setAutoApprove,
     prompt,
     cancel,
   } = useChat();
+
   const [draft, setDraft] = useState("");
   const opened = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
@@ -120,20 +42,20 @@ export function Chat({
     else if (providerId) openSession(providerId, cwd);
   }, [connected, openSession, attachSession, providerId, cwd, sessionId]);
 
-  const bubbles = useMemo(() => toBubbles(events), [events]);
+  const rows = useMemo(() => buildRows(events), [events]);
   const usage = useMemo(() => latestUsage(events), [events]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });
-  }, [bubbles.length]);
-
-  const busy = session?.busy ?? false;
-  // A session read back from disk has no agent attached until it is resumed.
-  const readOnly = session !== null && !session.live;
+  }, [rows.length]);
 
   useEffect(() => {
     if (session?.live) onStarted?.();
   }, [session?.live, onStarted]);
+
+  const busy = session?.busy ?? false;
+  // A session read back from disk has no agent attached until it is resumed.
+  const readOnly = session !== null && !session.live;
 
   const submit = () => {
     const text = draft.trim();
@@ -146,7 +68,7 @@ export function Chat({
     <div className="chat">
       <header className="chat-head">
         <div className="chat-title">
-          <strong>{session?.title ?? session?.providerName ?? providerId ?? "Conversation"}</strong>
+          <strong>{session?.title ?? session?.providerName ?? "Conversation"}</strong>
           {session && <code className="cmd">{session.cwd}</code>}
         </div>
         {usage && <ContextMeter usage={usage} />}
@@ -157,8 +79,8 @@ export function Chat({
 
       <div className="transcript">
         {!session && <p className="muted">{sessionId ? "Loading conversation…" : "Starting agent…"}</p>}
-        {bubbles.map((b) => (
-          <Message key={b.seq} bubble={b} />
+        {rows.map((row) => (
+          <Message key={row.seq} row={row} onPermission={answerPermission} />
         ))}
         {busy && <div className="thinking">Working…</div>}
         <div ref={bottom} />
@@ -181,38 +103,142 @@ export function Chat({
           </button>
         </div>
       ) : (
-      <div className="composer">
-        <textarea
-          value={draft}
-          placeholder={busy ? "Working…" : "Send a message"}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          rows={3}
-        />
-        <div className="composer-actions">
-          <div className="composer-config">
-            {session?.configOptions.map((option) => (
-              <ConfigPicker
-                key={option.id}
-                option={option}
-                onChange={(value) => setConfigOption(option.id, value)}
-              />
-            ))}
+        <div className="composer">
+          <textarea
+            value={draft}
+            placeholder={busy ? "Working…" : "Send a message"}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            rows={3}
+          />
+          <div className="composer-actions">
+            <div className="composer-config">
+              {session?.live && (
+                <label className="config-toggle" title="Approve tool calls without asking">
+                  <input
+                    type="checkbox"
+                    checked={session.autoApprove}
+                    onChange={(e) => setAutoApprove(e.target.checked)}
+                  />
+                  Auto-approve
+                </label>
+              )}
+              {session?.configOptions.map((option) => (
+                <ConfigPicker
+                  key={option.id}
+                  option={option}
+                  onChange={(value) => setConfigOption(option.id, value)}
+                />
+              ))}
+            </div>
+            {busy ? (
+              <button onClick={cancel}>Stop</button>
+            ) : (
+              <button className="primary" onClick={submit} disabled={!draft.trim() || !session}>
+                Send
+              </button>
+            )}
           </div>
-          {busy ? (
-            <button onClick={cancel}>Stop</button>
-          ) : (
-            <button className="primary" onClick={submit} disabled={!draft.trim() || !session}>
-              Send
-            </button>
-          )}
         </div>
-      </div>
+      )}
+    </div>
+  );
+}
+
+function Message({
+  row,
+  onPermission,
+}: {
+  row: Row;
+  onPermission: (requestId: string, optionId: string | null) => void;
+}) {
+  switch (row.kind) {
+    case "user":
+      return <div className="msg msg-user">{row.text}</div>;
+    case "agent":
+      return (
+        <div className="msg msg-agent">
+          <MarkdownBody>{row.text}</MarkdownBody>
+        </div>
+      );
+    case "thought":
+      return <div className="msg msg-thought">{row.text}</div>;
+    case "tool":
+      return <ToolCard row={row} />;
+    case "permission":
+      return <PermissionCard row={row} onAnswer={onPermission} />;
+    case "note":
+      return <div className="msg msg-note">{row.label}</div>;
+    case "divider":
+      return <hr className="turn-divider" />;
+    case "error":
+      return (
+        <div className="msg msg-error">
+          <span className="code">{row.code}</span> {row.message}
+          {row.remediation && <p className="remediation">{row.remediation}</p>}
+        </div>
+      );
+  }
+}
+
+const STATUS_MARK: Record<string, string> = {
+  pending: "○",
+  in_progress: "◐",
+  completed: "●",
+  failed: "✗",
+};
+
+/**
+ * One agent action, with all of its updates folded in, collapsed until asked.
+ * An always-expanded transcript of tool output is unreadable.
+ */
+function ToolCard({ row }: { row: Extract<Row, { kind: "tool" }> }) {
+  const subtitle = toolSubtitle(row.details);
+  return (
+    <details className={`tool tool-${row.status}`}>
+      <summary>
+        <span className="tool-mark">{STATUS_MARK[row.status] ?? "○"}</span>
+        <span className="tool-title">{row.title}</span>
+        {subtitle && subtitle !== row.title && <code className="tool-sub">{subtitle}</code>}
+      </summary>
+      <pre>{row.details.map((d) => JSON.stringify(d, null, 2)).join("\n")}</pre>
+    </details>
+  );
+}
+
+/** The agent is blocked on this request until the user answers it. */
+function PermissionCard({
+  row,
+  onAnswer,
+}: {
+  row: Extract<Row, { kind: "permission" }>;
+  onAnswer: (requestId: string, optionId: string | null) => void;
+}) {
+  const answered = row.answeredWith !== null;
+  return (
+    <div className={`permission ${answered ? "answered" : ""}`}>
+      <div className="permission-title">{row.title}</div>
+      {answered ? (
+        <span className="muted">
+          {row.answeredWith === "cancelled" ? "Cancelled" : `Answered: ${row.answeredWith}`}
+        </span>
+      ) : (
+        <div className="permission-actions">
+          {row.options.map((option) => (
+            <button
+              key={option.optionId}
+              className={option.kind.startsWith("allow") ? "primary" : ""}
+              onClick={() => onAnswer(row.requestId, option.optionId)}
+            >
+              {option.name}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -273,32 +299,4 @@ function ContextMeter({ usage }: { usage: SessionUsage }) {
       <span className="context-pct">{pct}%</span>
     </div>
   );
-}
-
-function Message({ bubble }: { bubble: Bubble }) {
-  switch (bubble.kind) {
-    case "user":
-      return <div className="msg msg-user">{bubble.text}</div>;
-    case "agent":
-      return (
-        <div className="msg msg-agent">
-          <MarkdownBody>{bubble.text}</MarkdownBody>
-        </div>
-      );
-    case "tool":
-      return <div className="msg msg-tool">{bubble.label}</div>;
-    case "thought":
-      return <div className="msg msg-thought">{bubble.text}</div>;
-    case "divider":
-      return <hr className="turn-divider" />;
-    case "exit":
-      return <div className="msg msg-exit">{bubble.label}</div>;
-    case "error":
-      return (
-        <div className="msg msg-error">
-          <span className="code">{bubble.code}</span> {bubble.message}
-          {bubble.remediation && <p className="remediation">{bubble.remediation}</p>}
-        </div>
-      );
-  }
 }

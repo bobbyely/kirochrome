@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { client, PROTOCOL_VERSION, type ClientConnection } from "@agentclientprotocol/sdk";
 import {
   causeOf,
@@ -44,6 +45,7 @@ export class Session {
   readonly id: string;
   private readonly log: KcEvent[] = [];
   private readonly subscribers = new Set<Subscriber>();
+  private readonly stateListeners = new Set<() => void>();
   private seq = 0;
   private busy = false;
 
@@ -61,6 +63,9 @@ export class Session {
    * discarded — appending them would duplicate the whole transcript.
    */
   private replaying = false;
+  /** Permission requests waiting on the UI, keyed by request id. */
+  private readonly pendingPermissions = new Map<string, (optionId: string | null) => void>();
+  private autoApprove = false;
 
   private title: string | null = null;
   private configOptions: ConfigOption[] = [];
@@ -141,8 +146,7 @@ export class Session {
 
     const app = client({ name: "kirochrome" })
       .onNotification("session/update", ({ params }) => this.onUpdate(params.update))
-      // Real approval UI is phase 5; until then refuse rather than hang.
-      .onRequest("session/request_permission", () => ({ outcome: { outcome: "cancelled" } }));
+      .onRequest("session/request_permission", ({ params }) => this.requestPermission(params));
 
     this.connection = app.connect(proc.stream);
 
@@ -306,7 +310,96 @@ export class Session {
     }
     // Ordering matters: flush pending text before any other event lands.
     this.flushText();
+
+    const t = update as {
+      sessionUpdate?: string;
+      toolCallId?: string;
+      title?: string;
+      kind?: string;
+      status?: string;
+    };
+
+    // Agents name their own sessions. Prefer that over our first-message
+    // fallback — it is better, and it costs nothing extra.
+    if (t.sessionUpdate === "session_info_update" && t.title) {
+      this.title = t.title;
+      this.persistMeta();
+      this.notifyState();
+    }
+    if (t.sessionUpdate === "tool_call" && t.toolCallId) {
+      this.append({
+        type: "tool_call",
+        toolCallId: t.toolCallId,
+        title: t.title ?? "Tool call",
+        kind: t.kind ?? "other",
+        status: t.status ?? "pending",
+        raw: update,
+      });
+      return;
+    }
+    if (t.sessionUpdate === "tool_call_update" && t.toolCallId) {
+      this.append({
+        type: "tool_call_update",
+        toolCallId: t.toolCallId,
+        ...(t.status ? { status: t.status } : {}),
+        raw: update,
+      });
+      return;
+    }
     this.append({ type: "agent_update", update });
+  }
+
+  /**
+   * Asks the user to approve a tool call.
+   *
+   * The ACP request stays open until the UI answers, so the agent is blocked
+   * exactly as long as the human takes. The prompt is an event like anything
+   * else, which is what makes it survive a page refresh mid-decision.
+   */
+  private async requestPermission(params: {
+    // Nullable fields mirror the ACP schema, which uses null rather than omission.
+    options?: Array<{ optionId: string; name: string; kind: string }>;
+    toolCall?: { title?: string | null };
+  }): Promise<
+    | { outcome: { outcome: "cancelled" } }
+    | { outcome: { outcome: "selected"; optionId: string } }
+  > {
+    const options = (params.options ?? []).map((o) => ({
+      optionId: o.optionId,
+      name: o.name,
+      kind: o.kind,
+    }));
+    const title = params.toolCall?.title ?? "Allow this action?";
+
+    if (this.autoApprove) {
+      const allow = options.find((o) => o.kind.startsWith("allow"));
+      if (allow) return { outcome: { outcome: "selected" as const, optionId: allow.optionId } };
+    }
+
+    const requestId = randomUUID();
+    this.flushText();
+    this.append({ type: "permission_request", requestId, title, options });
+
+    const optionId = await new Promise<string | null>((resolve) => {
+      this.pendingPermissions.set(requestId, resolve);
+    });
+    this.pendingPermissions.delete(requestId);
+
+    if (optionId === null) {
+      this.append({ type: "permission_resolved", requestId, optionId, outcome: "cancelled" });
+      return { outcome: { outcome: "cancelled" as const } };
+    }
+    this.append({ type: "permission_resolved", requestId, optionId, outcome: "selected" });
+    return { outcome: { outcome: "selected" as const, optionId } };
+  }
+
+  /** Answers an outstanding permission request. */
+  resolvePermission(requestId: string, optionId: string | null): void {
+    this.pendingPermissions.get(requestId)?.(optionId);
+  }
+
+  setAutoApprove(enabled: boolean): void {
+    this.autoApprove = enabled;
   }
 
   private bufferText(text: string): void {
@@ -364,6 +457,16 @@ export class Session {
     return this.log.filter((e) => e.seq > sinceSeq);
   }
 
+  /** Notified when session metadata changes outside the event stream. */
+  onStateChange(fn: () => void): () => void {
+    this.stateListeners.add(fn);
+    return () => this.stateListeners.delete(fn);
+  }
+
+  private notifyState(): void {
+    for (const fn of this.stateListeners) fn();
+  }
+
   subscribe(fn: Subscriber): () => void {
     this.subscribers.add(fn);
     return () => this.subscribers.delete(fn);
@@ -380,10 +483,14 @@ export class Session {
       title: this.title,
       live: true,
       configOptions: this.configOptions,
+      autoApprove: this.autoApprove,
     };
   }
 
   close(): void {
+    // Release anything blocked on a human; the agent is going away regardless.
+    for (const resolve of this.pendingPermissions.values()) resolve(null);
+    this.pendingPermissions.clear();
     this.flushText();
     this.connection?.close();
     this.proc?.kill();

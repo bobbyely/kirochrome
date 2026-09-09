@@ -119,6 +119,20 @@ export function useChat() {
   const listSessions = useCallback(() => send({ type: "list_sessions" }), [send]);
   const listWorkspaces = useCallback(() => send({ type: "list_workspaces" }), [send]);
 
+  const answerPermission = useCallback(
+    (requestId: string, optionId: string | null) => {
+      if (sessionId.current) send({ type: "permission_response", sessionId: sessionId.current, requestId, optionId });
+    },
+    [send],
+  );
+
+  const setAutoApprove = useCallback(
+    (enabled: boolean) => {
+      if (sessionId.current) send({ type: "set_auto_approve", sessionId: sessionId.current, enabled });
+    },
+    [send],
+  );
+
   const setConfigOption = useCallback(
     (configId: string, value: string | boolean) => {
       if (sessionId.current) send({ type: "set_config_option", sessionId: sessionId.current, configId, value });
@@ -158,6 +172,8 @@ export function useChat() {
     listSessions,
     listWorkspaces,
     setConfigOption,
+    answerPermission,
+    setAutoApprove,
     prompt,
     cancel,
   };

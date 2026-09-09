@@ -17,8 +17,13 @@ export type KcEvent = KcEventBase &
     | { type: "user_message"; text: string }
     /** Coalesced agent text. Deltas are buffered before append — never one event per token. */
     | { type: "agent_text"; text: string }
-    /** Any non-text ACP session update, kept raw until phase 5 renders it properly. */
+    /** Any non-text ACP session update we do not model explicitly. */
     | { type: "agent_update"; update: unknown }
+    | { type: "tool_call"; toolCallId: string; title: string; kind: string; status: string; raw: unknown }
+    | { type: "tool_call_update"; toolCallId: string; status?: string; raw: unknown }
+    /** The agent is asking to do something; the UI must answer. */
+    | { type: "permission_request"; requestId: string; title: string; options: PermissionOption[] }
+    | { type: "permission_resolved"; requestId: string; optionId: string | null; outcome: string }
     | { type: "turn_start" }
     /** Marks where an agent was re-attached to a restored conversation. */
     | { type: "resumed" }
@@ -57,6 +62,7 @@ export interface SessionSummary {
   live: boolean;
   /** Selectable settings the agent advertises. Empty when it offers none. */
   configOptions: ConfigOption[];
+  autoApprove: boolean;
 }
 
 /**
@@ -107,6 +113,13 @@ export function latestUsage(events: KcEvent[]): SessionUsage | null {
     return { used: u.used, size: u.size, ...(u.cost ? { cost: u.cost } : {}) };
   }
   return null;
+}
+
+export interface PermissionOption {
+  optionId: string;
+  name: string;
+  /** ACP kinds: allow_once, allow_always, reject_once, reject_always. */
+  kind: string;
 }
 
 /** A persisted session row. `sessions` is a derived index over the event log. */

@@ -76,20 +76,36 @@ const app = agent({ name: "mock-agent" })
       await sleep(30);
     }
 
-    // A tool call, so the client can prove it renders the full lifecycle.
+    // A tool call with several updates: the client must fold these into ONE row.
     await notify({
       sessionUpdate: "tool_call",
       toolCallId: "tool-1",
-      title: "Read README.md",
-      kind: "read",
-      status: "in_progress",
+      title: "Terminal",
+      kind: "execute",
+      status: "pending",
+      rawInput: { command: "git status --short" },
     });
-    await sleep(30);
+    await notify({ sessionUpdate: "tool_call_update", toolCallId: "tool-1", status: "in_progress" });
     await notify({
       sessionUpdate: "tool_call_update",
       toolCallId: "tool-1",
+      title: "git status --short",
       status: "completed",
       content: [{ type: "content", content: { type: "text", text: "ok" } }],
+    });
+
+    // Blocks until the client answers.
+    const decision = await client.request("session/request_permission", {
+      sessionId: params.sessionId,
+      toolCall: { toolCallId: "tool-2", title: "Delete build artefacts?" },
+      options: [
+        { optionId: "yes", name: "Allow", kind: "allow_once" },
+        { optionId: "no", name: "Deny", kind: "reject_once" },
+      ],
+    });
+    await notify({
+      sessionUpdate: "agent_message_chunk",
+      content: { type: "text", text: `[permission: ${JSON.stringify(decision.outcome)}]` },
     });
 
     await notify({ sessionUpdate: "usage_update", used: 18_900, size: 200_000, cost: { amount: 0.51, currency: "USD" } });
