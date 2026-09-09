@@ -44,16 +44,20 @@ export async function checkProvider(provider: ProviderConfig): Promise<ProviderC
     }
   };
 
-  const finish = (extra: Partial<ProviderCheckResult>): ProviderCheckResult => ({
-    providerId: provider.id,
-    status: extra.error ? "failed" : "ok",
-    stage,
-    stages,
-    stderrTail: agent?.stderr.tail(),
-    checkedAt: Date.now(),
-    durationMs: Date.now() - started,
-    ...extra,
-  });
+  const finish = (extra: Partial<ProviderCheckResult>): ProviderCheckResult => {
+    const stderrTail = agent?.stderr.tail();
+    return {
+      providerId: provider.id,
+      status: extra.error ? "failed" : "ok",
+      stage,
+      stages,
+      stderrTail,
+      checkedAt: Date.now(),
+      durationMs: Date.now() - started,
+      ...extra,
+      ...(extra.error ? { error: withStderrHint(extra.error, stderrTail) } : {}),
+    };
+  };
 
   try {
     // --- rung 1: resolve ---
@@ -182,6 +186,29 @@ export async function checkProvider(provider: ProviderConfig): Promise<ProviderC
   } finally {
     agent?.kill();
   }
+}
+
+/**
+ * Some agents fail for reasons only their stderr explains. Where we recognise
+ * one, promote it into remediation so the user is not left reading a stack
+ * trace. A hint only — it never changes the error code or control flow.
+ */
+const STDERR_HINTS: Array<{ match: RegExp; hint: string }> = [
+  {
+    match: /cannot be launched inside another Claude Code session/i,
+    hint: "Start the KiroChrome server from a normal terminal rather than from inside a Claude Code session, then re-run this check.",
+  },
+  {
+    match: /not logged in|please run .*login|authentication/i,
+    hint: "The agent looks logged out. Log in with its own CLI, then re-run this check.",
+  },
+];
+
+function withStderrHint(error: KcError, stderrTail: string | undefined): KcError {
+  if (!stderrTail) return error;
+  const hit = STDERR_HINTS.find((h) => h.match.test(stderrTail));
+  if (!hit) return error;
+  return { ...error, remediation: `${hit.hint} (${error.remediation ?? ""})`.trim() };
 }
 
 function authError(provider: ProviderConfig, authMethods: AuthMethod[], err: unknown): KcError {

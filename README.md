@@ -60,8 +60,20 @@ Providers are configured in `<dataDir>/config.json`, seeded on first run:
 Set `KIROCHROME_DATA_DIR` to override, and `KIROCHROME_TRACE=1` to log every
 JSON-RPC frame to a JSONL file in that directory.
 
+On first run the config is seeded with Kiro, Claude Code, and — when running
+from a checkout — an offline mock agent that always passes, so you can try the
+chat without any agent installed.
+
+**Testing with Claude Code:** the ACP adapter refuses to start inside an
+existing Claude Code session, so run `npm start` from a normal terminal.
+
 **Current state:** the setup page verifies each configured provider rung by
 rung, and a provider that passes can start a chat with streaming responses.
 Conversations are in memory only — persistence is phase 3.
+
+## Prior art
+
+[Kirodex](https://github.com/thabti/kirodex) solves the same problem as a Tauri
+desktop app, also over ACP. See [AGENTS.md](AGENTS.md) for what to borrow.
 
 Runs on macOS and Linux; Windows best-effort. Localhost only by design.

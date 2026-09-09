@@ -1,4 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { causeOf, kcError, type ProviderConfig } from "@kirochrome/shared";
 import { configPath, dataDir } from "./paths.js";
 
@@ -7,20 +9,25 @@ import { configPath, dataDir } from "./paths.js";
  * user edits config.json, and a provider's models/modes always come from the
  * protocol, never from here.
  */
-const DEFAULT_PROVIDERS: ProviderConfig[] = [
-  {
-    id: "kiro",
-    name: "Kiro CLI",
-    command: "kiro-cli",
-    args: ["acp"],
-  },
-  {
-    id: "claude-code",
-    name: "Claude Code",
-    command: "npx",
-    args: ["-y", "@agentclientprotocol/claude-agent-acp"],
-  },
-];
+function defaultProviders(): ProviderConfig[] {
+  const providers: ProviderConfig[] = [
+    { id: "kiro", name: "Kiro CLI", command: "kiro-cli", args: ["acp"] },
+    {
+      id: "claude-code",
+      name: "Claude Code",
+      command: "npx",
+      args: ["-y", "@agentclientprotocol/claude-agent-acp"],
+    },
+  ];
+
+  // When running from a checkout, seed the offline mock too, so a first run has
+  // at least one provider that is guaranteed to pass.
+  const mock = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "spike", "mock-agent.mjs");
+  if (existsSync(mock)) {
+    providers.push({ id: "mock", name: "Mock Agent (offline)", command: process.execPath, args: [mock] });
+  }
+  return providers;
+}
 
 export interface AppConfig {
   providers: ProviderConfig[];
@@ -34,7 +41,7 @@ export function loadConfig(): AppConfig {
   try {
     raw = readFileSync(path, "utf8");
   } catch {
-    const seeded: AppConfig = { providers: DEFAULT_PROVIDERS };
+    const seeded: AppConfig = { providers: defaultProviders() };
     writeFileSync(path, `${JSON.stringify(seeded, null, 2)}\n`, { mode: 0o600 });
     return seeded;
   }

@@ -212,9 +212,13 @@ server restart.
 
 **Goal:** the desktop-app feel, and hanging processes handled properly.
 
-- [ ] Render `ToolCall` / `ToolCallUpdate` as cards, not text blobs
-- [ ] File diffs rendered as diffs
-- [ ] Permission requests → approve/deny buttons
+- [ ] Fold events into typed timeline rows (see Kirodex's row taxonomy in
+      AGENTS.md), replacing the phase-2 `toBubbles` stopgap
+- [ ] Render `ToolCall` / `ToolCallUpdate` as cards, collapsed by default and
+      expandable — an always-expanded transcript is unreadable
+- [ ] File diffs rendered as diffs; read output syntax-highlighted
+- [ ] Permission requests → approve/deny buttons, plus an auto-approve toggle
+- [ ] Queue messages typed during a turn, sending them when it ends
 - [ ] Advertise `terminal: true`; implement `terminal/create`, `output`,
       `wait_for_exit`, `kill`, `release`
 - [ ] `TerminalRegistry`: wall-clock cap, `outputByteLimit`, process-group kill
@@ -230,6 +234,9 @@ the timeout, leaves no orphan in the process table, and the UI reports why.
 ## Phase 6 — Polish
 
 - [ ] FTS5 search across all sessions
+- [ ] `AGENT_NOT_FOUND` offers per-platform install commands and a manual path
+      field, rather than only naming the paths tried
+- [ ] Context-window usage indicator
 - [ ] Keyboard shortcuts, session switching
 - [ ] Image paste (Kiro advertises `promptCapabilities.image`)
 - [ ] Export a session to markdown
