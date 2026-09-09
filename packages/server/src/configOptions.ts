@@ -9,6 +9,21 @@ import type { ConfigOption } from "@kirochrome/shared";
  * older pair. Normalising here means the UI renders one shape and neither the
  * UI nor anything downstream branches per agent.
  */
+/**
+ * A readable label for an option that arrived with only an id.
+ *
+ * Kiro advertises its agents as modes, with ids like `kirocrew-conductor` and
+ * `kiro_default`, and does not always send a display name. Rendering the raw id
+ * is unhelpful; this is presentation only and never changes the value sent back.
+ */
+function humanise(id: string): string {
+  return id
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function normaliseConfigOptions(response: Record<string, unknown>): ConfigOption[] {
   const modern = response["configOptions"];
   const options: ConfigOption[] = Array.isArray(modern) ? ([...modern] as ConfigOption[]) : [];
@@ -32,7 +47,7 @@ export function normaliseConfigOptions(response: Record<string, unknown>): Confi
       currentValue: current ?? modelList[0]?.modelId ?? modelList[0]?.id ?? "",
       options: modelList.map((m) => ({
         value: m.modelId ?? m.id ?? "",
-        name: m.name ?? m.modelId ?? m.id ?? "",
+        name: m.name ?? humanise(m.modelId ?? m.id ?? ""),
         ...(m.description ? { description: m.description } : {}),
       })),
     });
@@ -50,7 +65,7 @@ export function normaliseConfigOptions(response: Record<string, unknown>): Confi
       currentValue: modes.currentModeId ?? modes.availableModes[0]?.id ?? "",
       options: modes.availableModes.map((m) => ({
         value: m.id,
-        name: m.name ?? m.id,
+        name: m.name ?? humanise(m.id),
         ...(m.description ? { description: m.description } : {}),
       })),
     });

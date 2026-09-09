@@ -38,6 +38,18 @@ describe("normaliseConfigOptions", () => {
     assert.equal(options[0].currentValue, "code", "the modern dialect wins");
   });
 
+  it("makes a readable label from an id when the agent sends no name", () => {
+    // Kiro advertises agents as modes with ids like these, often unnamed.
+    const options = normaliseConfigOptions({
+      modes: {
+        currentModeId: "kiro_default",
+        availableModes: [{ id: "kiro_default" }, { id: "kirocrew-conductor" }],
+      },
+    });
+    assert.deepEqual(options[0].options.map((o) => o.name), ["Kiro Default", "Kirocrew Conductor"]);
+    assert.deepEqual(options[0].options.map((o) => o.value), ["kiro_default", "kirocrew-conductor"]);
+  });
+
   it("returns nothing when the agent advertises nothing", () => {
     assert.deepEqual(normaliseConfigOptions({}), []);
     assert.deepEqual(normaliseConfigOptions({ configOptions: [] }), []);
