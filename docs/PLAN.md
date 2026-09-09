@@ -353,6 +353,15 @@ call, no extra tokens.
 - [x] Rename conversations; a manual name locks against the agent renaming it
 - [x] Live status per conversation in the sidebar (working / needs input /
       ready / detached), pushed rather than polled
+- [ ] Remember a default model (and mode) per provider, applied to each new
+      session. Store the chosen `configOption` values against the provider and
+      re-apply after `session/new` — still never a hardcoded list, just a
+      remembered choice.
+- [ ] Archive conversations: hide them from the sidebar without deleting the
+      log. `sessions.status` already has room for it; `events` stays untouched,
+      since the log is append-only.
+- [ ] Theme control on the Setup page: light / dark / follow system. Today the
+      theme is `prefers-color-scheme` only, with no way to override it.
 - [ ] Keyboard shortcuts, session switching
 - [ ] Image paste (Kiro advertises `promptCapabilities.image`)
 - [ ] Export a session to markdown

@@ -143,3 +143,61 @@ export function toolSubtitle(details: unknown[]): string | null {
   }
   return null;
 }
+
+export interface ToolDiff {
+  path: string;
+  oldText: string;
+  newText: string;
+}
+
+export interface ToolContent {
+  diffs: ToolDiff[];
+  texts: string[];
+  terminalIds: string[];
+}
+
+/**
+ * Pulls the renderable parts out of a tool call's updates.
+ *
+ * ACP's `ToolCallContent` has three shapes — `content`, `diff` and `terminal` —
+ * and later updates supersede earlier ones for the same call, so the last
+ * update carrying content wins rather than concatenating every revision.
+ */
+export function toolContent(details: unknown[]): ToolContent {
+  const result: ToolContent = { diffs: [], texts: [], terminalIds: [] };
+
+  for (let i = details.length - 1; i >= 0; i--) {
+    const content = (details[i] as { content?: unknown })?.content;
+    if (!Array.isArray(content) || content.length === 0) continue;
+
+    for (const entry of content as Array<Record<string, unknown>>) {
+      if (entry["type"] === "diff") {
+        const path = typeof entry["path"] === "string" ? entry["path"] : "";
+        result.diffs.push({
+          path,
+          oldText: typeof entry["oldText"] === "string" ? entry["oldText"] : "",
+          newText: typeof entry["newText"] === "string" ? entry["newText"] : "",
+        });
+      } else if (entry["type"] === "terminal") {
+        const id = entry["terminalId"];
+        if (typeof id === "string") result.terminalIds.push(id);
+      } else {
+        const inner = entry["content"] as { type?: string; text?: string } | undefined;
+        if (inner?.type === "text" && inner.text) result.texts.push(inner.text);
+      }
+    }
+    break; // the latest update with content is authoritative
+  }
+  return result;
+}
+
+/** Language hint for highlighting, from a file path. */
+export function languageFor(path: string): string {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  const map: Record<string, string> = {
+    ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
+    py: "python", rs: "rust", go: "go", sh: "bash", bash: "bash",
+    json: "json", css: "css", html: "xml", md: "markdown", yml: "yaml", yaml: "yaml", sql: "sql",
+  };
+  return map[ext] ?? "";
+}

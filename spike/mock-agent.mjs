@@ -144,6 +144,30 @@ const app = agent({ name: "mock-agent" })
     });
     await client.request("terminal/release", { sessionId: params.sessionId, terminalId: hung.terminalId });
 
+    // An edit carrying a real diff, so the client can render it as one.
+    await notify({
+      sessionUpdate: "tool_call",
+      toolCallId: "edit-1",
+      title: "Edit",
+      kind: "edit",
+      status: "in_progress",
+      rawInput: { file_path: "src/greet.ts" },
+    });
+    await notify({
+      sessionUpdate: "tool_call_update",
+      toolCallId: "edit-1",
+      title: "src/greet.ts",
+      status: "completed",
+      content: [
+        {
+          type: "diff",
+          path: "src/greet.ts",
+          oldText: "export function greet(name) {\n  return \"hi \" + name;\n}\n",
+          newText: "export function greet(name: string): string {\n  return `hello ${name}`;\n}\n",
+        },
+      ],
+    });
+
     // Blocks until the client answers.
     const decision = await client.request("session/request_permission", {
       sessionId: params.sessionId,

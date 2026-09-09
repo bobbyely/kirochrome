@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { latestUsage } from "@kirochrome/shared";
 import type { ConfigOption, SessionUsage } from "@kirochrome/shared";
 import { MarkdownBody } from "./Markdown.js";
-import { buildRows, toolSubtitle, type Row } from "./timeline.js";
+import { collapseContext, countChanges, lineDiff } from "./diff.js";
+import { buildRows, languageFor, toolContent, toolSubtitle, type Row, type ToolDiff } from "./timeline.js";
 import { useChat } from "./useChat.js";
 
 export function Chat({
@@ -197,22 +198,108 @@ const STATUS_MARK: Record<string, string> = {
   failed: "✗",
 };
 
+const KIND_MARK: Record<string, string> = {
+  read: "◇", edit: "✎", delete: "␡", move: "⇄", search: "⌕",
+  execute: "▸", think: "◌", fetch: "↓", switch_mode: "⇋", other: "•",
+};
+
 /**
  * One agent action, with all of its updates folded in, collapsed until asked.
  * An always-expanded transcript of tool output is unreadable.
  */
 function ToolCard({ row }: { row: Extract<Row, { kind: "tool" }> }) {
   const subtitle = toolSubtitle(row.details);
+  const content = toolContent(row.details);
+  const hasBody = content.diffs.length > 0 || content.texts.length > 0;
+  const summary = content.diffs.length > 0 ? diffSummary(content.diffs) : null;
+
   return (
     <details className={`tool tool-${row.status}`}>
       <summary>
         <span className="tool-mark">{STATUS_MARK[row.status] ?? "○"}</span>
+        <span className="tool-kind">{KIND_MARK[row.toolKind] ?? "•"}</span>
         <span className="tool-title">{row.title}</span>
         {subtitle && subtitle !== row.title && <code className="tool-sub">{subtitle}</code>}
+        {summary && <span className="tool-stat">{summary}</span>}
       </summary>
-      <pre>{row.details.map((d) => JSON.stringify(d, null, 2)).join("\n")}</pre>
+
+      <div className="tool-body">
+        {content.diffs.map((diff, i) => (
+          <DiffView key={`${diff.path}-${i}`} diff={diff} />
+        ))}
+
+        {content.texts.map((text, i) => (
+          <CodeBlock key={i} text={text} language={languageFor(subtitle ?? "")} />
+        ))}
+
+        {content.terminalIds.map((id) => (
+          <p key={id} className="muted tool-note">
+            Output streamed to terminal {id.slice(0, 8)}
+          </p>
+        ))}
+
+        {/* The raw payload stays reachable, just not in your face. */}
+        <details className="tool-raw">
+          <summary>{hasBody ? "Raw payload" : "No rendered content — raw payload"}</summary>
+          <pre>{row.details.map((d) => JSON.stringify(d, null, 2)).join("\n")}</pre>
+        </details>
+      </div>
     </details>
   );
+}
+
+function diffSummary(diffs: ToolDiff[]): string {
+  let added = 0;
+  let removed = 0;
+  for (const diff of diffs) {
+    const lines = lineDiff(diff.oldText, diff.newText);
+    if (!lines) continue;
+    const counts = countChanges(lines);
+    added += counts.added;
+    removed += counts.removed;
+  }
+  return `+${added} −${removed}`;
+}
+
+/** A file edit, rendered as a diff rather than two blobs of JSON. */
+function DiffView({ diff }: { diff: ToolDiff }) {
+  const lines = lineDiff(diff.oldText, diff.newText);
+  if (!lines) {
+    // Too large for the quadratic LCS; show the result rather than nothing.
+    return (
+      <div className="diff">
+        <div className="diff-head">{diff.path} <span className="muted">(too large to diff)</span></div>
+        <CodeBlock text={diff.newText} language={languageFor(diff.path)} />
+      </div>
+    );
+  }
+
+  const rows = collapseContext(lines);
+  const { added, removed } = countChanges(lines);
+  return (
+    <div className="diff">
+      <div className="diff-head">
+        <code>{diff.path}</code>
+        <span className="diff-stat">+{added} −{removed}</span>
+      </div>
+      <pre className="diff-body">
+        {rows.map((row, i) =>
+          row.kind === "gap" ? (
+            <span key={i} className="diff-gap">{`⋯ ${row.count} unchanged line${row.count === 1 ? "" : "s"}\n`}</span>
+          ) : (
+            <span key={i} className={`diff-line diff-${row.kind}`}>
+              {`${row.kind === "add" ? "+" : row.kind === "del" ? "-" : " "} ${row.text}\n`}
+            </span>
+          ),
+        )}
+      </pre>
+    </div>
+  );
+}
+
+/** Tool text output, highlighted when we can guess the language. */
+function CodeBlock({ text, language }: { text: string; language: string }) {
+  return <MarkdownBody>{`\`\`\`${language}\n${text}\n\`\`\``}</MarkdownBody>;
 }
 
 /** The agent is blocked on this request until the user answers it. */
@@ -259,9 +346,13 @@ function ConfigPicker({
   option: ConfigOption;
   onChange: (value: string | boolean) => void;
 }) {
+  // Include the id in the tooltip: when an agent advertises something
+  // unexpected, the label alone does not say where it came from.
+  const hint = `${option.name}${option.description ? ` — ${option.description}` : ""} (${option.id})`;
+
   if (option.type === "boolean") {
     return (
-      <label className="config-toggle" title={option.description ?? option.name}>
+      <label className="config-toggle" title={hint}>
         <input
           type="checkbox"
           checked={Boolean(option.currentValue)}
@@ -272,18 +363,20 @@ function ConfigPicker({
     );
   }
   return (
-    <select
-      className="config-select"
-      title={option.description ?? option.name}
-      value={String(option.currentValue)}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      {option.options?.map((choice) => (
-        <option key={choice.value} value={choice.value}>
-          {choice.name}
-        </option>
-      ))}
-    </select>
+    <label className="config-field" title={hint}>
+      <span className="config-label">{option.name}</span>
+      <select
+        className="config-select"
+        value={String(option.currentValue)}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {option.options?.map((choice) => (
+          <option key={choice.value} value={choice.value}>
+            {choice.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
