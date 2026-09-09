@@ -1,8 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Chat } from "./Chat.js";
 import { NewChat } from "./NewChat.js";
 import { Setup } from "./Setup.js";
 import { Sidebar } from "./Sidebar.js";
+import { useShortcuts } from "./useShortcuts.js";
 
 type View =
   | { name: "welcome" }
@@ -22,9 +23,25 @@ export function App() {
   const openSession = useCallback((sessionId: string) => setView({ name: "chat", sessionId }), []);
   const refreshList = useCallback(() => setListVersion((v) => v + 1), []);
 
+  // The sidebar owns the conversation list, so it exposes the two things
+  // shortcuts need rather than the list being lifted up here.
+  const sidebarApi = useRef<{ focusSearch: () => void; step: (delta: number) => void }>(null);
+
+  const shortcuts = useMemo(
+    () => ({
+      onNewChat: () => setView({ name: "new" }),
+      onFocusSearch: () => sidebarApi.current?.focusSearch(),
+      onNextSession: (delta: number) => sidebarApi.current?.step(delta),
+      onEscape: () => setView((v) => (v.name === "chat" ? v : { name: "welcome" })),
+    }),
+    [],
+  );
+  useShortcuts(shortcuts);
+
   return (
     <div className="shell">
       <Sidebar
+        api={sidebarApi}
         listVersion={listVersion}
         activeSessionId={view.name === "chat" ? view.sessionId : undefined}
         onNewChat={() => setView({ name: "new" })}

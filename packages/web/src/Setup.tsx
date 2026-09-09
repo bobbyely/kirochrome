@@ -62,6 +62,7 @@ export function Setup() {
       {loadError && <div className="banner">{loadError}</div>}
 
       <ThemePicker />
+      <Shortcuts />
 
       {!providers && !loadError && <p className="muted">Loading providers…</p>}
 
@@ -108,6 +109,29 @@ function ThemePicker() {
           </button>
         ))}
       </div>
+    </section>
+  );
+}
+
+const SHORTCUTS: Array<[string, string]> = [
+  ["⌘/Ctrl + K", "Search conversations"],
+  ["⌘/Ctrl + ⇧ + O", "New chat"],
+  ["Alt + ↑ / ↓", "Previous / next conversation"],
+  ["Enter", "Send · ⇧ Enter for a newline"],
+];
+
+function Shortcuts() {
+  return (
+    <section className="theme">
+      <h2 className="section-label">Keyboard</h2>
+      <dl className="shortcuts">
+        {SHORTCUTS.map(([keys, what]) => (
+          <div key={keys}>
+            <dt><kbd>{keys}</kbd></dt>
+            <dd>{what}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }

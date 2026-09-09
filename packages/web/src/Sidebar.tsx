@@ -1,9 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type RefObject } from "react";
 import type { SessionSummary } from "@kirochrome/shared";
 import { useChat } from "./useChat.js";
 
 /** Persistent left rail: new chat, past conversations, and a way into Setup. */
+export interface SidebarApi {
+  focusSearch: () => void;
+  step: (delta: number) => void;
+}
+
 export function Sidebar({
+  api,
   listVersion,
   activeSessionId,
   onNewChat,
@@ -11,6 +17,7 @@ export function Sidebar({
   onOpenSetup,
   setupActive,
 }: {
+  api: RefObject<SidebarApi | null>;
   listVersion: number;
   activeSessionId?: string | undefined;
   onNewChat: () => void;
@@ -23,6 +30,19 @@ export function Sidebar({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [query, setQuery] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(api, () => ({
+    focusSearch: () => searchInput.current?.select(),
+    step: (delta: number) => {
+      if (!sessions || sessions.length === 0) return;
+      const current = sessions.findIndex((s) => s.id === activeSessionId);
+      // From nowhere, Down starts at the top and Up at the bottom.
+      const next = current === -1 ? (delta > 0 ? 0 : sessions.length - 1) : current + delta;
+      const wrapped = (next + sessions.length) % sessions.length;
+      onOpenSession(sessions[wrapped]!.id);
+    },
+  }));
 
   useEffect(() => {
     if (connected) listSessions(showArchived);
@@ -48,6 +68,7 @@ export function Sidebar({
 
       <div className="sidebar-search">
         <input
+          ref={searchInput}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search conversations"
