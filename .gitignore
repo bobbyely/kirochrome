@@ -5,6 +5,11 @@ build/
 *.log
 .npm/
 
+# TypeScript incremental build state. Committing this makes `tsc -b` on a fresh
+# clone believe the build is current, so it emits nothing and every workspace
+# import fails.
+*.tsbuildinfo
+
 # Python
 __pycache__/
 *.py[cod]
