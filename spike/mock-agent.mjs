@@ -94,6 +94,39 @@ const app = agent({ name: "mock-agent" })
       content: [{ type: "content", content: { type: "text", text: "ok" } }],
     });
 
+    // Drive a real terminal through the client, including one that never exits.
+    const quick = await client.request("terminal/create", {
+      sessionId: params.sessionId,
+      command: "sh",
+      args: ["-c", "echo terminal-works"],
+    });
+    await client.request("terminal/wait_for_exit", { sessionId: params.sessionId, terminalId: quick.terminalId });
+    const out = await client.request("terminal/output", { sessionId: params.sessionId, terminalId: quick.terminalId });
+    await notify({
+      sessionUpdate: "agent_message_chunk",
+      content: { type: "text", text: `[terminal: ${JSON.stringify(out.output.trim())} exit=${out.exitStatus?.exitCode}]` },
+    });
+    await client.request("terminal/release", { sessionId: params.sessionId, terminalId: quick.terminalId });
+
+    // A command that spawns a child and never exits — the orphan case.
+    const hung = await client.request("terminal/create", {
+      sessionId: params.sessionId,
+      command: "sh",
+      args: ["-c", "sleep 9991 --kirochrome-orphan-probe & sleep 9992 --kirochrome-orphan-probe"],
+    });
+    await notify({
+      sessionUpdate: "agent_message_chunk",
+      content: { type: "text", text: `[hung terminal: ${hung.terminalId}]` },
+    });
+    await sleep(300);
+    await client.request("terminal/kill", { sessionId: params.sessionId, terminalId: hung.terminalId });
+    const hungExit = await client.request("terminal/wait_for_exit", { sessionId: params.sessionId, terminalId: hung.terminalId });
+    await notify({
+      sessionUpdate: "agent_message_chunk",
+      content: { type: "text", text: `[killed: signal=${hungExit.signal}]` },
+    });
+    await client.request("terminal/release", { sessionId: params.sessionId, terminalId: hung.terminalId });
+
     // Blocks until the client answers.
     const decision = await client.request("session/request_permission", {
       sessionId: params.sessionId,

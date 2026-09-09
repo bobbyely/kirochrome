@@ -277,12 +277,12 @@ screen.
 - [ ] File diffs rendered as diffs; read output syntax-highlighted
 - [x] Permission requests → approve/deny buttons, plus an auto-approve toggle
 - [ ] Queue messages typed during a turn, sending them when it ends
-- [ ] Advertise `terminal: true`; implement `terminal/create`, `output`,
+- [x] Advertise `terminal: true`; implement `terminal/create`, `output`,
       `wait_for_exit`, `kill`, `release`
 - [ ] `TerminalRegistry`: wall-clock cap, `outputByteLimit`, process-group kill
       (SIGTERM → SIGKILL), PID file for orphan reaping at startup
-- [ ] `agent_exited` surfaced in the UI; restart offered
-- [ ] Stop button → `session/cancel`
+- [x] `agent_exited` surfaced in the UI as a transcript row
+- [x] Stop button → `session/cancel`
 
 **Done when:** an infinite command (`sleep 99999`, `yes`) is killed cleanly by
 the timeout, leaves no orphan in the process table, and the UI reports why.
@@ -296,6 +296,20 @@ row, not three: 15 raw events fold to 7 rows. The card's title upgrades from
 Permission requests block the agent until answered. The ACP request is held
 open, so the agent waits exactly as long as the human does, and the prompt is
 an ordinary log event — it survives a refresh mid-decision.
+
+### Terminals verified
+
+Measured directly rather than assumed:
+
+- A shell spawning two background grandchildren, then killed: **2 processes
+  while running, 0 after** — the process *group* died, not just the leader.
+  That is the orphan bug the design called out, demonstrably handled.
+- 50KB of output into a 200-byte limit keeps 200 bytes and sets `truncated`.
+- stdout and stderr are both captured, with the exit status.
+- **A command that cannot start no longer kills the server.** `spawn` emits
+  `error`, not `exit`, and the unhandled event was fatal. Since the *agent*
+  chooses these commands, a typo in a tool call could have taken down every
+  session. Now reported as exit 127 with an explanation.
 
 ### Session titles come from the agent
 

@@ -14,6 +14,7 @@ import {
 import { resolveProvider, spawnAgent, type AgentProcess } from "./agentProcess.js";
 import { normaliseConfigOptions } from "./configOptions.js";
 import type { Store } from "./store.js";
+import { TerminalRegistry } from "./terminals.js";
 
 /**
  * The older per-kind config methods, by option id.
@@ -66,6 +67,7 @@ export class Session {
   /** Permission requests waiting on the UI, keyed by request id. */
   private readonly pendingPermissions = new Map<string, (optionId: string | null) => void>();
   private autoApprove = false;
+  private readonly terminals = new TerminalRegistry();
 
   private title: string | null = null;
   private configOptions: ConfigOption[] = [];
@@ -146,7 +148,20 @@ export class Session {
 
     const app = client({ name: "kirochrome" })
       .onNotification("session/update", ({ params }) => this.onUpdate(params.update))
-      .onRequest("session/request_permission", ({ params }) => this.requestPermission(params));
+      .onRequest("session/request_permission", ({ params }) => this.requestPermission(params))
+      // We advertise terminal: true, so the agent delegates command execution
+      // to us and their lifetimes become our responsibility.
+      .onRequest("terminal/create", ({ params }) => this.terminals.create(params))
+      .onRequest("terminal/output", ({ params }) => this.terminals.output(params.terminalId))
+      .onRequest("terminal/wait_for_exit", ({ params }) => this.terminals.waitForExit(params.terminalId))
+      .onRequest("terminal/kill", ({ params }) => {
+        this.terminals.kill(params.terminalId);
+        return {};
+      })
+      .onRequest("terminal/release", ({ params }) => {
+        this.terminals.release(params.terminalId);
+        return {};
+      });
 
     this.connection = app.connect(proc.stream);
 
@@ -491,6 +506,7 @@ export class Session {
     // Release anything blocked on a human; the agent is going away regardless.
     for (const resolve of this.pendingPermissions.values()) resolve(null);
     this.pendingPermissions.clear();
+    this.terminals.releaseAll();
     this.flushText();
     this.connection?.close();
     this.proc?.kill();
