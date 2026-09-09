@@ -60,6 +60,7 @@ export function App() {
             cwd={view.cwd}
             sessionId={view.sessionId}
             onStarted={refreshList}
+            onOpenSetup={() => setView({ name: "setup" })}
           />
         )}
       </main>

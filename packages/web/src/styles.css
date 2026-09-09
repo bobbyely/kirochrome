@@ -714,3 +714,7 @@ button.primary:hover:not(:disabled) { opacity: 0.9; color: #fff; }
 .queued-remove:hover { color: var(--fail); border: none; }
 
 .composer-buttons { display: flex; gap: 8px; align-items: center; }
+
+.banner { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.banner-body { min-width: 0; }
+.banner button { flex-shrink: 0; }

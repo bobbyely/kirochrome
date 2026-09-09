@@ -46,13 +46,13 @@ live per-conversation status.
 
 What is left, in the order I would do it:
 
-1. **Provider goes `stale` on a runtime failure** — invariant 11 in AGENTS.md
-   describes this, and it is not implemented. Either build it or drop the
-   invariant; a rule nothing enforces is worse than no rule.
-2. **Default model per provider**, remembered and re-applied after
+1. **Default model per provider**, remembered and re-applied after
    `session/new` — a remembered choice, never a hardcoded list.
+2. **Group consecutive tool calls and thinking** into one collapsed work row.
 3. **Archiving**, so the sidebar stays usable as conversations accumulate.
 4. Search, theme control, keyboard shortcuts, image paste, export.
+
+Every invariant in AGENTS.md is now enforced by code.
 
 Still unanswered since phase 0: whether Kiro speaks `configOptions` or the
 older `availableModels`. The code handles both, so nothing is blocked, but
@@ -256,7 +256,7 @@ localhost.
       `availableModels` / `modes` dialects
 - [x] Session list sidebar; reopen calls `session/load`
 - [x] Session titles (first message, or agent-provided)
-- [ ] Runtime failures mark the provider `stale` and link back to setup
+- [x] Runtime failures mark the provider `stale` and link back to setup
 
 **Done when:** two sessions on two different providers, both resumable after a
 server restart.
@@ -351,6 +351,10 @@ call, no extra tokens.
 - [x] Rename conversations; a manual name locks against the agent renaming it
 - [x] Live status per conversation in the sidebar (working / needs input /
       ready / detached), pushed rather than polled
+- [ ] Group consecutive tool calls and thinking into one collapsed work row
+      ("Ran 3 tools"), expandable to the individual cards. This is Kirodex's
+      `WorkGroupRow` pattern; `timeline.ts` already folds per call, so this is
+      the next fold up.
 - [ ] Remember a default model (and mode) per provider, applied to each new
       session. Store the chosen `configOption` values against the provider and
       re-apply after `session/new` — still never a hardcoded list, just a

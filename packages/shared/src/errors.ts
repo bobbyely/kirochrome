@@ -78,6 +78,22 @@ export const REMEDIATION: Record<KcErrorCode, string> = {
   INTERNAL: "An unexpected internal error. Please report this with the details below.",
 };
 
+/**
+ * Codes that indicate the *provider* is wrong, rather than this particular
+ * conversation. These mark a provider stale so it drops out of the new-chat
+ * list until re-checked, and the UI offers a route back to Setup.
+ */
+export const PROVIDER_FAULT_CODES = new Set<KcErrorCode>([
+  "AGENT_NOT_FOUND",
+  "AGENT_SPAWN_FAILED",
+  "AGENT_HANDSHAKE_TIMEOUT",
+  "AGENT_PROTOCOL_MISMATCH",
+  "AGENT_AUTH_REQUIRED",
+]);
+
+export const isProviderFault = (code: KcErrorCode | undefined): boolean =>
+  code !== undefined && PROVIDER_FAULT_CODES.has(code);
+
 /** Builds a KcError, defaulting the remediation from the code. */
 export function kcError(
   code: KcErrorCode,

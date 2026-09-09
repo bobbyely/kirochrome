@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { latestUsage } from "@kirochrome/shared";
+import { isProviderFault, latestUsage } from "@kirochrome/shared";
 import type { ConfigOption, SessionUsage } from "@kirochrome/shared";
 import { MarkdownBody } from "./Markdown.js";
 import { collapseContext, countChanges, lineDiff } from "./diff.js";
@@ -11,11 +11,13 @@ export function Chat({
   cwd,
   sessionId,
   onStarted,
+  onOpenSetup,
 }: {
   providerId?: string;
   cwd?: string;
   sessionId?: string;
   onStarted?: () => void;
+  onOpenSetup?: () => void;
 }) {
   const {
     connected,
@@ -98,8 +100,14 @@ export function Chat({
 
       {error && (
         <div className="banner">
-          <strong>{error.code}</strong> {error.message}
-          {error.remediation && <p className="remediation">{error.remediation}</p>}
+          <div className="banner-body">
+            <strong>{error.code}</strong> {error.message}
+            {error.remediation && <p className="remediation">{error.remediation}</p>}
+          </div>
+          {/* A provider fault is not this conversation's problem to solve. */}
+          {isProviderFault(error.code) && onOpenSetup && (
+            <button onClick={onOpenSetup}>Go to Setup</button>
+          )}
         </div>
       )}
 

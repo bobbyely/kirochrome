@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { kcError, type KcEvent, type ProviderConfig, type SessionSummary } from "@kirochrome/shared";
+import {
+  isProviderFault,
+  kcError,
+  type KcError,
+  type KcEvent,
+  type ProviderConfig,
+  type SessionSummary,
+} from "@kirochrome/shared";
 import { Session } from "./session.js";
 import type { Store } from "./store.js";
 
@@ -34,17 +41,36 @@ export class SessionManager {
     // A dead agent is not a live session: drop it so prompting reports
     // SESSION_NOT_LIVE with a way forward, rather than a confusing
     // "the agent is not connected" from a session the UI still thinks is fine.
-    session.onExit(() => {
+    session.onExit((unexpected) => {
       this.live.delete(session.id);
+      // Invariant 11: a runtime failure contradicts the provider's last check,
+      // so stop trusting it until it is re-checked.
+      if (unexpected) this.store.markStale(session.provider.id);
       broadcast();
     });
     broadcast();
   }
 
   async open(provider: ProviderConfig, cwd?: string): Promise<Session> {
-    const session = await Session.open(randomUUID(), provider, this.store, cwd);
+    const session = await this.staleOnFailure(provider, () =>
+      Session.open(randomUUID(), provider, this.store, cwd),
+    );
     this.track(session);
     return session;
+  }
+
+  /**
+   * Failures that say the provider itself is wrong — a missing binary, a failed
+   * handshake, an expired login — mark it stale so it drops out of the new-chat
+   * list until re-checked. Session-level failures do not.
+   */
+  private async staleOnFailure<T>(provider: ProviderConfig, run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (err) {
+      if (isProviderFault((err as KcError | undefined)?.code)) this.store.markStale(provider.id);
+      throw err;
+    }
   }
 
   /** Re-attaches an agent to a stored conversation so it can be continued. */
@@ -55,7 +81,9 @@ export class SessionManager {
     const record = this.store.getSession(id);
     if (!record) throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
 
-    const session = await Session.resume(record, provider, this.store);
+    const session = await this.staleOnFailure(provider, () =>
+      Session.resume(record, provider, this.store),
+    );
     this.track(session);
     return session;
   }

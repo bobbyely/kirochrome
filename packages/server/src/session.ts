@@ -47,8 +47,10 @@ export class Session {
   private readonly log: KcEvent[] = [];
   private readonly subscribers = new Set<Subscriber>();
   private readonly stateListeners = new Set<() => void>();
-  private readonly exitListeners = new Set<() => void>();
+  private readonly exitListeners = new Set<(unexpected: boolean) => void>();
   private exited = false;
+  /** Set while we are deliberately shutting the agent down, so its exit is not read as a crash. */
+  private closing = false;
   private seq = 0;
   private busy = false;
 
@@ -170,7 +172,9 @@ export class Session {
       for (const resolve of this.pendingPermissions.values()) resolve(null);
       this.pendingPermissions.clear();
       this.notifyState();
-      for (const fn of this.exitListeners) fn();
+      // A crash says something about the provider; a shutdown we asked for does not.
+      const unexpected = !this.closing;
+      for (const fn of this.exitListeners) fn(unexpected);
     });
 
     const app = client({ name: "kirochrome" })
@@ -568,8 +572,11 @@ export class Session {
     return this.log.filter((e) => e.seq > sinceSeq);
   }
 
-  /** Notified when the agent process ends, so the manager can stop treating it as live. */
-  onExit(fn: () => void): () => void {
+  /**
+   * Notified when the agent process ends. `unexpected` is false when we asked
+   * it to stop, so a normal shutdown is not mistaken for a provider fault.
+   */
+  onExit(fn: (unexpected: boolean) => void): () => void {
     this.exitListeners.add(fn);
     return () => this.exitListeners.delete(fn);
   }
@@ -607,6 +614,7 @@ export class Session {
   }
 
   close(): void {
+    this.closing = true;
     // Release anything blocked on a human; the agent is going away regardless.
     for (const resolve of this.pendingPermissions.values()) resolve(null);
     this.pendingPermissions.clear();

@@ -84,9 +84,14 @@ export class Store {
 
   lastCheck(providerId: string): ProviderCheckResult | null {
     const row = this.db
-      .prepare(`SELECT result FROM provider_checks WHERE provider_id = ?`)
-      .get(providerId) as { result?: string } | undefined;
-    return row?.result ? (JSON.parse(row.result) as ProviderCheckResult) : null;
+      .prepare(`SELECT status, result FROM provider_checks WHERE provider_id = ?`)
+      .get(providerId) as { status?: string; result?: string } | undefined;
+    if (!row?.result) return null;
+
+    const result = JSON.parse(row.result) as ProviderCheckResult;
+    // The stored blob is the check as it ran; the column is the current
+    // verdict, which markStale can move after the fact. The column wins.
+    return { ...result, status: (row.status as ProviderCheckResult["status"]) ?? result.status };
   }
 
   /**
