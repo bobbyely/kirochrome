@@ -38,23 +38,32 @@ you have not verified is how you end up debugging a spinner.
 
 ## Where this is now
 
-Phases 0–5 are built and running locally against Claude Code. What works: the
-setup check ladder, streaming chat, persistence and resume, per-session working
-directories, agent-advertised model and mode pickers, tool-call cards,
-permission prompts, terminals with orphan-safe process handling, renaming, and
-live per-conversation status.
+Phases 0–6 are built and verified locally against Claude Code and an offline
+mock agent. A clean checkout installs, typechecks, builds and runs.
 
-What is left, in the order I would do it:
+**Setup:** a seven-rung check ladder that reports which rung failed, with
+per-platform install hints and a field to correct a binary path. Providers go
+`stale` on a runtime failure and drop out of the new-chat list.
 
-1. **Archiving**, so the sidebar stays usable as conversations accumulate.
-4. Search, theme control, keyboard shortcuts, image paste, export.
+**Chat:** streaming responses with markdown and syntax highlighting; tool calls
+folded into collapsible cards showing real diffs; runs of tool calls grouped
+into one row; permission prompts that block the agent until answered;
+context-window meter; image paste; messages queued while a turn runs.
 
-Every invariant in AGENTS.md is now enforced by code.
+**Conversations:** persisted and resumable via `session/load`; renameable,
+archivable, exportable to Markdown; full-text search across all of them; a
+sidebar with live per-conversation status.
 
-Still unanswered since phase 0: whether Kiro speaks `configOptions` or the
-older `availableModels`. The code handles both, so nothing is blocked, but
-running the spike on the work machine would let us delete a fallback path
-instead of carrying it on speculation.
+**Process safety:** agents and their commands run in their own process groups
+and are killed as groups; a ledger reaps anything a crashed server left behind,
+guarded against PID reuse.
+
+### What is left
+
+1. Reorder and edit queued messages before they send.
+2. True virtualisation, if the windowed transcript proves insufficient.
+3. Whatever the work machine turns up once Kiro is actually driving it —
+   including the one protocol question still open since phase 0, below.
 
 ## Phase 0 — Handshake spike
 
