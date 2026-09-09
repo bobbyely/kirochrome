@@ -36,6 +36,31 @@ parser.
 
 ## Development
 
-Nothing to run yet — see [docs/PLAN.md](docs/PLAN.md) phase 0.
+Requires Node 22+ (see `.nvmrc`).
+
+```bash
+npm install
+npm start                 # build everything, serve on http://127.0.0.1:4711
+```
+
+For a live-reloading UI, run the server and Vite separately:
+
+```bash
+npm run build && npm start -w @kirochrome/server   # :4711
+npm run dev -w @kirochrome/web                     # :5173, proxies /api
+```
+
+Providers are configured in `<dataDir>/config.json`, seeded on first run:
+
+| OS | Location |
+|---|---|
+| Linux | `~/.local/share/kirochrome/` |
+| macOS | `~/Library/Application Support/kirochrome/` |
+
+Set `KIROCHROME_DATA_DIR` to override, and `KIROCHROME_TRACE=1` to log every
+JSON-RPC frame to a JSONL file in that directory.
+
+**Current state:** the setup page works — it verifies each configured provider
+rung by rung and reports exactly where a broken one fails. Chat is phase 2.
 
 Runs on macOS and Linux; Windows best-effort. Localhost only by design.

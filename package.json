@@ -1,0 +1,21 @@
+{
+  "name": "kirochrome",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build -w @kirochrome/shared && npm run build -w @kirochrome/server && npm run build -w @kirochrome/web",
+    "dev": "npm run build -w @kirochrome/shared && npm run dev -w @kirochrome/server & npm run dev -w @kirochrome/web",
+    "start": "npm run build && npm start -w @kirochrome/server",
+    "typecheck": "tsc -b packages/shared packages/server && npm run typecheck -w @kirochrome/web"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.13",
+    "typescript": "5.9.3"
+  }
+}

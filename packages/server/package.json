@@ -1,0 +1,16 @@
+{
+  "name": "@kirochrome/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b -w --preserveWatchOutput & node --watch --no-warnings=ExperimentalWarning dist/index.js",
+    "start": "node --no-warnings=ExperimentalWarning dist/index.js"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "1.4.0",
+    "@kirochrome/shared": "*"
+  }
+}

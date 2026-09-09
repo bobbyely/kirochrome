@@ -82,22 +82,50 @@ config-option dialect.
 
 **Goal:** know that a configured agent works before ever opening a chat.
 
-- [ ] Workspace setup, TS strict, `.nvmrc`
-- [ ] `shared`: `KcError`, `KcErrorCode` enum, remediation map, WS message types
-- [ ] Provider registry config (`{id, name, command, args, cwd?}`)
-- [ ] Check ladder: `resolve → spawn → initialize → version → authenticate →
+- [x] Workspace setup (npm workspaces, TS strict), `.nvmrc`
+- [x] `shared`: `KcError`, `KcErrorCode` enum, `CHECK_STAGES`, remediation map
+- [x] Provider registry config (`{id, name, command, args, cwd?}`), seeded on
+      first run at `<dataDir>/config.json`
+- [x] Check ladder: `resolve → spawn → initialize → version → authenticate →
       session → capabilities`, each rung its own error code
-- [ ] Per-session stderr ring buffer (~64KB), attached to error reports
-- [ ] `KIROCHROME_TRACE=1` JSON-RPC frame trace
-- [ ] `provider_checks` table; results persisted with timestamp
-- [ ] Setup UI: provider list, per-provider status, stage reached, remediation,
-      raw stderr behind a details toggle, "Re-check" button
-- [ ] `authenticate` flow when the agent advertises `authMethods`
-- [ ] Server on `127.0.0.1` with WebSocket `Origin` checking
+- [x] Per-session stderr ring buffer (64KB), attached to error reports
+- [x] `KIROCHROME_TRACE=1` JSON-RPC frame trace
+- [x] `provider_checks` table (`node:sqlite`), results persisted with timestamp
+- [x] Setup UI: provider list, rung-by-rung ladder, remediation, raw stderr
+      behind a details toggle, "Re-check" button
+- [x] `authenticate` rung, including mapping a `-32000` at `session/new` back to
+      the `authenticate` rung so the user is told what to act on
+- [x] Server on `127.0.0.1` with `Origin` checking
+- [x] Process-group kill, verified to leave no orphans
 
 **Done when:** a deliberately broken provider (bad path, wrong args, logged-out
 agent) reports the *specific* rung it failed on with actionable text — and a
 good one shows its capabilities and model list.
+
+### Verified
+
+| Provider | Result |
+|---|---|
+| mock agent | `ok` — all seven rungs, config options and modes returned |
+| missing binary | `failed` at `resolve` → `AGENT_NOT_FOUND`, lists paths tried |
+| non-ACP process | `failed` at `initialize` → `AGENT_HANDSHAKE_TIMEOUT` |
+
+Cross-site `Origin` rejected with 403; the Vite dev origin allowed. Check
+results survive a server restart. No orphaned processes after a killed check.
+
+### Deviation from the original phase list
+
+Setup uses **HTTP JSON endpoints, not a WebSocket**. A check is request/response
+— there is nothing to stream yet — so a socket would be complexity without
+benefit. `Origin` checking is implemented now and the WebSocket arrives in phase
+2 where streaming actually exists, reusing the same origin allowlist.
+
+### Known rough edge
+
+A non-ACP process only fails after the full 60s handshake timeout, which is a
+long stare at a spinner. The timeout is generous because `npx` may download an
+adapter on first run. Worth a per-provider override, or streaming rung progress
+to the UI once the WebSocket lands in phase 2.
 
 ---
 
