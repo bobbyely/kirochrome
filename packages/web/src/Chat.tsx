@@ -3,6 +3,7 @@ import { isProviderFault, latestUsage } from "@kirochrome/shared";
 import type { ConfigOption, SessionUsage } from "@kirochrome/shared";
 import { MarkdownBody } from "./Markdown.js";
 import { collapseContext, countChanges, lineDiff } from "./diff.js";
+import { fileToImage, type PendingImage } from "./images.js";
 import { buildRows, languageFor, toolContent, toolSubtitle, type Row, type ToolDiff } from "./timeline.js";
 import { useChat } from "./useChat.js";
 
@@ -36,6 +37,7 @@ export function Chat({
   } = useChat();
 
   const [draft, setDraft] = useState("");
+  const [images, setImages] = useState<PendingImage[]>([]);
   const opened = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
 
@@ -67,9 +69,23 @@ export function Chat({
     const text = draft.trim();
     // Deliberately allowed while busy: the server queues it and sends it when
     // the current turn ends.
-    if (!text || readOnly) return;
-    prompt(text);
+    if ((!text && images.length === 0) || readOnly) return;
+    prompt(text, images.map(({ mime, data }) => ({ mime, data })));
     setDraft("");
+    setImages([]);
+  };
+
+  const canAttach = session?.supportsImages === true;
+
+  /** Collects images from a paste or drop, ignoring anything else. */
+  const collect = async (files: FileList | File[] | null) => {
+    if (!canAttach || !files) return;
+    const picked: PendingImage[] = [];
+    for (const file of Array.from(files)) {
+      const image = await fileToImage(file);
+      if (image) picked.push(image);
+    }
+    if (picked.length > 0) setImages((prev) => [...prev, ...picked]);
   };
 
   return (
@@ -152,9 +168,37 @@ export function Chat({
               ))}
             </div>
           )}
+          {images.length > 0 && (
+            <div className="attachments">
+              {images.map((image) => (
+                <div key={image.key} className="attachment">
+                  <img src={`data:${image.mime};base64,${image.data}`} alt={image.name} />
+                  <button
+                    aria-label={`Remove ${image.name}`}
+                    onClick={() => setImages((prev) => prev.filter((i) => i.key !== image.key))}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             value={draft}
-            placeholder={busy ? "Type to queue for when this turn ends…" : "Send a message"}
+            placeholder={
+              busy
+                ? "Type to queue for when this turn ends…"
+                : canAttach
+                  ? "Send a message — paste or drop an image to attach it"
+                  : "Send a message"
+            }
+            onPaste={(e) => void collect(e.clipboardData?.files ?? null)}
+            onDragOver={(e) => canAttach && e.preventDefault()}
+            onDrop={(e) => {
+              if (!canAttach) return;
+              e.preventDefault();
+              void collect(e.dataTransfer?.files ?? null);
+            }}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -186,7 +230,11 @@ export function Chat({
             </div>
             <div className="composer-buttons">
               {busy && <button onClick={cancel}>Stop</button>}
-              <button className="primary" onClick={submit} disabled={!draft.trim() || !session}>
+              <button
+                className="primary"
+                onClick={submit}
+                disabled={(!draft.trim() && images.length === 0) || !session}
+              >
                 {busy ? "Queue" : "Send"}
               </button>
             </div>
@@ -206,7 +254,18 @@ function Message({
 }) {
   switch (row.kind) {
     case "user":
-      return <div className="msg msg-user">{row.text}</div>;
+      return (
+        <div className="msg msg-user">
+          {row.attachments.length > 0 && (
+            <div className="msg-images">
+              {row.attachments.map((a) => (
+                <img key={a.id} src={`/api/attachments/${encodeURIComponent(a.id)}`} alt="attachment" />
+              ))}
+            </div>
+          )}
+          {row.text}
+        </div>
+      );
     case "agent":
       return (
         <div className="msg msg-agent">

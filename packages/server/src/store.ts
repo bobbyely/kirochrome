@@ -61,6 +61,17 @@ export class Store {
         seq UNINDEXED
       );
 
+      -- Pasted images. Kept out of the event payloads so replaying a
+      -- conversation does not push megabytes of base64 over the socket; the
+      -- event carries ids and the browser fetches them over HTTP.
+      CREATE TABLE IF NOT EXISTS attachments (
+        id         TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        mime       TEXT NOT NULL,
+        data       TEXT NOT NULL,   -- base64
+        created_at INTEGER NOT NULL
+      ) WITHOUT ROWID;
+
       -- Remembered picker choices, re-applied to each new session of a
       -- provider. Values only; the list of options always comes from the agent.
       CREATE TABLE IF NOT EXISTS provider_defaults (
@@ -188,6 +199,21 @@ export class Store {
     this.db
       .prepare(`UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?`)
       .run(archived ? "archived" : "active", Date.now(), id);
+  }
+
+  // ---------- attachments ----------
+
+  addAttachment(id: string, sessionId: string, mime: string, base64: string): void {
+    this.db
+      .prepare(`INSERT INTO attachments (id, session_id, mime, data, created_at) VALUES (?, ?, ?, ?, ?)`)
+      .run(id, sessionId, mime, base64, Date.now());
+  }
+
+  attachment(id: string): { mime: string; data: string } | null {
+    const row = this.db.prepare(`SELECT mime, data FROM attachments WHERE id = ?`).get(id) as
+      | { mime: string; data: string }
+      | undefined;
+    return row ?? null;
   }
 
   // ---------- provider defaults ----------

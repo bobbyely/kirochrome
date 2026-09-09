@@ -186,9 +186,14 @@ export function useChat() {
   );
 
   const prompt = useCallback(
-    (text: string) => {
+    (text: string, images: Array<{ mime: string; data: string }> = []) => {
       if (!sessionId.current) return;
-      send({ type: "prompt", sessionId: sessionId.current, text });
+      send({
+        type: "prompt",
+        sessionId: sessionId.current,
+        text,
+        ...(images.length > 0 ? { images } : {}),
+      });
     },
     [send],
   );

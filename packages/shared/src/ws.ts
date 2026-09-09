@@ -5,7 +5,13 @@ import type { KcEvent, SearchHit, SessionSummary } from "./events.js";
 export type ClientMessage =
   | { type: "open"; providerId: string; cwd?: string }
   | { type: "subscribe"; sessionId: string; sinceSeq: number }
-  | { type: "prompt"; sessionId: string; text: string }
+  | {
+      type: "prompt";
+      sessionId: string;
+      text: string;
+      /** Pasted images, base64 encoded. */
+      images?: Array<{ mime: string; data: string }>;
+    }
   | { type: "cancel"; sessionId: string }
   | { type: "resume"; sessionId: string; sinceSeq: number }
   | { type: "list_workspaces" }

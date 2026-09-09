@@ -110,6 +110,23 @@ async function handleApi(
     return sendJson(res, 200, { ok: true });
   }
 
+  // GET /api/attachments/:id — pasted images, referenced by the event log.
+  const attachmentMatch = /^\/api\/attachments\/([^/]+)$/.exec(url.pathname);
+  if (attachmentMatch && req.method === "GET") {
+    const stored = store.attachment(decodeURIComponent(attachmentMatch[1]!));
+    if (!stored) return sendError(res, 404, kcError("INTERNAL", "No such attachment."));
+
+    const body = Buffer.from(stored.data, "base64");
+    res.writeHead(200, {
+      "content-type": stored.mime,
+      "content-length": String(body.length),
+      // Immutable: attachments are never rewritten once stored.
+      "cache-control": "private, max-age=31536000, immutable",
+    });
+    res.end(body);
+    return;
+  }
+
   // GET /api/sessions/:id/export — the conversation as Markdown.
   const exportMatch = /^\/api\/sessions\/([^/]+)\/export$/.exec(url.pathname);
   if (exportMatch && req.method === "GET") {

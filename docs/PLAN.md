@@ -363,7 +363,7 @@ call, no extra tokens.
       with an "Archived" toggle to see them and restore any of them
 - [x] Theme control on the Setup page: light / dark / follow system
 - [x] Keyboard shortcuts, session switching
-- [ ] Image paste (Kiro advertises `promptCapabilities.image`)
+- [x] Image paste and drag-drop, when the agent advertises `promptCapabilities.image`
 - [x] Export a conversation to markdown
 
 ---

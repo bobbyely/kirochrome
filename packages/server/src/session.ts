@@ -6,6 +6,7 @@ import {
   type KcError,
   type KcEvent,
   type KcEventInput,
+  type Attachment,
   type ConfigOption,
   type ProviderConfig,
   type SessionRecord,
@@ -65,7 +66,7 @@ export class Session {
    * user message, so it is authoritative state (invariant 3). It therefore
    * survives a disconnect and is visible to every connected tab.
    */
-  private readonly queue: string[] = [];
+  private readonly queue: Array<{ text: string; attachments: Attachment[] }> = [];
 
   private textBuffer = "";
   private flushTimer: NodeJS.Timeout | null = null;
@@ -86,6 +87,7 @@ export class Session {
   /** Set once the user renames the chat, so the agent stops renaming it back. */
   private titleLocked = false;
   private configOptions: ConfigOption[] = [];
+  private supportsImages = false;
 
   private constructor(
     id: string,
@@ -216,6 +218,10 @@ export class Session {
       );
     }
 
+    const promptCapabilities = (init.agentCapabilities as { promptCapabilities?: { image?: boolean } })
+      ?.promptCapabilities;
+    this.supportsImages = promptCapabilities?.image === true;
+
     if (opts.loadSessionId) {
       const capabilities = init.agentCapabilities as { loadSession?: boolean } | undefined;
       if (!capabilities?.loadSession) {
@@ -279,8 +285,18 @@ export class Session {
    * A running turn never blocks the composer: further messages join the queue
    * and are sent in order as each turn finishes.
    */
-  async prompt(text: string): Promise<void> {
-    this.queue.push(text);
+  async prompt(text: string, images: Array<{ mime: string; data: string }> = []): Promise<void> {
+    // Images are stored now and referenced by id, so the queue and the log
+    // never carry base64.
+    const attachments: Attachment[] = [];
+    for (const image of images) {
+      if (!this.supportsImages) break;
+      const id = randomUUID();
+      this.store.addAttachment(id, this.id, image.mime, image.data);
+      attachments.push({ id, mime: image.mime });
+    }
+
+    this.queue.push({ text, attachments });
     this.notifyState();
     if (this.busy) return;
     await this.drain();
@@ -291,7 +307,7 @@ export class Session {
       const next = this.queue.shift();
       if (next === undefined) return;
       this.notifyState();
-      await this.runTurn(next);
+      await this.runTurn(next.text, next.attachments);
     }
   }
 
@@ -302,7 +318,7 @@ export class Session {
     this.notifyState();
   }
 
-  private async runTurn(text: string): Promise<void> {
+  private async runTurn(text: string, attachments: Attachment[] = []): Promise<void> {
     const connection = this.connection;
     const agentSessionId = this.agentSessionId;
     if (!connection || !agentSessionId) {
@@ -317,14 +333,24 @@ export class Session {
       this.title = text.length > 60 ? `${text.slice(0, 57)}…` : text;
       this.persistMeta();
     }
-    this.append({ type: "user_message", text });
+    this.append(
+      attachments.length > 0 ? { type: "user_message", text, attachments } : { type: "user_message", text },
+    );
     this.append({ type: "turn_start" });
 
     try {
-      const res = await connection.agent.request("session/prompt", {
+      const blocks: Array<Record<string, unknown>> = [{ type: "text", text }];
+      for (const attachment of attachments) {
+        const stored = this.store.attachment(attachment.id);
+        if (stored) blocks.push({ type: "image", mimeType: stored.mime, data: stored.data });
+      }
+
+      // Typed explicitly: the generic overload is used because the prompt
+      // blocks are built dynamically, which loses the literal inference.
+      const res = (await connection.agent.request("session/prompt", {
         sessionId: agentSessionId,
-        prompt: [{ type: "text", text }],
-      });
+        prompt: blocks,
+      })) as { stopReason?: string };
       this.flushText();
       this.append({ type: "turn_end", stopReason: res.stopReason ?? "end_turn" });
     } catch (err) {
@@ -640,8 +666,9 @@ export class Session {
       configOptions: this.configOptions,
       autoApprove: this.autoApprove,
       awaitingInput: this.pendingPermissions.size > 0,
-      queued: [...this.queue],
+      queued: this.queue.map((q) => q.text),
       archived: false,
+      supportsImages: this.supportsImages,
     };
   }
 

@@ -120,6 +120,7 @@ export class SessionManager {
       awaitingInput: false,
       queued: [],
       archived: record.status === "archived",
+      supportsImages: false,
     };
   }
 

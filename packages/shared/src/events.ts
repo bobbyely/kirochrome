@@ -14,7 +14,8 @@ export interface KcEventBase {
 
 export type KcEvent = KcEventBase &
   (
-    | { type: "user_message"; text: string }
+    /** `attachments` holds ids, not bytes — see the attachments table. */
+    | { type: "user_message"; text: string; attachments?: Attachment[] }
     /** Coalesced agent text. Deltas are buffered before append — never one event per token. */
     | { type: "agent_text"; text: string }
     /** Any non-text ACP session update we do not model explicitly. */
@@ -68,6 +69,8 @@ export interface SessionSummary {
   /** Messages typed during a turn, waiting their turn to be sent. */
   queued: string[];
   archived: boolean;
+  /** Whether the agent said it accepts images in a prompt. */
+  supportsImages: boolean;
 }
 
 /**
@@ -118,6 +121,11 @@ export function latestUsage(events: KcEvent[]): SessionUsage | null {
     return { used: u.used, size: u.size, ...(u.cost ? { cost: u.cost } : {}) };
   }
   return null;
+}
+
+export interface Attachment {
+  id: string;
+  mime: string;
 }
 
 export interface PermissionOption {

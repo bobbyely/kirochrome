@@ -155,7 +155,7 @@ async function dispatch(
     case "prompt": {
       const session = sessions.requireLive(msg.sessionId);
       send({ type: "session_state", session: { ...session.summary(), busy: true } });
-      await session.prompt(msg.text);
+      await session.prompt(msg.text, msg.images ?? []);
       send({ type: "session_state", session: session.summary() });
       return;
     }

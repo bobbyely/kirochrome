@@ -1,4 +1,4 @@
-import type { KcEvent, PermissionOption } from "@kirochrome/shared";
+import type { Attachment, KcEvent, PermissionOption } from "@kirochrome/shared";
 import { updateCategory } from "@kirochrome/shared";
 
 /**
@@ -12,7 +12,7 @@ import { updateCategory } from "@kirochrome/shared";
  * A pure function of the log, so a replay produces identical output.
  */
 export type Row =
-  | { kind: "user"; seq: number; text: string }
+  | { kind: "user"; seq: number; text: string; attachments: Attachment[] }
   | { kind: "agent"; seq: number; text: string }
   | { kind: "thought"; seq: number; text: string }
   | { kind: "tool"; seq: number; toolCallId: string; title: string; toolKind: string; status: string; details: unknown[] }
@@ -73,7 +73,12 @@ export function buildRows(events: KcEvent[]): Row[] {
   for (const event of events) {
     switch (event.type) {
       case "user_message":
-        rows.push({ kind: "user", seq: event.seq, text: event.text });
+        rows.push({
+          kind: "user",
+          seq: event.seq,
+          text: event.text,
+          attachments: event.attachments ?? [],
+        });
         break;
 
       case "agent_text": {
