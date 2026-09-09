@@ -165,3 +165,13 @@ export interface ConfigOption {
   currentValue: string | boolean;
   options?: ConfigOptionValue[];
 }
+
+/** One conversation matching a search, with its best snippet. */
+export interface SearchHit {
+  sessionId: string;
+  seq: number;
+  /** Matches are wrapped in \u0002 … \u0003 so the UI can highlight them safely. */
+  snippet: string;
+  title: string | null;
+  providerName: string;
+}

@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ClientMessage, KcError, KcEvent, ServerMessage, SessionSummary } from "@kirochrome/shared";
+import type {
+  ClientMessage,
+  KcError,
+  KcEvent,
+  SearchHit,
+  ServerMessage,
+  SessionSummary,
+} from "@kirochrome/shared";
 
 /**
  * Owns the WebSocket and mirrors the server's event log.
@@ -15,6 +22,7 @@ export function useChat() {
   const [error, setError] = useState<KcError | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
   const [workspaces, setWorkspaces] = useState<string[] | null>(null);
+  const [searchHits, setSearchHits] = useState<SearchHit[] | null>(null);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
 
   const ws = useRef<WebSocket | null>(null);
@@ -71,6 +79,9 @@ export function useChat() {
         case "sessions":
           setSessions(msg.sessions);
           break;
+        case "search_results":
+          setSearchHits(msg.hits);
+          break;
         case "workspaces":
           setWorkspaces(msg.workspaces);
           setCurrentWorkspace(msg.current);
@@ -118,6 +129,14 @@ export function useChat() {
 
   const listSessions = useCallback(
     (includeArchived = false) => send({ type: "list_sessions", includeArchived }),
+    [send],
+  );
+
+  const search = useCallback(
+    (query: string) => {
+      if (query.trim()) send({ type: "search", query });
+      else setSearchHits(null);
+    },
     [send],
   );
 
@@ -193,6 +212,8 @@ export function useChat() {
     listWorkspaces,
     archiveSession,
     renameSession,
+    search,
+    searchHits,
     unqueue,
     setConfigOption,
     answerPermission,

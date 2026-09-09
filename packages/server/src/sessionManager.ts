@@ -164,6 +164,10 @@ export class SessionManager {
     throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
   }
 
+  search(query: string) {
+    return this.store.searchSessions(query);
+  }
+
   /** Renames a conversation, whether or not it currently has an agent attached. */
   rename(id: string, title: string): void {
     const trimmed = title.trim();

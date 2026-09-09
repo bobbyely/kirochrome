@@ -18,13 +18,23 @@ export function Sidebar({
   onOpenSetup: () => void;
   setupActive: boolean;
 }) {
-  const { connected, sessions, listSessions, renameSession, archiveSession } = useChat();
+  const { connected, sessions, listSessions, renameSession, archiveSession, search, searchHits } =
+    useChat();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     if (connected) listSessions(showArchived);
   }, [connected, listSessions, listVersion, showArchived]);
+
+  // Debounced so typing does not fire a query per keystroke.
+  useEffect(() => {
+    const id = window.setTimeout(() => search(query), 180);
+    return () => window.clearTimeout(id);
+  }, [query, search]);
+
+  const searching = query.trim().length > 0;
 
   return (
     <aside className="sidebar">
@@ -36,6 +46,31 @@ export function Sidebar({
         <span className="plus">+</span> New chat
       </button>
 
+      <div className="sidebar-search">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search conversations"
+          aria-label="Search conversations"
+        />
+        {searching && (
+          <button className="search-clear" onClick={() => setQuery("")} aria-label="Clear search">
+            ×
+          </button>
+        )}
+      </div>
+
+      {searching ? (
+        <nav className="sidebar-list">
+          {searchHits?.length === 0 && <p className="sidebar-empty">No matches.</p>}
+          {searchHits?.map((hit) => (
+            <button key={hit.sessionId} className="search-hit" onClick={() => onOpenSession(hit.sessionId)}>
+              <span className="sidebar-item-title">{hit.title ?? "Untitled"}</span>
+              <Snippet text={hit.snippet} />
+            </button>
+          ))}
+        </nav>
+      ) : (
       <nav className="sidebar-list">
         {sessions?.length === 0 && (
           <p className="sidebar-empty">{showArchived ? "Nothing here." : "No conversations yet."}</p>
@@ -90,6 +125,7 @@ export function Sidebar({
           ),
         )}
       </nav>
+      )}
 
       <div className="sidebar-foot">
         <button className={`setup-link ${setupActive ? "active" : ""}`} onClick={onOpenSetup}>
@@ -123,6 +159,24 @@ function StatusIcon({ session }: { session: SessionSummary }) {
     return <span className="status status-detached" title="No agent attached" aria-label="Detached" />;
   }
   return <span className="status status-idle" title="Ready" aria-label="Ready" />;
+}
+
+/**
+ * Renders a search snippet, highlighting the matched terms.
+ *
+ * SQLite marks matches with \u0002 and \u0003 rather than HTML, so the text is
+ * split on those and rendered as elements — no dangerouslySetInnerHTML, and no
+ * way for conversation text to inject markup.
+ */
+function Snippet({ text }: { text: string }) {
+  const parts = text.split(/\u0002|\u0003/);
+  return (
+    <span className="search-snippet">
+      {parts.map((part, i) =>
+        i % 2 === 1 ? <mark key={i}>{part}</mark> : <span key={i}>{part}</span>,
+      )}
+    </span>
+  );
 }
 
 function RenameField({

@@ -1,5 +1,5 @@
 import type { KcError } from "./errors.js";
-import type { KcEvent, SessionSummary } from "./events.js";
+import type { KcEvent, SearchHit, SessionSummary } from "./events.js";
 
 /** Browser → server. */
 export type ClientMessage =
@@ -15,6 +15,7 @@ export type ClientMessage =
   | { type: "rename_session"; sessionId: string; title: string }
   | { type: "unqueue"; sessionId: string; index: number }
   | { type: "archive_session"; sessionId: string; archived: boolean }
+  | { type: "search"; query: string }
   | { type: "list_sessions"; includeArchived?: boolean };
 
 /** Server → browser. */
@@ -24,5 +25,6 @@ export type ServerMessage =
   | { type: "events"; sessionId: string; events: KcEvent[] }
   | { type: "session_state"; session: SessionSummary }
   | { type: "sessions"; sessions: SessionSummary[] }
+  | { type: "search_results"; query: string; hits: SearchHit[] }
   | { type: "workspaces"; workspaces: string[]; current: string }
   | { type: "error"; error: KcError; sessionId?: string };

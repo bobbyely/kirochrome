@@ -117,6 +117,11 @@ async function dispatch(
       return;
     }
 
+    case "search": {
+      send({ type: "search_results", query: msg.query, hits: sessions.search(msg.query) });
+      return;
+    }
+
     case "archive_session": {
       sessions.setArchived(msg.sessionId, msg.archived);
       send({ type: "sessions", sessions: sessions.list(100, prefs.includeArchived) });

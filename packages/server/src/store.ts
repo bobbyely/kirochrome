@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import type { KcEvent, ProviderCheckResult, SessionRecord } from "@kirochrome/shared";
+import type { KcEvent, ProviderCheckResult, SearchHit, SessionRecord } from "@kirochrome/shared";
 import { dataDir, dbPath } from "./paths.js";
 
 /**
@@ -52,6 +52,15 @@ export class Store {
 
       CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
 
+      -- Full-text index over what was actually said. Derived from the event
+      -- log, so it can be dropped and rebuilt at any time.
+      -- (No backticks in this string: it is a TypeScript template literal.)
+      CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(
+        body,
+        session_id UNINDEXED,
+        seq UNINDEXED
+      );
+
       -- Remembered picker choices, re-applied to each new session of a
       -- provider. Values only; the list of options always comes from the agent.
       CREATE TABLE IF NOT EXISTS provider_defaults (
@@ -63,6 +72,7 @@ export class Store {
     `);
 
     this.migrate();
+    this.backfillSearch();
     // The database holds work conversations and source code. Keep it private.
     try {
       chmodSync(path, 0o600);
@@ -214,6 +224,76 @@ export class Store {
       .prepare(`INSERT INTO events (session_id, seq, ts, type, payload) VALUES (?, ?, ?, ?, ?)`)
       .run(sessionId, event.seq, event.ts, event.type, JSON.stringify(event));
     this.db.prepare(`UPDATE sessions SET updated_at = ? WHERE id = ?`).run(event.ts, sessionId);
+
+    const body = searchableText(event);
+    if (body) {
+      this.db
+        .prepare(`INSERT INTO events_fts (body, session_id, seq) VALUES (?, ?, ?)`)
+        .run(body, sessionId, event.seq);
+    }
+  }
+
+  /** Builds the index from the log when it is missing — after an upgrade, say. */
+  private backfillSearch(): void {
+    const indexed = this.db.prepare(`SELECT count(*) AS n FROM events_fts`).get() as { n: number };
+    if (indexed.n > 0) return;
+
+    const rows = this.db
+      .prepare(`SELECT session_id, seq, payload FROM events WHERE type IN ('user_message','agent_text')`)
+      .all() as Array<{ session_id: string; seq: number; payload: string }>;
+    if (rows.length === 0) return;
+
+    const insert = this.db.prepare(`INSERT INTO events_fts (body, session_id, seq) VALUES (?, ?, ?)`);
+    for (const row of rows) {
+      try {
+        const body = searchableText(JSON.parse(row.payload) as KcEvent);
+        if (body) insert.run(body, row.session_id, row.seq);
+      } catch {
+        // A single unreadable row must not stop the server starting.
+      }
+    }
+    console.log(`[search] indexed ${rows.length} existing message(s)`);
+  }
+
+  /**
+   * Full-text search across every conversation.
+   *
+   * Returns the best-matching snippet per session rather than every hit, which
+   * is what a conversation list wants.
+   */
+  searchSessions(query: string, limit = 30): SearchHit[] {
+    const match = toMatchQuery(query);
+    if (!match) return [];
+
+    const rows = this.db
+      .prepare(
+        `SELECT f.session_id AS sessionId, f.seq AS seq,
+                snippet(events_fts, 0, '\u0002', '\u0003', '…', 12) AS snippet,
+                s.title AS title, s.provider_name AS providerName, s.status AS status
+         FROM events_fts f
+         JOIN sessions s ON s.id = f.session_id
+         WHERE events_fts MATCH ?
+         ORDER BY rank
+         LIMIT ?`,
+      )
+      .all(match, limit * 4) as Array<Record<string, string | number | null>>;
+
+    // One hit per conversation: a list wants the best snippet, not every match.
+    const best = new Map<string, SearchHit>();
+    for (const row of rows) {
+      const sessionId = String(row["sessionId"]);
+      if (!best.has(sessionId)) {
+        best.set(sessionId, {
+          sessionId,
+          seq: Number(row["seq"]),
+          snippet: String(row["snippet"] ?? ""),
+          title: (row["title"] as string | null) ?? null,
+          providerName: String(row["providerName"] ?? ""),
+        });
+      }
+      if (best.size >= limit) break;
+    }
+    return [...best.values()];
   }
 
   eventsSince(sessionId: string, sinceSeq: number): KcEvent[] {
@@ -258,4 +338,26 @@ function toRecord(row: Record<string, string | number | null>): SessionRecord {
     createdAt: Number(row["created_at"]),
     updatedAt: Number(row["updated_at"]),
   };
+}
+
+/** Only what a person actually said or was told is worth indexing. */
+function searchableText(event: KcEvent): string | null {
+  if (event.type === "user_message" || event.type === "agent_text") return event.text;
+  return null;
+}
+
+/**
+ * Turns a plain search box into a safe FTS5 query.
+ *
+ * FTS5 MATCH is a language, so raw input like `foo(` or `AND` is a syntax
+ * error rather than a search. Every term is quoted and ANDed, which makes any
+ * input legal and behaves the way a search box is expected to.
+ */
+function toMatchQuery(query: string): string | null {
+  const terms = query
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((term) => `"${term.replace(/"/g, '""')}"`);
+  return terms.length > 0 ? terms.join(" AND ") : null;
 }
