@@ -72,6 +72,22 @@ Breaking one of these is a design regression, not a style nit.
   swap it for a native module to silence the warning.
 - **Never log `env`** when logging a spawn.
 
+## Committing
+
+**Commit as the repository's own git identity.** Run plain `git commit` and let
+it use the configured `user.name` / `user.email`. Record Claude's contribution
+with a `Co-Authored-By:` trailer and nothing else.
+
+**Never pass `-c user.email=...` or `--author`** unless the user explicitly asks
+for a specific author.
+
+**Why:** an agent session may be handed a plus-alias address such as
+`name+claude@example.com`. GitHub does not map a plus-alias to the owner's
+account, so commits made with one are attributed to a separate identity — the
+repo owner ends up listed as a co-author on their own work, and the contributor
+graph is wrong. It happened here: the first nine commits had to be rewritten.
+The session-supplied email identifies the user; it does not stamp authorship.
+
 ## Prior art: Kirodex
 
 [thabti/kirodex](https://github.com/thabti/kirodex) — MIT, Tauri 2 + Rust +
