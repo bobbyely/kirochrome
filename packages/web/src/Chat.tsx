@@ -209,6 +209,8 @@ function Message({
       return <PermissionCard row={row} onAnswer={onPermission} />;
     case "note":
       return <div className="msg msg-note">{row.label}</div>;
+    case "work":
+      return <WorkGroup row={row} onPermission={onPermission} />;
     case "divider":
       return <hr className="turn-divider" />;
     case "error":
@@ -219,6 +221,54 @@ function Message({
         </div>
       );
   }
+}
+
+/**
+ * A run of tool calls and thinking, collapsed into one row.
+ *
+ * Open while the agent is still working so progress is visible, then collapsed
+ * once it finishes — unless the reader has taken control of the toggle, in
+ * which case their choice wins.
+ */
+function WorkGroup({
+  row,
+  onPermission,
+}: {
+  row: Extract<Row, { kind: "work" }>;
+  onPermission: (requestId: string, optionId: string | null) => void;
+}) {
+  const [open, setOpen] = useState(row.active);
+  const touched = useRef(false);
+
+  useEffect(() => {
+    if (!touched.current) setOpen(row.active);
+  }, [row.active]);
+
+  const parts = [
+    row.tools > 0 ? `Ran ${row.tools} tool${row.tools === 1 ? "" : "s"}` : null,
+    row.thoughts > 0 ? "thought" : null,
+  ].filter(Boolean);
+
+  return (
+    <details
+      className="work"
+      open={open}
+      onToggle={(e) => {
+        touched.current = true;
+        setOpen((e.currentTarget as HTMLDetailsElement).open);
+      }}
+    >
+      <summary>
+        <span className={`work-mark ${row.active ? "active" : ""}`}>{row.active ? "◐" : "●"}</span>
+        <span>{parts.join(" · ") || "Work"}</span>
+      </summary>
+      <div className="work-children">
+        {row.children.map((child) => (
+          <Message key={child.seq} row={child} onPermission={onPermission} />
+        ))}
+      </div>
+    </details>
+  );
 }
 
 const STATUS_MARK: Record<string, string> = {

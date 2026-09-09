@@ -18,8 +18,52 @@ export type Row =
   | { kind: "tool"; seq: number; toolCallId: string; title: string; toolKind: string; status: string; details: unknown[] }
   | { kind: "permission"; seq: number; requestId: string; title: string; options: PermissionOption[]; answeredWith: string | null }
   | { kind: "note"; seq: number; label: string }
+  /** Consecutive tool calls and thinking, folded into one collapsible run. */
+  | { kind: "work"; seq: number; children: Row[]; tools: number; thoughts: number; active: boolean }
   | { kind: "error"; seq: number; code: string; message: string; remediation?: string | undefined }
   | { kind: "divider"; seq: number };
+
+/**
+ * Folds runs of consecutive tool calls and thinking into a single `work` row.
+ *
+ * A turn that reads four files and runs two commands is six rows of machinery
+ * around one sentence of answer. Grouping keeps the conversation legible while
+ * leaving every card one click away.
+ *
+ * A lone item is left alone — wrapping one tool call in a group is pure noise.
+ */
+function groupWork(rows: Row[]): Row[] {
+  const out: Row[] = [];
+  let run: Row[] = [];
+
+  const flush = () => {
+    if (run.length === 0) return;
+    if (run.length === 1) {
+      out.push(run[0]!);
+    } else {
+      const tools = run.filter((r) => r.kind === "tool");
+      out.push({
+        kind: "work",
+        seq: run[0]!.seq,
+        children: run,
+        tools: tools.length,
+        thoughts: run.filter((r) => r.kind === "thought").length,
+        active: tools.some((r) => r.kind === "tool" && r.status !== "completed" && r.status !== "failed"),
+      });
+    }
+    run = [];
+  };
+
+  for (const row of rows) {
+    if (row.kind === "tool" || row.kind === "thought") run.push(row);
+    else {
+      flush();
+      out.push(row);
+    }
+  }
+  flush();
+  return out;
+}
 
 export function buildRows(events: KcEvent[]): Row[] {
   const rows: Row[] = [];
@@ -129,7 +173,7 @@ export function buildRows(events: KcEvent[]): Row[] {
       // turn_start drives the busy indicator, not the transcript.
     }
   }
-  return rows;
+  return groupWork(rows);
 }
 
 /** Best-effort one-line summary of what a tool call actually did. */

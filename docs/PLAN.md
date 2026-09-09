@@ -46,8 +46,7 @@ live per-conversation status.
 
 What is left, in the order I would do it:
 
-1. **Group consecutive tool calls and thinking** into one collapsed work row.
-2. **Archiving**, so the sidebar stays usable as conversations accumulate.
+1. **Archiving**, so the sidebar stays usable as conversations accumulate.
 4. Search, theme control, keyboard shortcuts, image paste, export.
 
 Every invariant in AGENTS.md is now enforced by code.
@@ -349,10 +348,8 @@ call, no extra tokens.
 - [x] Rename conversations; a manual name locks against the agent renaming it
 - [x] Live status per conversation in the sidebar (working / needs input /
       ready / detached), pushed rather than polled
-- [ ] Group consecutive tool calls and thinking into one collapsed work row
-      ("Ran 3 tools"), expandable to the individual cards. This is Kirodex's
-      `WorkGroupRow` pattern; `timeline.ts` already folds per call, so this is
-      the next fold up.
+- [x] Group consecutive tool calls and thinking into one collapsed work row
+      ("Ran 3 tools"), expandable to the individual cards
 - [x] Remember a default model (and mode) per provider, applied to each new
       session. Stored against the provider and re-applied after `session/new` —
       still never a hardcoded list, just a remembered choice.

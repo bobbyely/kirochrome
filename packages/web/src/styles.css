@@ -718,3 +718,29 @@ button.primary:hover:not(:disabled) { opacity: 0.9; color: #fff; }
 .banner { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .banner-body { min-width: 0; }
 .banner button { flex-shrink: 0; }
+
+/* ---------- grouped work ---------- */
+.work { align-self: stretch; }
+.work > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.work > summary::-webkit-details-marker { display: none; }
+.work > summary:hover { color: var(--text); }
+.work-mark { font-size: 10px; }
+.work-mark.active { color: var(--accent); animation: spin 0.9s linear infinite; display: inline-block; }
+@media (prefers-reduced-motion: reduce) { .work-mark.active { animation: none; } }
+.work-children {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
