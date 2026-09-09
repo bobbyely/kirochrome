@@ -12,7 +12,10 @@
     "build": "npm run build -w @kirochrome/shared && npm run build -w @kirochrome/server && npm run build -w @kirochrome/web",
     "dev": "npm run build -w @kirochrome/shared && npm run dev -w @kirochrome/server & npm run dev -w @kirochrome/web",
     "start": "npm run build && npm start -w @kirochrome/server",
-    "typecheck": "tsc -b packages/shared packages/server && npm run typecheck -w @kirochrome/web"
+    "typecheck": "tsc -b packages/shared packages/server && npm run typecheck -w @kirochrome/web",
+    "test": "npm run build && npm run test:unit && npm run test:server",
+    "test:unit": "node --experimental-strip-types --test 'packages/web/src/__tests__/*.test.ts'",
+    "test:server": "node --test --test-timeout=45000 'packages/server/test/*.test.mjs'"
   },
   "devDependencies": {
     "@types/node": "22.18.13",

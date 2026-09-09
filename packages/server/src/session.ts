@@ -561,12 +561,19 @@ export class Session {
 
     const requestId = randomUUID();
     this.flushText();
-    this.append({ type: "permission_request", requestId, title, options });
 
-    const optionId = await new Promise<string | null>((resolve) => {
+    // Register the resolver BEFORE announcing the request. `append` notifies
+    // subscribers synchronously, so an answer that comes back synchronously
+    // would otherwise find no pending entry and be dropped — leaving the agent
+    // blocked forever.
+    const answer = new Promise<string | null>((resolve) => {
       this.pendingPermissions.set(requestId, resolve);
-      this.notifyState();
     });
+
+    this.append({ type: "permission_request", requestId, title, options });
+    this.notifyState();
+
+    const optionId = await answer;
     this.pendingPermissions.delete(requestId);
     this.notifyState();
 

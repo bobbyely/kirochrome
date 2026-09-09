@@ -73,6 +73,10 @@ Breaking one of these is a design regression, not a style nit.
 - **`session/load` returns `modes` and `configOptions` too**, exactly as
   `session/new` does. Discarding its response leaves a resumed conversation
   with no pickers at all.
+- **Register a pending resolver before announcing the event that asks for it.**
+  `append` notifies subscribers synchronously, so an answer arriving
+  synchronously would find no pending entry and be dropped, blocking the agent
+  forever. This is exactly how the permission race was found.
 - **Reap orphaned processes once at startup, never per session** — per-session
   reaping kills processes belonging to sessions that are still alive.
 - **Killing a shell does not kill its children.** Kill the process group
@@ -144,6 +148,24 @@ Patterns worth adopting, and why:
 - **Detection with a manual fallback.** Their onboarding auto-detects the CLI,
   offers per-platform install commands when it fails, and lets the user browse
   to a path. Our `AGENT_NOT_FOUND` should grow the same two affordances.
+
+## Tests
+
+`npm test` builds, then runs both suites. No test dependencies: `node:test` and
+`--experimental-strip-types` are built into Node 22.
+
+- `packages/web/src/__tests__/*.test.ts` — pure logic (diffing, folding the
+  event log into rows), run directly as TypeScript.
+- `packages/server/test/*.test.mjs` — run against `dist`, so they exercise what
+  actually ships. Node's type stripping does not rewrite `.js` specifiers to
+  `.ts`, which is why these are plain `.mjs` importing the build.
+
+`session.test.mjs` drives the real mock agent over ACP, so it covers the
+behaviours that are easy to break: delta coalescing, queue ordering, replay
+suppression on resume, and defaults surviving a withdrawn option.
+
+**When you fix a bug, add the case.** Every test in there exists because
+something was once wrong.
 
 ## Debugging
 
