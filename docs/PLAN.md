@@ -353,6 +353,12 @@ call, no extra tokens.
 - [x] Remember a default model (and mode) per provider, applied to each new
       session. Stored against the provider and re-applied after `session/new` —
       still never a hardcoded list, just a remembered choice.
+- [ ] A real icon and favicon. Note the obvious approach — combining the Kiro
+      and Chrome marks — borrows two companies' trademarks, so it is fine for a
+      local tool but a problem the moment this is shared publicly. An original
+      mark that nods at both ideas (an agent in a browser) avoids that. A
+      placeholder ships today; this item is to replace it with something
+      designed.
 - [ ] Archive conversations: hide them from the sidebar without deleting the
       log. `sessions.status` already has room for it; `events` stays untouched,
       since the log is append-only.
