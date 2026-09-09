@@ -10,6 +10,7 @@ import {
   type StageOutcome,
 } from "@kirochrome/shared";
 import { resolveProvider, spawnAgent, type AgentProcess } from "./agentProcess.js";
+import { defaultCwd } from "./session.js";
 
 /** JSON-RPC code an ACP agent returns when it needs the client to authenticate. */
 const AUTH_REQUIRED = -32000;
@@ -143,7 +144,7 @@ export async function checkProvider(provider: ProviderConfig): Promise<ProviderC
       const session = await rung("session", async () => {
         try {
           return await withTimeout(
-            acp.buildSession(provider.cwd ?? process.cwd()).start(),
+            acp.buildSession(provider.cwd ?? defaultCwd()).start(),
             SESSION_TIMEOUT_MS,
             () =>
               kcError("RPC_TIMEOUT", `'${provider.name}' did not answer session/new in time.`, {

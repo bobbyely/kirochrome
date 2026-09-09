@@ -48,7 +48,7 @@ export class Session {
 
   /** Spawns the agent and completes the ACP handshake. */
   static async open(id: string, provider: ProviderConfig): Promise<Session> {
-    const cwd = provider.cwd ?? process.cwd();
+    const cwd = provider.cwd ?? defaultCwd();
     const session = new Session(id, provider, cwd);
     await session.connect();
     return session;
@@ -212,6 +212,18 @@ export class Session {
     this.connection?.close();
     this.proc?.kill();
   }
+}
+
+/**
+ * Where the agent should work.
+ *
+ * `process.cwd()` is wrong here: npm runs a workspace script with the cwd set
+ * to the package directory, so an agent started via `npm start` would be
+ * scoped to packages/server rather than the project. INIT_CWD is where the
+ * user actually invoked npm.
+ */
+export function defaultCwd(): string {
+  return process.env.KIROCHROME_CWD ?? process.env.INIT_CWD ?? process.cwd();
 }
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: () => KcError): Promise<T> {

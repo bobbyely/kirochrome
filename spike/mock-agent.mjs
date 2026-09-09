@@ -47,6 +47,13 @@ const app = agent({ name: "mock-agent" })
     const notify = (update) =>
       client.notify("session/update", { sessionId: params.sessionId, update });
 
+    // Session-state updates: these must NOT become transcript rows.
+    await notify({ sessionUpdate: "available_commands_update", availableCommands: [] });
+    await notify({ sessionUpdate: "usage_update", used: 12_500, size: 200_000, cost: { amount: 0.42, currency: "USD" } });
+    await notify({ sessionUpdate: "session_info_update", title: "Mock session" });
+
+    await notify({ sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "thinking…" } });
+
     for (const text of ["PROBE", "_", "OK"]) {
       await notify({
         sessionUpdate: "agent_message_chunk",
@@ -71,6 +78,7 @@ const app = agent({ name: "mock-agent" })
       content: [{ type: "content", content: { type: "text", text: "ok" } }],
     });
 
+    await notify({ sessionUpdate: "usage_update", used: 18_900, size: 200_000, cost: { amount: 0.51, currency: "USD" } });
     return { stopReason: "end_turn" };
   });
 

@@ -231,3 +231,22 @@ button:disabled { opacity: 0.55; cursor: default; }
 
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.primary:hover:not(:disabled) { opacity: 0.9; color: #fff; }
+
+.msg-thought {
+  align-self: flex-start;
+  max-width: 100%;
+  font-style: italic;
+  color: var(--muted);
+  background: transparent;
+  border-left: 2px solid var(--border);
+  border-radius: 0;
+  padding: 2px 0 2px 12px;
+}
+
+.turn-divider { width: 100%; border: none; border-top: 1px solid var(--border); margin: 6px 0; opacity: 0.6; }
+
+.context-meter { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+.context-bar { width: 56px; height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.context-fill { height: 100%; background: var(--accent); transition: width 0.3s ease; }
+.context-fill.high { background: var(--warn); }
+.context-pct { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }

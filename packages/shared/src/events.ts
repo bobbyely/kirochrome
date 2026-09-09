@@ -48,3 +48,53 @@ export interface SessionSummary {
   busy: boolean;
   lastSeq: number;
 }
+
+/**
+ * ACP session updates split into two jobs: things that belong in the
+ * transcript, and things that describe session state.
+ *
+ * Rendering every update as a transcript row buries the conversation under
+ * `usage_update` noise. Both kinds are still appended to the log — the log
+ * stays the source of truth — but only transcript updates become rows.
+ */
+const STATE_UPDATES = new Set([
+  "usage_update",
+  "session_info_update",
+  "available_commands_update",
+  "current_mode_update",
+  "config_option_update",
+  "compaction_update",
+]);
+
+export type UpdateCategory = "transcript" | "state";
+
+/** Unknown updates default to `transcript`, so something new is noticed rather than hidden. */
+export function updateCategory(sessionUpdate: string | undefined): UpdateCategory {
+  return sessionUpdate && STATE_UPDATES.has(sessionUpdate) ? "state" : "transcript";
+}
+
+/** Context-window usage, as reported by `usage_update`. */
+export interface SessionUsage {
+  used: number;
+  size: number;
+  /** ACP requires both fields on Cost, so never assume a currency. */
+  cost?: { amount: number; currency: string };
+}
+
+/** Reads the latest usage out of the event log. The browser derives state; it never stores it. */
+export function latestUsage(events: KcEvent[]): SessionUsage | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i];
+    if (event?.type !== "agent_update") continue;
+    const u = event.update as {
+      sessionUpdate?: string;
+      used?: number;
+      size?: number;
+      cost?: { amount: number; currency: string };
+    };
+    if (u.sessionUpdate !== "usage_update") continue;
+    if (typeof u.used !== "number" || typeof u.size !== "number") continue;
+    return { used: u.used, size: u.size, ...(u.cost ? { cost: u.cost } : {}) };
+  }
+  return null;
+}
