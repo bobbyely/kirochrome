@@ -9,6 +9,7 @@ import {
   type SessionSummary,
 } from "@kirochrome/shared";
 import { resolveProvider, spawnAgent, type AgentProcess } from "./agentProcess.js";
+import type { Store } from "./store.js";
 
 /** Deltas are buffered this long before becoming one event. See docs/DESIGN.md. */
 const TEXT_FLUSH_MS = 250;
@@ -38,18 +39,33 @@ export class Session {
   private textBuffer = "";
   private flushTimer: NodeJS.Timeout | null = null;
 
+  private title: string | null = null;
+
   private constructor(
     id: string,
     readonly provider: ProviderConfig,
     readonly cwd: string,
+    private readonly store: Store,
   ) {
     this.id = id;
   }
 
-  /** Spawns the agent and completes the ACP handshake. */
-  static async open(id: string, provider: ProviderConfig): Promise<Session> {
+  /** Spawns the agent, completes the ACP handshake and records the session. */
+  static async open(id: string, provider: ProviderConfig, store: Store): Promise<Session> {
     const cwd = provider.cwd ?? defaultCwd();
-    const session = new Session(id, provider, cwd);
+    const session = new Session(id, provider, cwd, store);
+    const now = Date.now();
+    store.upsertSession({
+      id,
+      agentSessionId: null,
+      providerId: provider.id,
+      providerName: provider.name,
+      cwd,
+      title: null,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    });
     await session.connect();
     return session;
   }
@@ -97,6 +113,7 @@ export class Session {
 
     const active = await this.connection.agent.buildSession(this.cwd).start();
     this.agentSessionId = active.sessionId;
+    this.persistMeta();
   }
 
   /** Sends a prompt and returns once the turn completes. */
@@ -113,6 +130,11 @@ export class Session {
     }
 
     this.busy = true;
+    // First message names the session, so the list is browsable.
+    if (this.title === null) {
+      this.title = text.length > 60 ? `${text.slice(0, 57)}…` : text;
+      this.persistMeta();
+    }
     this.append({ type: "user_message", text });
     this.append({ type: "turn_start" });
 
@@ -179,11 +201,33 @@ export class Session {
     this.append({ type: "error", error });
   }
 
-  /** The only way anything enters the log. Append-only, monotonic seq. */
+  /** The only way anything enters the log. Append-only, monotonic seq, durable. */
   private append(event: KcEventInput): void {
     const full = { ...event, seq: ++this.seq, ts: Date.now() } as KcEvent;
     this.log.push(full);
+    try {
+      this.store.appendEvent(this.id, full);
+    } catch (err) {
+      // Never let a write failure take down a live turn; the in-memory log
+      // still serves this session, and the failure is visible in the console.
+      console.error(`[session ${this.id}] failed to persist event ${full.seq}:`, err);
+    }
     for (const notify of this.subscribers) notify([full]);
+  }
+
+  private persistMeta(): void {
+    const now = Date.now();
+    this.store.upsertSession({
+      id: this.id,
+      agentSessionId: this.agentSessionId,
+      providerId: this.provider.id,
+      providerName: this.provider.name,
+      cwd: this.cwd,
+      title: this.title,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    });
   }
 
   /** Everything after `sinceSeq` — the whole of catch-up-after-reconnect. */
@@ -204,6 +248,8 @@ export class Session {
       cwd: this.cwd,
       busy: this.busy,
       lastSeq: this.seq,
+      title: this.title,
+      live: true,
     };
   }
 

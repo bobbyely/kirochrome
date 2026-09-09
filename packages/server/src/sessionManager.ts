@@ -1,25 +1,77 @@
 import { randomUUID } from "node:crypto";
-import { kcError, type ProviderConfig } from "@kirochrome/shared";
+import { kcError, type KcEvent, type ProviderConfig, type SessionSummary } from "@kirochrome/shared";
 import { Session } from "./session.js";
+import type { Store } from "./store.js";
 
-/** Owns live sessions. Persistence arrives in phase 3. */
+/**
+ * Owns live sessions and reads dead ones back from the log.
+ *
+ * A session that is not in memory is not gone — its transcript is on disk and
+ * can be read. Re-attaching an agent to it (`session/load`) is phase 4; until
+ * then a restored session is read-only.
+ */
 export class SessionManager {
-  private readonly sessions = new Map<string, Session>();
+  private readonly live = new Map<string, Session>();
+
+  constructor(private readonly store: Store) {}
 
   async open(provider: ProviderConfig): Promise<Session> {
-    const session = await Session.open(randomUUID(), provider);
-    this.sessions.set(session.id, session);
+    const session = await Session.open(randomUUID(), provider, this.store);
+    this.live.set(session.id, session);
     return session;
   }
 
-  get(id: string): Session {
-    const session = this.sessions.get(id);
-    if (!session) throw kcError("INTERNAL", `No session '${id}'.`);
-    return session;
+  getLive(id: string): Session | null {
+    return this.live.get(id) ?? null;
+  }
+
+  /** Live log if the session is running, otherwise replayed from disk. */
+  eventsSince(id: string, sinceSeq: number): KcEvent[] {
+    const session = this.live.get(id);
+    if (session) return session.eventsSince(sinceSeq);
+    if (!this.store.getSession(id)) throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
+    return this.store.eventsSince(id, sinceSeq);
+  }
+
+  summary(id: string): SessionSummary {
+    const session = this.live.get(id);
+    if (session) return session.summary();
+
+    const record = this.store.getSession(id);
+    if (!record) throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
+    return {
+      id: record.id,
+      providerId: record.providerId,
+      providerName: record.providerName,
+      cwd: record.cwd,
+      busy: false,
+      lastSeq: this.store.lastSeq(id),
+      title: record.title,
+      live: false,
+    };
+  }
+
+  list(limit = 100): SessionSummary[] {
+    return this.store.listSessions(limit).map((record) => {
+      const session = this.live.get(record.id);
+      return session ? session.summary() : { ...this.summary(record.id), title: record.title };
+    });
+  }
+
+  /** Requires a live session — prompting a restored one is not possible yet. */
+  requireLive(id: string): Session {
+    const session = this.live.get(id);
+    if (session) return session;
+    if (this.store.getSession(id)) {
+      throw kcError("SESSION_NOT_LIVE", "This conversation has no agent attached.", {
+        remediation: "Start a new chat to continue. Resuming a past session arrives in the next phase.",
+      });
+    }
+    throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
   }
 
   closeAll(): void {
-    for (const session of this.sessions.values()) session.close();
-    this.sessions.clear();
+    for (const session of this.live.values()) session.close();
+    this.live.clear();
   }
 }

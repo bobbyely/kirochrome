@@ -2,8 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { CHECK_STAGES } from "@kirochrome/shared";
 import type { CheckStage, ProviderCheckResult, ProviderView } from "@kirochrome/shared";
 import { ApiError, fetchProviders, runCheck } from "./api.js";
+import { RecentChats } from "./RecentChats.js";
 
-export function Setup({ onUseProvider }: { onUseProvider: (id: string) => void }) {
+export function Setup({
+  onUseProvider,
+  onOpenSession,
+}: {
+  onUseProvider: (id: string) => void;
+  onOpenSession: (id: string) => void;
+}) {
   const [providers, setProviders] = useState<ProviderView[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [running, setRunning] = useState<Set<string>>(new Set());
@@ -61,6 +68,8 @@ export function Setup({ onUseProvider }: { onUseProvider: (id: string) => void }
       {loadError && <div className="banner">{loadError}</div>}
 
       {!providers && !loadError && <p className="muted">Loading providers…</p>}
+
+      <RecentChats onOpen={onOpenSession} />
 
       <div className="cards">
         {providers?.map((provider) => (

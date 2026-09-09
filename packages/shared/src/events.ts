@@ -47,6 +47,12 @@ export interface SessionSummary {
   /** True while a turn is in flight. */
   busy: boolean;
   lastSeq: number;
+  title: string | null;
+  /**
+   * False for a session read back from disk with no agent attached: its
+   * transcript is readable but it cannot be prompted until reopened.
+   */
+  live: boolean;
 }
 
 /**
@@ -97,4 +103,18 @@ export function latestUsage(events: KcEvent[]): SessionUsage | null {
     return { used: u.used, size: u.size, ...(u.cost ? { cost: u.cost } : {}) };
   }
   return null;
+}
+
+/** A persisted session row. `sessions` is a derived index over the event log. */
+export interface SessionRecord {
+  id: string;
+  /** The agent's own session id, kept so `session/load` can re-hydrate it. */
+  agentSessionId: string | null;
+  providerId: string;
+  providerName: string;
+  cwd: string;
+  title: string | null;
+  status: "active" | "closed";
+  createdAt: number;
+  updatedAt: number;
 }

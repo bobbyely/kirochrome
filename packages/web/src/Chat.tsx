@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { latestUsage, updateCategory } from "@kirochrome/shared";
 import type { KcEvent, SessionUsage } from "@kirochrome/shared";
+import { MarkdownBody } from "./Markdown.js";
 import { useChat } from "./useChat.js";
 
 /**
@@ -82,18 +83,26 @@ function toBubbles(events: KcEvent[]): Bubble[] {
   return bubbles;
 }
 
-export function Chat({ providerId, onBack }: { providerId: string; onBack: () => void }) {
-  const { connected, session, events, error, openSession, prompt, cancel } = useChat();
+export function Chat({
+  providerId,
+  sessionId,
+  onBack,
+}: {
+  providerId?: string;
+  sessionId?: string;
+  onBack: () => void;
+}) {
+  const { connected, session, events, error, openSession, attachSession, prompt, cancel } = useChat();
   const [draft, setDraft] = useState("");
   const opened = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (connected && !opened.current) {
-      opened.current = true;
-      openSession(providerId);
-    }
-  }, [connected, openSession, providerId]);
+    if (!connected || opened.current) return;
+    opened.current = true;
+    if (sessionId) attachSession(sessionId);
+    else if (providerId) openSession(providerId);
+  }, [connected, openSession, attachSession, providerId, sessionId]);
 
   const bubbles = useMemo(() => toBubbles(events), [events]);
   const usage = useMemo(() => latestUsage(events), [events]);
@@ -103,10 +112,12 @@ export function Chat({ providerId, onBack }: { providerId: string; onBack: () =>
   }, [bubbles.length]);
 
   const busy = session?.busy ?? false;
+  // A session read back from disk has no agent attached; it is readable only.
+  const readOnly = session !== null && !session.live;
 
   const submit = () => {
     const text = draft.trim();
-    if (!text || busy) return;
+    if (!text || busy || readOnly) return;
     prompt(text);
     setDraft("");
   };
@@ -116,7 +127,7 @@ export function Chat({ providerId, onBack }: { providerId: string; onBack: () =>
       <header className="chat-head">
         <button onClick={onBack}>← Setup</button>
         <div className="chat-title">
-          <strong>{session?.providerName ?? providerId}</strong>
+          <strong>{session?.title ?? session?.providerName ?? providerId ?? "Conversation"}</strong>
           {session && <code className="cmd">{session.cwd}</code>}
         </div>
         {usage && <ContextMeter usage={usage} />}
@@ -126,7 +137,7 @@ export function Chat({ providerId, onBack }: { providerId: string; onBack: () =>
       </header>
 
       <div className="transcript">
-        {!session && <p className="muted">Starting agent…</p>}
+        {!session && <p className="muted">{sessionId ? "Loading conversation…" : "Starting agent…"}</p>}
         {bubbles.map((b) => (
           <Message key={b.seq} bubble={b} />
         ))}
@@ -141,6 +152,14 @@ export function Chat({ providerId, onBack }: { providerId: string; onBack: () =>
         </div>
       )}
 
+      {readOnly ? (
+        <div className="composer readonly">
+          <p className="muted">
+            This conversation was restored from disk and has no agent attached — it is read-only.
+            Start a new chat to continue.
+          </p>
+        </div>
+      ) : (
       <div className="composer">
         <textarea
           value={draft}
@@ -165,6 +184,7 @@ export function Chat({ providerId, onBack }: { providerId: string; onBack: () =>
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -192,7 +212,11 @@ function Message({ bubble }: { bubble: Bubble }) {
     case "user":
       return <div className="msg msg-user">{bubble.text}</div>;
     case "agent":
-      return <div className="msg msg-agent">{bubble.text}</div>;
+      return (
+        <div className="msg msg-agent">
+          <MarkdownBody>{bubble.text}</MarkdownBody>
+        </div>
+      );
     case "tool":
       return <div className="msg msg-tool">{bubble.label}</div>;
     case "thought":

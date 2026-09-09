@@ -83,18 +83,24 @@ async function dispatch(
     }
 
     case "subscribe": {
-      const session = sessions.get(msg.sessionId);
       // Backlog first, then live updates — so nothing is missed in between.
-      send({ type: "events", sessionId: session.id, events: session.eventsSince(msg.sinceSeq) });
-      unsubscribers.push(
-        session.subscribe((events) => send({ type: "events", sessionId: session.id, events })),
-      );
-      send({ type: "session_state", session: session.summary() });
+      // Works for restored sessions too; those just have nothing live to add.
+      send({ type: "events", sessionId: msg.sessionId, events: sessions.eventsSince(msg.sessionId, msg.sinceSeq) });
+      const live = sessions.getLive(msg.sessionId);
+      if (live) {
+        unsubscribers.push(live.subscribe((events) => send({ type: "events", sessionId: live.id, events })));
+      }
+      send({ type: "session_state", session: sessions.summary(msg.sessionId) });
+      return;
+    }
+
+    case "list_sessions": {
+      send({ type: "sessions", sessions: sessions.list() });
       return;
     }
 
     case "prompt": {
-      const session = sessions.get(msg.sessionId);
+      const session = sessions.requireLive(msg.sessionId);
       send({ type: "session_state", session: { ...session.summary(), busy: true } });
       await session.prompt(msg.text);
       send({ type: "session_state", session: session.summary() });
@@ -102,7 +108,7 @@ async function dispatch(
     }
 
     case "cancel": {
-      await sessions.get(msg.sessionId).cancel();
+      await sessions.requireLive(msg.sessionId).cancel();
       return;
     }
   }

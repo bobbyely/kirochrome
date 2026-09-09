@@ -6,7 +6,8 @@ export type ClientMessage =
   | { type: "open"; providerId: string }
   | { type: "subscribe"; sessionId: string; sinceSeq: number }
   | { type: "prompt"; sessionId: string; text: string }
-  | { type: "cancel"; sessionId: string };
+  | { type: "cancel"; sessionId: string }
+  | { type: "list_sessions" };
 
 /** Server → browser. */
 export type ServerMessage =
@@ -14,4 +15,5 @@ export type ServerMessage =
   /** A batch of log events at or after the requested seq. */
   | { type: "events"; sessionId: string; events: KcEvent[] }
   | { type: "session_state"; session: SessionSummary }
+  | { type: "sessions"; sessions: SessionSummary[] }
   | { type: "error"; error: KcError; sessionId?: string };

@@ -13,6 +13,7 @@ export function useChat() {
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [events, setEvents] = useState<KcEvent[]>([]);
   const [error, setError] = useState<KcError | null>(null);
+  const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
 
   const ws = useRef<WebSocket | null>(null);
   const lastSeq = useRef(0);
@@ -65,6 +66,9 @@ export function useChat() {
         case "session_state":
           setSession(msg.session);
           break;
+        case "sessions":
+          setSessions(msg.sessions);
+          break;
         case "error":
           setError(msg.error);
           break;
@@ -91,6 +95,20 @@ export function useChat() {
 
   const openSession = useCallback((providerId: string) => send({ type: "open", providerId }), [send]);
 
+  /** Attaches to a session that already exists, live or restored from disk. */
+  const attachSession = useCallback(
+    (id: string) => {
+      sessionId.current = id;
+      lastSeq.current = 0;
+      setEvents([]);
+      setError(null);
+      send({ type: "subscribe", sessionId: id, sinceSeq: 0 });
+    },
+    [send],
+  );
+
+  const listSessions = useCallback(() => send({ type: "list_sessions" }), [send]);
+
   const prompt = useCallback(
     (text: string) => {
       if (!sessionId.current) return;
@@ -103,5 +121,5 @@ export function useChat() {
     if (sessionId.current) send({ type: "cancel", sessionId: sessionId.current });
   }, [send]);
 
-  return { connected, session, events, error, openSession, prompt, cancel };
+  return { connected, session, sessions, events, error, openSession, attachSession, listSessions, prompt, cancel };
 }

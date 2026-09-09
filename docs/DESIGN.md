@@ -88,14 +88,16 @@ CREATE TABLE sessions (
   updated_at       INTEGER NOT NULL
 );
 
+-- seq is per-session, not global: it is what the wire protocol resumes from,
+-- so it is the key rather than a rowid we would have to translate.
 CREATE TABLE events (
-  seq        INTEGER PRIMARY KEY AUTOINCREMENT,  -- global order
-  session_id TEXT NOT NULL REFERENCES sessions(id),
+  session_id TEXT NOT NULL,
+  seq        INTEGER NOT NULL,
   ts         INTEGER NOT NULL,
   type       TEXT NOT NULL,
   payload    TEXT NOT NULL   -- JSON: the ACP update or our own event
-);
-CREATE INDEX idx_events_session ON events(session_id, seq);
+  , PRIMARY KEY (session_id, seq)
+) WITHOUT ROWID;
 ```
 
 `events` is INSERT-only — never UPDATE, never DELETE. `sessions` is a derived

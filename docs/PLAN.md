@@ -178,15 +178,43 @@ is no browser on the dev box, so layout and styling are unconfirmed.
 
 **Goal:** never lose a conversation.
 
-- [ ] SQLite store, schema from DESIGN.md, `chmod 0600`
-- [ ] Append events; coalesce text deltas on a ~250ms flush
-- [ ] Resume by `seq`: browser sends its high-water mark on connect
-- [ ] Turns survive browser disconnect (server-owned, not socket-owned)
-- [ ] Error events persisted inline in the transcript
-- [ ] Markdown + syntax highlighting
+- [x] SQLite store, schema from DESIGN.md, `chmod 0600`
+- [x] Append events; coalesce text deltas on a ~250ms flush
+- [x] Resume by `seq`: browser sends its high-water mark on connect
+- [x] Turns survive browser disconnect (server-owned, not socket-owned)
+- [x] Error events persisted inline in the transcript
+- [x] Markdown + syntax highlighting
+- [x] Recent-chats list, so a persisted conversation can be reopened
 
 **Done when:** refresh mid-turn and lose nothing; restart the server and the
 conversation is still there.
+
+### Verified
+
+Created a session, killed the server, restarted it: the conversation was listed
+with its derived title, all 11 events replayed from disk, and the database was
+`0600`. Prompting a restored session is refused with `SESSION_NOT_LIVE` rather
+than failing obscurely.
+
+### Schema deviation
+
+`events` uses a composite `(session_id, seq)` primary key rather than DESIGN.md's
+global `AUTOINCREMENT` rowid. `seq` is per-session and is what the wire protocol
+resumes from, so making it the key avoids translating between two orderings.
+DESIGN.md updated to match.
+
+### Restored sessions are read-only
+
+Re-attaching an agent needs `session/load`, which is phase 4. Until then a
+restored conversation shows its transcript and says so plainly.
+
+### New dependencies
+
+`react-markdown`, `remark-gfm`, `rehype-highlight`, `highlight.js`.
+`react-markdown` builds React elements rather than setting innerHTML, so model
+output cannot inject script — chosen for that over a smaller renderer plus a
+sanitiser. It costs ~150KB gzipped, which is accepted: this is served from
+localhost.
 
 ---
 

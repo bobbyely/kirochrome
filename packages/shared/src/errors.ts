@@ -13,6 +13,8 @@ export const KC_ERROR_CODES = [
   "AGENT_SESSION_FAILED",
   "RPC_TIMEOUT",
   "RPC_ERROR",
+  "SESSION_NOT_LIVE",
+  "SESSION_UNKNOWN",
   "PROVIDER_UNKNOWN",
   "CONFIG_INVALID",
   "INTERNAL",
@@ -68,6 +70,9 @@ export const REMEDIATION: Record<KcErrorCode, string> = {
     "The handshake succeeded but the agent refused to open a session. The stderr output below usually explains why.",
   RPC_TIMEOUT: "The agent stopped responding. Re-run the check, and restart the agent if it persists.",
   RPC_ERROR: "The agent returned an error. See the details below.",
+  SESSION_NOT_LIVE:
+    "This conversation was restored from disk, so its transcript is readable but no agent is attached to it.",
+  SESSION_UNKNOWN: "That conversation no longer exists.",
   PROVIDER_UNKNOWN: "No provider is configured with that id. Check your config file.",
   CONFIG_INVALID: "The configuration file could not be read. Fix or delete it to regenerate defaults.",
   INTERNAL: "An unexpected internal error. Please report this with the details below.",

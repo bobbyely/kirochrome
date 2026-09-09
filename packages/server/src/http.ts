@@ -37,7 +37,7 @@ const MIME: Record<string, string> = {
 
 export function startServer(port: number, webRoot: string | null): void {
   const store = new Store();
-  const sessions = new SessionManager();
+  const sessions = new SessionManager(store);
 
   const server = createServer(async (req, res) => {
     if (!originAllowed(req, port)) {
