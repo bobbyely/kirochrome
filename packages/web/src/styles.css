@@ -681,3 +681,36 @@ button.primary:hover:not(:disabled) { opacity: 0.9; color: #fff; }
    agent advertises something you did not expect. */
 .config-field { display: flex; align-items: center; gap: 5px; }
 .config-label { font-size: 11px; color: var(--muted); text-transform: lowercase; }
+
+/* ---------- queued messages ---------- */
+.queued { margin: 0 auto 8px; max-width: 860px; display: flex; flex-direction: column; gap: 4px; }
+.queued-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.queued-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 11px;
+  border-radius: 7px;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  font-size: 13px;
+}
+.queued-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queued-remove {
+  flex-shrink: 0;
+  padding: 0 5px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+}
+.queued-remove:hover { color: var(--fail); border: none; }
+
+.composer-buttons { display: flex; gap: 8px; align-items: center; }

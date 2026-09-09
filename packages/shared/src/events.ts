@@ -65,6 +65,8 @@ export interface SessionSummary {
   autoApprove: boolean;
   /** A permission prompt is open: the agent is blocked until the user answers. */
   awaitingInput: boolean;
+  /** Messages typed during a turn, waiting their turn to be sent. */
+  queued: string[];
 }
 
 /**

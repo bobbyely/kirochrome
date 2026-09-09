@@ -161,6 +161,13 @@ async function dispatch(
       return;
     }
 
+    case "unqueue": {
+      const session = sessions.requireLive(msg.sessionId);
+      session.unqueue(msg.index);
+      send({ type: "session_state", session: session.summary() });
+      return;
+    }
+
     case "cancel": {
       await sessions.requireLive(msg.sessionId).cancel();
       return;

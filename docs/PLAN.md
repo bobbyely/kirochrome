@@ -46,15 +46,13 @@ live per-conversation status.
 
 What is left, in the order I would do it:
 
-1. **Tool card contents** — cards currently expand to raw JSON. Diffs should
-   render as diffs and file reads as highlighted code. This is the largest
-   remaining gap between "works" and "feels like the real thing".
-2. **Queued messages** — a running turn still blocks the composer. Our own
-   steering doc calls this the best turn-handling idea in Kirodex.
-3. **Provider goes `stale` on a runtime failure** — invariant 11 in AGENTS.md
+1. **Provider goes `stale` on a runtime failure** — invariant 11 in AGENTS.md
    describes this, and it is not implemented. Either build it or drop the
    invariant; a rule nothing enforces is worse than no rule.
-4. Search, keyboard shortcuts, image paste, export.
+2. **Default model per provider**, remembered and re-applied after
+   `session/new` — a remembered choice, never a hardcoded list.
+3. **Archiving**, so the sidebar stays usable as conversations accumulate.
+4. Search, theme control, keyboard shortcuts, image paste, export.
 
 Still unanswered since phase 0: whether Kiro speaks `configOptions` or the
 older `availableModels`. The code handles both, so nothing is blocked, but
@@ -299,9 +297,9 @@ screen.
       phase-2 `toBubbles` stopgap
 - [x] Render `ToolCall` / `ToolCallUpdate` as cards, collapsed by default and
       expandable — all updates for one call fold into a single row
-- [ ] File diffs rendered as diffs; read output syntax-highlighted
+- [x] File diffs rendered as diffs; read output syntax-highlighted
 - [x] Permission requests → approve/deny buttons, plus an auto-approve toggle
-- [ ] Queue messages typed during a turn, sending them when it ends
+- [x] Queue messages typed during a turn, sending them when it ends
 - [x] Advertise `terminal: true`; implement `terminal/create`, `output`,
       `wait_for_exit`, `kill`, `release`
 - [x] `TerminalRegistry`: wall-clock cap, `outputByteLimit`, process-group kill

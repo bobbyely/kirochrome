@@ -28,6 +28,7 @@ export function Chat({
     setConfigOption,
     answerPermission,
     setAutoApprove,
+    unqueue,
     prompt,
     cancel,
   } = useChat();
@@ -58,9 +59,13 @@ export function Chat({
   // A session read back from disk has no agent attached until it is resumed.
   const readOnly = session !== null && !session.live;
 
+  const queued = session?.queued ?? [];
+
   const submit = () => {
     const text = draft.trim();
-    if (!text || busy || readOnly) return;
+    // Deliberately allowed while busy: the server queues it and sends it when
+    // the current turn ends.
+    if (!text || readOnly) return;
     prompt(text);
     setDraft("");
   };
@@ -109,9 +114,27 @@ export function Chat({
         </div>
       ) : (
         <div className="composer">
+          {queued.length > 0 && (
+            <div className="queued">
+              <span className="queued-label">Queued ({queued.length})</span>
+              {queued.map((text, i) => (
+                <div key={`${i}-${text}`} className="queued-item">
+                  <span className="queued-text">{text}</span>
+                  <button
+                    className="queued-remove"
+                    aria-label="Remove queued message"
+                    title="Remove"
+                    onClick={() => unqueue(i)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             value={draft}
-            placeholder={busy ? "Working…" : "Send a message"}
+            placeholder={busy ? "Type to queue for when this turn ends…" : "Send a message"}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -141,13 +164,12 @@ export function Chat({
                 />
               ))}
             </div>
-            {busy ? (
-              <button onClick={cancel}>Stop</button>
-            ) : (
+            <div className="composer-buttons">
+              {busy && <button onClick={cancel}>Stop</button>}
               <button className="primary" onClick={submit} disabled={!draft.trim() || !session}>
-                Send
+                {busy ? "Queue" : "Send"}
               </button>
-            )}
+            </div>
           </div>
         </div>
       )}

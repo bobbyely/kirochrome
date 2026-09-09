@@ -90,6 +90,7 @@ export class SessionManager {
       configOptions: [],
       autoApprove: false,
       awaitingInput: false,
+      queued: [],
     };
   }
 

@@ -119,6 +119,13 @@ export function useChat() {
   const listSessions = useCallback(() => send({ type: "list_sessions" }), [send]);
   const listWorkspaces = useCallback(() => send({ type: "list_workspaces" }), [send]);
 
+  const unqueue = useCallback(
+    (index: number) => {
+      if (sessionId.current) send({ type: "unqueue", sessionId: sessionId.current, index });
+    },
+    [send],
+  );
+
   const renameSession = useCallback(
     (id: string, title: string) => send({ type: "rename_session", sessionId: id, title }),
     [send],
@@ -177,6 +184,7 @@ export function useChat() {
     listSessions,
     listWorkspaces,
     renameSession,
+    unqueue,
     setConfigOption,
     answerPermission,
     setAutoApprove,

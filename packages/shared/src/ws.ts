@@ -13,7 +13,8 @@ export type ClientMessage =
   | { type: "set_config_option"; sessionId: string; configId: string; value: string | boolean }
   | { type: "permission_response"; sessionId: string; requestId: string; optionId: string | null }
   | { type: "set_auto_approve"; sessionId: string; enabled: boolean }
-  | { type: "rename_session"; sessionId: string; title: string };
+  | { type: "rename_session"; sessionId: string; title: string }
+  | { type: "unqueue"; sessionId: string; index: number };
 
 /** Server → browser. */
 export type ServerMessage =

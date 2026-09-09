@@ -56,6 +56,15 @@ export class Session {
   private connection: ClientConnection | null = null;
   private agentSessionId: string | null = null;
 
+  /**
+   * Messages typed while a turn was running.
+   *
+   * Server-side rather than in the browser: a queued message will become a real
+   * user message, so it is authoritative state (invariant 3). It therefore
+   * survives a disconnect and is visible to every connected tab.
+   */
+  private readonly queue: string[] = [];
+
   private textBuffer = "";
   private flushTimer: NodeJS.Timeout | null = null;
   /**
@@ -254,12 +263,36 @@ export class Session {
     this.persistMeta();
   }
 
-  /** Sends a prompt and returns once the turn completes. */
+  /**
+   * Queues a message and, if nothing is running, works through the queue.
+   *
+   * A running turn never blocks the composer: further messages join the queue
+   * and are sent in order as each turn finishes.
+   */
   async prompt(text: string): Promise<void> {
-    if (this.busy) {
-      this.emitError(kcError("INTERNAL", "A turn is already running in this session."));
-      return;
+    this.queue.push(text);
+    this.notifyState();
+    if (this.busy) return;
+    await this.drain();
+  }
+
+  private async drain(): Promise<void> {
+    while (this.queue.length > 0) {
+      const next = this.queue.shift();
+      if (next === undefined) return;
+      this.notifyState();
+      await this.runTurn(next);
     }
+  }
+
+  /** Removes a message that has not been sent yet. */
+  unqueue(index: number): void {
+    if (index < 0 || index >= this.queue.length) return;
+    this.queue.splice(index, 1);
+    this.notifyState();
+  }
+
+  private async runTurn(text: string): Promise<void> {
     const connection = this.connection;
     const agentSessionId = this.agentSessionId;
     if (!connection || !agentSessionId) {
@@ -352,6 +385,12 @@ export class Session {
    * the turn ends when the in-flight `session/prompt` returns.
    */
   async cancel(): Promise<void> {
+    // Stop means stop: drop anything waiting, or the queue would immediately
+    // start a new turn and look like the button did nothing.
+    if (this.queue.length > 0) {
+      this.queue.length = 0;
+      this.notifyState();
+    }
     if (!this.connection || !this.agentSessionId || !this.busy) return;
     try {
       await this.connection.agent.notify("session/cancel", { sessionId: this.agentSessionId });
@@ -563,6 +602,7 @@ export class Session {
       configOptions: this.configOptions,
       autoApprove: this.autoApprove,
       awaitingInput: this.pendingPermissions.size > 0,
+      queued: [...this.queue],
     };
   }
 
