@@ -123,7 +123,9 @@ export function Chat({
             Export
           </a>
         )}
-        {session?.live && <ContextMeter usage={usage} />}
+        {/* Live sessions always show it; a restored one shows it whenever its
+            log holds usage, since that history is still meaningful. */}
+        {(session?.live || usage) && <ContextMeter usage={usage} />}
         <span className={`pill ${connected ? "pill-ok" : "pill-stale"}`}>
           {connected ? "Connected" : "Reconnecting…"}
         </span>
