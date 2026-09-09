@@ -38,6 +38,21 @@ parser.
 
 Requires Node 22+ (see `.nvmrc`).
 
+### On a new machine
+
+`.git/config` does not travel with a clone, so set your commit identity before
+your first commit — otherwise commits are attributed to whatever global identity
+that machine happens to have:
+
+```bash
+git config user.name  "bobbyely"
+git config user.email "robert.w.ely@gmail.com"
+```
+
+Verify with `git log -1 --format='%an <%ae>'` after committing. A `.mailmap`
+canonicalises past mistakes for git's own tooling, but it does not fix GitHub's
+contributor graph — get the identity right at commit time.
+
 ```bash
 npm install
 npm start                 # build everything, serve on http://127.0.0.1:4711
