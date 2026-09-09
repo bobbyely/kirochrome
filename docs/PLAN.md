@@ -69,6 +69,14 @@ It is not a `configOption`, so it never appeared in a picker — which is why it
 looked missing. Kiro also persists the choice in `~/.kiro/settings/cli.json`, and
 `chat.modelDefaults` there sets a per-model default independently of any client.
 
+### Not yet: agent-supplied argument completion
+
+Argument values come from parsing the command's own `hint` when it enumerates
+them. Kiro also exposes `_kiro.dev/commands/options` for real autocomplete
+suggestions, which would beat guessing — but it is a Kiro extension marked
+experimental, and its signature is undocumented. Worth wiring once the shape is
+known, behind a capability check so other agents are unaffected.
+
 ### What is left
 
 0. **A side drawer for file and code changes.** A pull-out panel listing every

@@ -3,6 +3,7 @@ import { isProviderFault, latestUsage } from "@kirochrome/shared";
 import type { ConfigOption, SessionUsage } from "@kirochrome/shared";
 import { KSpinner } from "./KSpinner.js";
 import { MarkdownBody } from "./Markdown.js";
+import { commonPrefix, complete } from "./commands.js";
 import { collapseContext, countChanges, lineDiff } from "./diff.js";
 import { fileToImage, type PendingImage } from "./images.js";
 import { buildRows, languageFor, toolContent, toolSubtitle, type Row, type ToolDiff } from "./timeline.js";
@@ -118,20 +119,24 @@ export function Chat({
 
   const canAttach = session?.supportsImages === true;
 
-  // The picker opens on a leading slash and filters as you type. Commands are
-  // ordinary prompt text in ACP, so choosing one just completes the input.
-  const slashQuery = /^\/(\S*)$/.exec(draft);
-  const matches = slashQuery
-    ? (session?.commands ?? []).filter((c) => c.name.startsWith(slashQuery[1] ?? ""))
-    : [];
+  // Terminal-style completion: command names first, then their arguments.
+  const matches = useMemo(() => complete(draft, session?.commands ?? []), [draft, session?.commands]);
   const picking = matches.length > 0;
+  const active = matches[Math.min(commandIndex, matches.length - 1)];
 
-  const chooseCommand = (name: string) => {
-    const command = session?.commands.find((c) => c.name === name);
-    // Leave the cursor after a trailing space when the command takes an
-    // argument, so the hint is actionable rather than decorative.
-    setDraft(`/${name}${command?.input ? " " : ""}`);
+  const choose = (replacement: string) => {
+    setDraft(replacement);
     setCommandIndex(0);
+  };
+
+  /**
+   * Tab behaves like a shell: complete to the longest shared prefix when the
+   * choice is ambiguous, and only commit when it is not.
+   */
+  const tabComplete = () => {
+    if (matches.length === 1) return choose(matches[0]!.replacement);
+    const shared = commonPrefix(matches.map((m) => m.replacement));
+    if (shared.length > draft.length) choose(shared);
   };
 
   /** Collects images from a paste or drop, ignoring anything else. */
@@ -242,16 +247,16 @@ export function Chat({
           )}
           {picking && (
             <div className="commands">
-              {matches.map((command, i) => (
+              {matches.map((match, i) => (
                 <button
-                  key={command.name}
-                  className={`command ${i === commandIndex ? "on" : ""}`}
+                  key={match.replacement}
+                  className={`command ${match === active ? "on" : ""}`}
                   onMouseEnter={() => setCommandIndex(i)}
-                  onClick={() => chooseCommand(command.name)}
+                  onClick={() => choose(match.replacement)}
                 >
-                  <span className="command-name">/{command.name}</span>
-                  <span className="command-desc">{command.description}</span>
-                  {command.input?.hint && <span className="command-hint">{command.input.hint}</span>}
+                  <span className="command-name">{match.label}</span>
+                  <span className="command-desc">{match.detail}</span>
+                  {match.hint && <span className="command-hint">{match.hint}</span>}
                 </button>
               ))}
             </div>
@@ -296,9 +301,14 @@ export function Chat({
                   setCommandIndex((i) => (i + delta + matches.length) % matches.length);
                   return;
                 }
-                if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+                if (e.key === "Tab") {
                   e.preventDefault();
-                  chooseCommand(matches[commandIndex]!.name);
+                  tabComplete();
+                  return;
+                }
+                if (e.key === "Enter" && !e.shiftKey && active) {
+                  e.preventDefault();
+                  choose(active.replacement);
                   return;
                 }
                 if (e.key === "Escape") {
