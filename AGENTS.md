@@ -70,6 +70,9 @@ Breaking one of these is a design regression, not a style nit.
   Stop hang forever and appear to do nothing.
 - **`white-space: pre-wrap` must not reach markdown rows.** It renders the
   newlines between block elements literally, double-spacing every paragraph.
+- **Probe an optional extension once, then stop.** `_kiro.dev/commands/options`
+  is an ACP extension, not the standard; a failed call marks it unsupported for
+  that session rather than being retried on every keystroke.
 - **Not every agent setting is a `configOption`.** Slash commands are the other
   half: advertised by `available_commands_update` and run as ordinary prompt
   text. Kiro exposes reasoning effort only that way, so a missing picker does

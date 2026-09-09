@@ -38,6 +38,8 @@ export function Chat({
     answerPermission,
     setAutoApprove,
     unqueue,
+    commandOptions,
+    requestCommandOptions,
     editQueued,
     moveQueued,
     prompt,
@@ -119,8 +121,20 @@ export function Chat({
 
   const canAttach = session?.supportsImages === true;
 
+  // Ask the agent for real suggestions while an argument is being typed. It may
+  // not support it, in which case nothing comes back and the hint-derived
+  // values below stand on their own.
+  const argPhase = /^\/(\S+)\s+(\S*)$/.exec(draft);
+  useEffect(() => {
+    if (argPhase) requestCommandOptions(argPhase[1]!, argPhase[2] ?? "");
+  }, [argPhase?.[1], argPhase?.[2], requestCommandOptions]);
+
   // Terminal-style completion: command names first, then their arguments.
-  const matches = useMemo(() => complete(draft, session?.commands ?? []), [draft, session?.commands]);
+  const agentOptions = argPhase ? commandOptions[`${argPhase[1]}\u0000${argPhase[2] ?? ""}`] : undefined;
+  const matches = useMemo(
+    () => complete(draft, session?.commands ?? [], agentOptions),
+    [draft, session?.commands, agentOptions],
+  );
   const picking = matches.length > 0;
   const active = matches[Math.min(commandIndex, matches.length - 1)];
 

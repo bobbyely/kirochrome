@@ -51,6 +51,16 @@ const app = agent({ name: "mock-agent" })
   }))
   // Replays history the way a real agent does, so the client's replay
   // suppression can be tested.
+  // The Kiro autocomplete extension, so the client's option path is exercised.
+  .onRequest("_kiro.dev/commands/options", { parse: (p) => p }, ({ params }) => {
+    const values = { effort: ["low", "medium", "high", "xhigh", "max"] };
+    const all = values[params.command] ?? [];
+    return {
+      options: all
+        .filter((v) => v.startsWith(params.partial ?? ""))
+        .map((v) => ({ value: v, label: v.toUpperCase(), current: v === "medium" })),
+    };
+  })
   .onRequest("session/set_config_option", ({ params }) => ({
     configOptions: [{ id: params.configId, currentValue: params.value }],
   }))

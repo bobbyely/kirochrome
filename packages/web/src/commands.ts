@@ -1,4 +1,4 @@
-import type { SlashCommand } from "@kirochrome/shared";
+import type { CommandOption, SlashCommand } from "@kirochrome/shared";
 
 export interface Completion {
   /** What the picker shows. */
@@ -17,7 +17,12 @@ export interface Completion {
  * enumerates them (`low|medium|high`), which is how ACP agents describe a
  * fixed set without a dedicated protocol for it.
  */
-export function complete(draft: string, commands: SlashCommand[]): Completion[] {
+export function complete(
+  draft: string,
+  commands: SlashCommand[],
+  /** Suggestions from the agent, which beat anything parsed from a hint. */
+  agentOptions?: CommandOption[],
+): Completion[] {
   const name = /^\/(\S*)$/.exec(draft);
   if (name) {
     const typed = name[1] ?? "";
@@ -36,6 +41,16 @@ export function complete(draft: string, commands: SlashCommand[]): Completion[] 
 
   const command = commands.find((c) => c.name === withArg[1]);
   const typedArg = withArg[2] ?? "";
+
+  // The agent knows its own values; a parsed hint is only a fallback.
+  if (agentOptions && agentOptions.length > 0) {
+    return agentOptions.map((option) => ({
+      label: option.label || option.value,
+      detail: option.description ?? (option.current ? "current" : `/${withArg[1]}`),
+      replacement: `/${withArg[1]} ${option.value}`,
+    }));
+  }
+
   return enumerated(command?.input?.hint)
     .filter((value) => value.startsWith(typedArg))
     .map((value) => ({

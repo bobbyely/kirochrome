@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   ClientMessage,
+  CommandOption,
   KcError,
   KcEvent,
   SearchHit,
@@ -23,6 +24,8 @@ export function useChat() {
   const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
   const [workspaces, setWorkspaces] = useState<string[] | null>(null);
   const [searchHits, setSearchHits] = useState<SearchHit[] | null>(null);
+  /** Agent-supplied argument suggestions, keyed by "command\u0000partial". */
+  const [commandOptions, setCommandOptions] = useState<Record<string, CommandOption[]>>({});
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
 
   const ws = useRef<WebSocket | null>(null);
@@ -85,6 +88,9 @@ export function useChat() {
         case "search_results":
           setSearchHits(msg.hits);
           break;
+        case "command_options_result":
+          setCommandOptions((prev) => ({ ...prev, [`${msg.command}\u0000${msg.partial}`]: msg.options }));
+          break;
         case "workspaces":
           setWorkspaces(msg.workspaces);
           setCurrentWorkspace(msg.current);
@@ -132,6 +138,15 @@ export function useChat() {
 
   const listSessions = useCallback(
     (includeArchived = false) => send({ type: "list_sessions", includeArchived }),
+    [send],
+  );
+
+  const requestCommandOptions = useCallback(
+    (command: string, partial: string) => {
+      if (sessionId.current) {
+        send({ type: "command_options", sessionId: sessionId.current, command, partial });
+      }
+    },
     [send],
   );
 
@@ -236,6 +251,8 @@ export function useChat() {
     renameSession,
     search,
     searchHits,
+    commandOptions,
+    requestCommandOptions,
     unqueue,
     editQueued,
     moveQueued,

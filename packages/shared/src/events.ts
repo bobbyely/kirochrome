@@ -144,6 +144,15 @@ export interface SlashCommand {
   input?: { hint?: string } | null;
 }
 
+/** One suggestion from an agent that supports argument completion. */
+export interface CommandOption {
+  value: string;
+  label: string;
+  description?: string;
+  /** True when this is the value currently in effect. */
+  current?: boolean;
+}
+
 export interface PermissionOption {
   optionId: string;
   name: string;

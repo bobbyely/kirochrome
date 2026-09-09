@@ -126,6 +126,13 @@ async function dispatch(
       return;
     }
 
+    case "command_options": {
+      const session = sessions.getLive(msg.sessionId);
+      const options = session ? await session.commandOptions(msg.command, msg.partial) : [];
+      send({ type: "command_options_result", command: msg.command, partial: msg.partial, options });
+      return;
+    }
+
     case "search": {
       send({ type: "search_results", query: msg.query, hits: sessions.search(msg.query) });
       return;

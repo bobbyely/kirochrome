@@ -1,5 +1,5 @@
 import type { KcError } from "./errors.js";
-import type { KcEvent, SearchHit, SessionSummary } from "./events.js";
+import type { CommandOption, KcEvent, SearchHit, SessionSummary } from "./events.js";
 
 /** Browser → server. */
 export type ClientMessage =
@@ -24,6 +24,7 @@ export type ClientMessage =
   | { type: "move_queued"; sessionId: string; from: number; to: number }
   | { type: "archive_session"; sessionId: string; archived: boolean }
   | { type: "search"; query: string }
+  | { type: "command_options"; sessionId: string; command: string; partial: string }
   | { type: "list_sessions"; includeArchived?: boolean };
 
 /** Server → browser. */
@@ -34,5 +35,6 @@ export type ServerMessage =
   | { type: "session_state"; session: SessionSummary }
   | { type: "sessions"; sessions: SessionSummary[] }
   | { type: "search_results"; query: string; hits: SearchHit[] }
+  | { type: "command_options_result"; command: string; partial: string; options: CommandOption[] }
   | { type: "workspaces"; workspaces: string[]; current: string }
   | { type: "error"; error: KcError; sessionId?: string };

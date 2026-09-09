@@ -61,3 +61,29 @@ describe("commonPrefix", () => {
     assert.equal(commonPrefix([]), "");
   });
 });
+
+describe("agent-supplied options", () => {
+  it("prefers the agent's values over anything parsed from a hint", () => {
+    const matches = complete("/effort ", commands, [
+      { value: "high", label: "High", description: "Deeper analysis" },
+      { value: "max", label: "Max", current: true },
+    ]);
+    assert.deepEqual(matches.map((m) => m.label), ["High", "Max"]);
+    assert.equal(matches[0]!.replacement, "/effort high");
+    assert.equal(matches[0]!.detail, "Deeper analysis");
+  });
+
+  it("falls back to the hint when the agent offers nothing", () => {
+    // An agent without the extension returns an empty list; the hint must
+    // still work rather than the picker going blank.
+    assert.deepEqual(
+      complete("/effort ", commands, []).map((m) => m.label),
+      ["low", "medium", "high", "xhigh", "max"],
+    );
+  });
+
+  it("marks the value currently in effect", () => {
+    const matches = complete("/effort ", commands, [{ value: "max", label: "Max", current: true }]);
+    assert.equal(matches[0]!.detail, "current");
+  });
+});

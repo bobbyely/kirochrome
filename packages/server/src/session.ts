@@ -7,6 +7,7 @@ import {
   type KcEvent,
   type KcEventInput,
   type Attachment,
+  type CommandOption,
   type ConfigOption,
   type ProviderConfig,
   type SlashCommand,
@@ -90,6 +91,12 @@ export class Session {
   private configOptions: ConfigOption[] = [];
   private supportsImages = false;
   private commands: SlashCommand[] = [];
+  /**
+   * Set once an agent has shown it does not implement the option-completion
+   * extension, so we stop asking. It is an optional enhancement and its absence
+   * must cost nothing.
+   */
+  private commandOptionsUnsupported = false;
 
   private constructor(
     id: string,
@@ -600,6 +607,33 @@ export class Session {
   /** Answers an outstanding permission request. */
   resolvePermission(requestId: string, optionId: string | null): void {
     this.pendingPermissions.get(requestId)?.(optionId);
+  }
+
+  /**
+   * Argument suggestions for a partially typed command.
+   *
+   * Uses Kiro's `_kiro.dev/commands/options` extension where the agent
+   * implements it. This is an ACP extension, not part of the standard, so a
+   * failure is treated as "unsupported" and never asked again — the composer
+   * falls back to parsing the command's own hint.
+   */
+  async commandOptions(command: string, partial: string): Promise<CommandOption[]> {
+    if (this.commandOptionsUnsupported) return [];
+    const connection = this.connection;
+    const agentSessionId = this.agentSessionId;
+    if (!connection || !agentSessionId) return [];
+
+    try {
+      const res = (await connection.agent.request("_kiro.dev/commands/options", {
+        sessionId: agentSessionId,
+        command,
+        partial,
+      })) as { options?: CommandOption[] };
+      return Array.isArray(res?.options) ? res.options.filter((o) => typeof o?.value === "string") : [];
+    } catch {
+      this.commandOptionsUnsupported = true;
+      return [];
+    }
   }
 
   /** Renames the chat and stops the agent overwriting the choice. */
