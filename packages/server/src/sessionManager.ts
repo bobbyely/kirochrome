@@ -12,12 +12,30 @@ import type { Store } from "./store.js";
  */
 export class SessionManager {
   private readonly live = new Map<string, Session>();
+  private readonly changeListeners = new Set<() => void>();
 
   constructor(private readonly store: Store) {}
 
+  /**
+   * Notified whenever any live session changes state, so connected clients can
+   * keep the conversation list current without polling.
+   */
+  onChange(fn: () => void): () => void {
+    this.changeListeners.add(fn);
+    return () => this.changeListeners.delete(fn);
+  }
+
+  private track(session: Session): void {
+    this.live.set(session.id, session);
+    session.onStateChange(() => {
+      for (const fn of this.changeListeners) fn();
+    });
+    for (const fn of this.changeListeners) fn();
+  }
+
   async open(provider: ProviderConfig, cwd?: string): Promise<Session> {
     const session = await Session.open(randomUUID(), provider, this.store, cwd);
-    this.live.set(session.id, session);
+    this.track(session);
     return session;
   }
 
@@ -30,7 +48,7 @@ export class SessionManager {
     if (!record) throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
 
     const session = await Session.resume(record, provider, this.store);
-    this.live.set(id, session);
+    this.track(session);
     return session;
   }
 
@@ -63,6 +81,7 @@ export class SessionManager {
       live: false,
       configOptions: [],
       autoApprove: false,
+      awaitingInput: false,
     };
   }
 
@@ -83,6 +102,20 @@ export class SessionManager {
       });
     }
     throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
+  }
+
+  /** Renames a conversation, whether or not it currently has an agent attached. */
+  rename(id: string, title: string): void {
+    const trimmed = title.trim();
+    if (!trimmed) throw kcError("INTERNAL", "A chat name cannot be empty.");
+
+    const live = this.live.get(id);
+    if (live) {
+      live.rename(trimmed);
+      return;
+    }
+    if (!this.store.getSession(id)) throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
+    this.store.renameSession(id, trimmed);
   }
 
   /** Distinct directories already worked in, most recent first. */

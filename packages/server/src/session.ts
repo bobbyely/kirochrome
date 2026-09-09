@@ -70,6 +70,8 @@ export class Session {
   private readonly terminals = new TerminalRegistry();
 
   private title: string | null = null;
+  /** Set once the user renames the chat, so the agent stops renaming it back. */
+  private titleLocked = false;
   private configOptions: ConfigOption[] = [];
 
   private constructor(
@@ -102,6 +104,7 @@ export class Session {
       status: "active",
       createdAt: now,
       updatedAt: now,
+      titleLocked: false,
     });
     await session.connect();
     return session;
@@ -125,6 +128,7 @@ export class Session {
     }
     const session = new Session(record.id, provider, record.cwd, store);
     session.title = record.title;
+    session.titleLocked = record.titleLocked;
     session.agentSessionId = record.agentSessionId;
     session.seq = store.lastSeq(record.id);
     session.log.push(...store.eventsSince(record.id, 0));
@@ -231,8 +235,9 @@ export class Session {
     }
 
     this.busy = true;
+    this.notifyState();
     // First message names the session, so the list is browsable.
-    if (this.title === null) {
+    if (this.title === null && !this.titleLocked) {
       this.title = text.length > 60 ? `${text.slice(0, 57)}…` : text;
       this.persistMeta();
     }
@@ -256,6 +261,7 @@ export class Session {
       );
     } finally {
       this.busy = false;
+      this.notifyState();
     }
   }
 
@@ -336,7 +342,7 @@ export class Session {
 
     // Agents name their own sessions. Prefer that over our first-message
     // fallback — it is better, and it costs nothing extra.
-    if (t.sessionUpdate === "session_info_update" && t.title) {
+    if (t.sessionUpdate === "session_info_update" && t.title && !this.titleLocked) {
       this.title = t.title;
       this.persistMeta();
       this.notifyState();
@@ -397,8 +403,10 @@ export class Session {
 
     const optionId = await new Promise<string | null>((resolve) => {
       this.pendingPermissions.set(requestId, resolve);
+      this.notifyState();
     });
     this.pendingPermissions.delete(requestId);
+    this.notifyState();
 
     if (optionId === null) {
       this.append({ type: "permission_resolved", requestId, optionId, outcome: "cancelled" });
@@ -411,6 +419,14 @@ export class Session {
   /** Answers an outstanding permission request. */
   resolvePermission(requestId: string, optionId: string | null): void {
     this.pendingPermissions.get(requestId)?.(optionId);
+  }
+
+  /** Renames the chat and stops the agent overwriting the choice. */
+  rename(title: string): void {
+    this.title = title;
+    this.titleLocked = true;
+    this.store.renameSession(this.id, title);
+    this.notifyState();
   }
 
   setAutoApprove(enabled: boolean): void {
@@ -464,6 +480,7 @@ export class Session {
       status: "active",
       createdAt: now,
       updatedAt: now,
+      titleLocked: this.titleLocked,
     });
   }
 
@@ -499,6 +516,7 @@ export class Session {
       live: true,
       configOptions: this.configOptions,
       autoApprove: this.autoApprove,
+      awaitingInput: this.pendingPermissions.size > 0,
     };
   }
 

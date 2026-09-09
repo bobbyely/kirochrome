@@ -185,15 +185,14 @@ button:disabled { opacity: 0.55; cursor: default; }
 .chat-title { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .chat-title .cmd { font-size: 11px; }
 
-.transcript {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 20px 24px;
+.transcript { flex: 1; overflow-y: auto; padding: 20px 20px 24px; }
+.transcript-inner {
+  max-width: 860px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.transcript > * { max-width: 860px; width: 100%; margin-left: auto; margin-right: auto; }
 
 .msg { max-width: 82%; padding: 7px 12px; border-radius: 11px; white-space: pre-wrap; word-wrap: break-word; }
 .msg-user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
@@ -543,3 +542,69 @@ button.primary:hover:not(:disabled) { opacity: 0.9; color: #fff; }
 .permission.answered { opacity: 0.65; border-color: var(--border); background: var(--bg); }
 .permission-title { font-size: 13.5px; }
 .permission-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- sidebar rename ---------- */
+.sidebar-item { flex-direction: row; align-items: stretch; gap: 0; padding: 0; }
+.sidebar-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+  padding: 8px 4px 8px 10px;
+  background: none;
+  border: none;
+}
+.sidebar-item-main:hover { border: none; color: inherit; }
+.sidebar-rename {
+  flex-shrink: 0;
+  padding: 0 9px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  opacity: 0;
+}
+.sidebar-item:hover .sidebar-rename { opacity: 1; }
+.sidebar-rename:hover { color: var(--accent); border: none; }
+.sidebar-rename-input {
+  width: 100%;
+  font: inherit;
+  font-size: 13.5px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--bg);
+  color: var(--text);
+}
+.sidebar-rename-input:focus { outline: none; }
+
+/* ---------- conversation status ---------- */
+.sidebar-item-title { display: flex; align-items: center; gap: 7px; }
+
+.status { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.status-idle { background: var(--ok); }
+.status-detached { background: var(--muted); opacity: 0.45; }
+
+/* Blocked on the user: pulses, because it needs attention. */
+.status-input { background: var(--warn); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 60%, transparent); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 0%, transparent); }
+}
+
+/* Working: a spinning ring rather than a filled dot. */
+.status-working {
+  background: none;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .status-working { animation: none; border-top-color: var(--accent); }
+  .status-input { animation: none; }
+}

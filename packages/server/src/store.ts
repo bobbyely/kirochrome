@@ -52,6 +52,8 @@ export class Store {
 
       CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
     `);
+
+    this.migrate();
     // The database holds work conversations and source code. Keep it private.
     try {
       chmodSync(path, 0o600);
@@ -97,18 +99,33 @@ export class Store {
       .run(providerId);
   }
 
+  /**
+   * Additive migrations for databases created by an earlier version.
+   * Columns only ever get added, never dropped — the log is append-only and so,
+   * in spirit, is its schema.
+   */
+  private migrate(): void {
+    const columns = (this.db.prepare(`PRAGMA table_info(sessions)`).all() as Array<{ name: string }>).map(
+      (c) => c.name,
+    );
+    if (!columns.includes("title_locked")) {
+      this.db.exec(`ALTER TABLE sessions ADD COLUMN title_locked INTEGER NOT NULL DEFAULT 0`);
+    }
+  }
+
   // ---------- sessions ----------
 
   upsertSession(record: SessionRecord): void {
     this.db
       .prepare(
-        `INSERT INTO sessions (id, agent_session_id, provider_id, provider_name, cwd, title, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO sessions (id, agent_session_id, provider_id, provider_name, cwd, title, status, created_at, updated_at, title_locked)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            agent_session_id = excluded.agent_session_id,
            title = excluded.title,
            status = excluded.status,
-           updated_at = excluded.updated_at`,
+           updated_at = excluded.updated_at,
+           title_locked = excluded.title_locked`,
       )
       .run(
         record.id,
@@ -120,6 +137,7 @@ export class Store {
         record.status,
         record.createdAt,
         record.updatedAt,
+        record.titleLocked ? 1 : 0,
       );
   }
 
@@ -153,6 +171,16 @@ export class Store {
     return rows.map((r) => JSON.parse(r.payload) as KcEvent);
   }
 
+  /**
+   * Renames a conversation and locks the title, so the agent's own
+   * `session_info_update` does not overwrite what the user chose.
+   */
+  renameSession(id: string, title: string): void {
+    this.db
+      .prepare(`UPDATE sessions SET title = ?, title_locked = 1, updated_at = ? WHERE id = ?`)
+      .run(title, Date.now(), id);
+  }
+
   lastSeq(sessionId: string): number {
     const row = this.db
       .prepare(`SELECT MAX(seq) AS seq FROM events WHERE session_id = ?`)
@@ -174,6 +202,7 @@ function toRecord(row: Record<string, string | number | null>): SessionRecord {
     cwd: String(row["cwd"]),
     title: (row["title"] as string | null) ?? null,
     status: String(row["status"]) as SessionRecord["status"],
+    titleLocked: Boolean(row["title_locked"]),
     createdAt: Number(row["created_at"]),
     updatedAt: Number(row["updated_at"]),
   };

@@ -119,6 +119,11 @@ export function useChat() {
   const listSessions = useCallback(() => send({ type: "list_sessions" }), [send]);
   const listWorkspaces = useCallback(() => send({ type: "list_workspaces" }), [send]);
 
+  const renameSession = useCallback(
+    (id: string, title: string) => send({ type: "rename_session", sessionId: id, title }),
+    [send],
+  );
+
   const answerPermission = useCallback(
     (requestId: string, optionId: string | null) => {
       if (sessionId.current) send({ type: "permission_response", sessionId: sessionId.current, requestId, optionId });
@@ -171,6 +176,7 @@ export function useChat() {
     resumeSession,
     listSessions,
     listWorkspaces,
+    renameSession,
     setConfigOption,
     answerPermission,
     setAutoApprove,

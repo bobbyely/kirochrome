@@ -325,6 +325,9 @@ call, no extra tokens.
 - [ ] `AGENT_NOT_FOUND` offers per-platform install commands and a manual path
       field, rather than only naming the paths tried
 - [ ] Context-window usage indicator
+- [x] Rename conversations; a manual name locks against the agent renaming it
+- [x] Live status per conversation in the sidebar (working / needs input /
+      ready / detached), pushed rather than polled
 - [ ] Keyboard shortcuts, session switching
 - [ ] Image paste (Kiro advertises `promptCapabilities.image`)
 - [ ] Export a session to markdown

@@ -36,6 +36,9 @@ function handleConnection(ws: WebSocket, sessions: SessionManager): void {
   const send = (msg: ServerMessage) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
   };
+
+  // Keep every client's conversation list live, so status shows without a refresh.
+  unsubscribers.push(sessions.onChange(() => send({ type: "sessions", sessions: sessions.list() })));
   const fail = (error: KcError, sessionId?: string) => send({ type: "error", error, sessionId });
 
   ws.on("message", (raw) => {
@@ -93,6 +96,12 @@ async function dispatch(
         unsubscribers.push(live.onStateChange(() => send({ type: "session_state", session: live.summary() })));
       }
       send({ type: "session_state", session: sessions.summary(msg.sessionId) });
+      return;
+    }
+
+    case "rename_session": {
+      sessions.rename(msg.sessionId, msg.title);
+      send({ type: "sessions", sessions: sessions.list() });
       return;
     }
 

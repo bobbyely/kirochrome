@@ -63,6 +63,8 @@ export interface SessionSummary {
   /** Selectable settings the agent advertises. Empty when it offers none. */
   configOptions: ConfigOption[];
   autoApprove: boolean;
+  /** A permission prompt is open: the agent is blocked until the user answers. */
+  awaitingInput: boolean;
 }
 
 /**
@@ -132,6 +134,8 @@ export interface SessionRecord {
   cwd: string;
   title: string | null;
   status: "active" | "closed";
+  /** True once the user has renamed it, which stops the agent renaming it back. */
+  titleLocked: boolean;
   createdAt: number;
   updatedAt: number;
 }

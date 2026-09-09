@@ -78,12 +78,16 @@ export function Chat({
       </header>
 
       <div className="transcript">
-        {!session && <p className="muted">{sessionId ? "Loading conversation…" : "Starting agent…"}</p>}
-        {rows.map((row) => (
-          <Message key={row.seq} row={row} onPermission={answerPermission} />
-        ))}
-        {busy && <div className="thinking">Working…</div>}
-        <div ref={bottom} />
+        {/* Inner wrapper caps line length; alignment happens inside it, so
+            user messages can still sit right while the column stays centred. */}
+        <div className="transcript-inner">
+          {!session && <p className="muted">{sessionId ? "Loading conversation…" : "Starting agent…"}</p>}
+          {rows.map((row) => (
+            <Message key={row.seq} row={row} onPermission={answerPermission} />
+          ))}
+          {busy && <div className="thinking">Working…</div>}
+          <div ref={bottom} />
+        </div>
       </div>
 
       {error && (
