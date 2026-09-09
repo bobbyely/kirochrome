@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isProviderFault, latestUsage } from "@kirochrome/shared";
 import type { ConfigOption, SessionUsage } from "@kirochrome/shared";
+import { KSpinner } from "./KSpinner.js";
 import { MarkdownBody } from "./Markdown.js";
 import { collapseContext, countChanges, lineDiff } from "./diff.js";
 import { fileToImage, type PendingImage } from "./images.js";
@@ -166,7 +167,11 @@ export function Chat({
           {rows.map((row) => (
             <Message key={row.seq} row={row} onPermission={answerPermission} />
           ))}
-          {busy && <div className="thinking">Working…</div>}
+          {busy && (
+            <div className="thinking">
+              <KSpinner label={session?.awaitingInput ? "Waiting for you" : "Working"} />
+            </div>
+          )}
           <div ref={bottom} />
         </div>
       </div>

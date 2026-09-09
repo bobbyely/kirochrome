@@ -16,6 +16,16 @@ export function loadTheme(): Theme {
   return "system";
 }
 
+/** What the browser would pick with no explicit choice. */
+export function systemTheme(): "light" | "dark" {
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+/** The theme actually in effect, resolving "system". */
+export function effectiveTheme(theme: Theme): "light" | "dark" {
+  return theme === "system" ? systemTheme() : theme;
+}
+
 export function applyTheme(theme: Theme): void {
   const root = document.documentElement;
   if (theme === "system") root.removeAttribute("data-theme");

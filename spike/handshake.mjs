@@ -95,9 +95,14 @@ try {
 
     const r = session.newSessionResponse;
     console.log("\n--- what the composer pickers would render ---");
-    console.log("configOptions :", JSON.stringify(r.configOptions ?? null));
-    console.log("availableModels:", JSON.stringify(r.models ?? r.availableModels ?? null));
-    console.log("modes          :", JSON.stringify(session.modes ?? null));
+    const options = Array.isArray(r.configOptions) ? r.configOptions : [];
+    if (options.length === 0) console.log("  (no configOptions advertised)");
+    for (const o of options) {
+      console.log(`  id=${o.id}  category=${o.category ?? "-"}  type=${o.type}  current=${JSON.stringify(o.currentValue)}`);
+      for (const v of o.options ?? []) console.log(`      ${JSON.stringify(v.value)}  ${v.name ?? ""}`);
+    }
+    console.log("\n  legacy models:", JSON.stringify(r.models ?? r.availableModels ?? null));
+    console.log("  legacy modes :", JSON.stringify(session.modes ?? null));
 
     // --- a real turn ---
     console.log("\n--- prompting ---");

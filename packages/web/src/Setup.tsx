@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CHECK_STAGES } from "@kirochrome/shared";
 import type { CheckStage, HostPlatform, ProviderCheckResult, ProviderView } from "@kirochrome/shared";
 import { ApiError, fetchProviders, runCheck, updateProvider } from "./api.js";
-import { applyTheme, loadTheme, type Theme } from "./theme.js";
+import { applyTheme, effectiveTheme, loadTheme, type Theme } from "./theme.js";
 
 export function Setup() {
   const [providers, setProviders] = useState<ProviderView[] | null>(null);
@@ -84,14 +84,16 @@ export function Setup() {
   );
 }
 
-const THEMES: Array<{ value: Theme; label: string }> = [
-  { value: "system", label: "System" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-];
-
+/**
+ * A switch rather than three buttons.
+ *
+ * "System" is still honoured — it is simply the starting state rather than a
+ * third position. Flicking the switch makes an explicit choice; "follow system"
+ * hands control back, and only appears once there is something to hand back.
+ */
 function ThemePicker() {
   const [theme, setTheme] = useState<Theme>(loadTheme);
+  const dark = effectiveTheme(theme) === "dark";
 
   const choose = (next: Theme) => {
     setTheme(next);
@@ -101,17 +103,26 @@ function ThemePicker() {
   return (
     <section className="theme">
       <h2 className="section-label">Appearance</h2>
-      <div className="segmented" role="group" aria-label="Theme">
-        {THEMES.map((option) => (
-          <button
-            key={option.value}
-            className={theme === option.value ? "on" : ""}
-            aria-pressed={theme === option.value}
-            onClick={() => choose(option.value)}
-          >
-            {option.label}
+      <div className="theme-row">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={dark}
+          aria-label="Dark mode"
+          className={`switch ${dark ? "on" : ""}`}
+          onClick={() => choose(dark ? "light" : "dark")}
+        >
+          <span className="switch-track">
+            <span className="switch-knob" />
+          </span>
+          <span className="switch-label">{dark ? "Dark" : "Light"}</span>
+        </button>
+
+        {theme !== "system" && (
+          <button className="setup-link" onClick={() => choose("system")}>
+            Follow system
           </button>
-        ))}
+        )}
       </div>
     </section>
   );
