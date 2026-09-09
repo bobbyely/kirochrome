@@ -36,13 +36,30 @@ parser.
 
 ## Development
 
-Requires Node 22+ (see `.nvmrc`).
+Requires **Node 22.5+** (for the built-in `node:sqlite`). See `.nvmrc`.
+
+```bash
+git clone https://github.com/bobbyely/kirochrome.git
+cd kirochrome
+npm install
+npm start                 # builds everything, serves http://127.0.0.1:4711
+```
+
+Open <http://127.0.0.1:4711>, press **Check** on a provider, and once it passes,
+**New chat**.
+
+For a live-reloading UI, run the two halves separately:
+
+```bash
+npm start -w @kirochrome/server    # :4711
+npm run dev -w @kirochrome/web     # :5173, proxies /api and the WebSocket
+```
 
 ### On a new machine
 
 `.git/config` does not travel with a clone, so set your commit identity before
 your first commit — otherwise commits are attributed to whatever global identity
-that machine happens to have:
+that machine has (a corporate one, on a work laptop):
 
 ```bash
 git config user.name  "bobbyely"
@@ -53,38 +70,40 @@ Verify with `git log -1 --format='%an <%ae>'` after committing. A `.mailmap`
 canonicalises past mistakes for git's own tooling, but it does not fix GitHub's
 contributor graph — get the identity right at commit time.
 
-```bash
-npm install
-npm start                 # build everything, serve on http://127.0.0.1:4711
-```
+### Providers
 
-For a live-reloading UI, run the server and Vite separately:
+Configured in `<dataDir>/config.json`, seeded on first run with Kiro, Claude
+Code, and — when running from a checkout — an offline mock agent that always
+passes, so you can try the chat with no agent installed.
 
-```bash
-npm run build && npm start -w @kirochrome/server   # :4711
-npm run dev -w @kirochrome/web                     # :5173, proxies /api
-```
-
-Providers are configured in `<dataDir>/config.json`, seeded on first run:
-
-| OS | Location |
+| OS | Data directory |
 |---|---|
-| Linux | `~/.local/share/kirochrome/` |
 | macOS | `~/Library/Application Support/kirochrome/` |
+| Linux | `~/.local/share/kirochrome/` |
 
-Set `KIROCHROME_DATA_DIR` to override, and `KIROCHROME_TRACE=1` to log every
-JSON-RPC frame to a JSONL file in that directory.
+`KIROCHROME_DATA_DIR` overrides it. `KIROCHROME_PORT` changes the port.
+`KIROCHROME_TRACE=1` logs every JSON-RPC frame to a JSONL file in the data
+directory.
 
-On first run the config is seeded with Kiro, Claude Code, and — when running
-from a checkout — an offline mock agent that always passes, so you can try the
-chat without any agent installed.
+If a provider fails, the setup page names the rung it failed on and what to do
+about it. Two common ones:
 
-**Testing with Claude Code:** the ACP adapter refuses to start inside an
-existing Claude Code session, so run `npm start` from a normal terminal.
+- **`AGENT_NOT_FOUND`** — set an absolute path in `config.json`. Kiro installs
+  to `~/.local/bin/kiro-cli`, which a GUI-launched process often cannot see.
+- **Claude Code refuses to start** — its ACP adapter will not run nested inside
+  an existing Claude Code session. Use a plain terminal.
 
-**Current state:** the setup page verifies each configured provider rung by
-rung, and a provider that passes can start a chat with streaming responses.
-Conversations are in memory only — persistence is phase 3.
+### Probing an agent directly
+
+To see raw ACP traffic without the UI — useful when a provider misbehaves, or to
+check what a new agent advertises:
+
+```bash
+cd spike && npm install
+node handshake.mjs kiro          # or: claude-code, mock
+```
+
+## Prior art
 
 ## Prior art
 
