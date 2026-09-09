@@ -71,7 +71,7 @@ export const REMEDIATION: Record<KcErrorCode, string> = {
   RPC_TIMEOUT: "The agent stopped responding. Re-run the check, and restart the agent if it persists.",
   RPC_ERROR: "The agent returned an error. See the details below.",
   SESSION_NOT_LIVE:
-    "This conversation was restored from disk, so its transcript is readable but no agent is attached to it.",
+    "No agent is attached to this conversation — it was restored from disk, or its agent exited. The transcript is readable; use 'Resume conversation' to continue it.",
   SESSION_UNKNOWN: "That conversation no longer exists.",
   PROVIDER_UNKNOWN: "No provider is configured with that id. Check your config file.",
   CONFIG_INVALID: "The configuration file could not be read. Fix or delete it to regenerate defaults.",

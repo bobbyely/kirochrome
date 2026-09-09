@@ -47,6 +47,8 @@ export class Session {
   private readonly log: KcEvent[] = [];
   private readonly subscribers = new Set<Subscriber>();
   private readonly stateListeners = new Set<() => void>();
+  private readonly exitListeners = new Set<() => void>();
+  private exited = false;
   private seq = 0;
   private busy = false;
 
@@ -93,20 +95,10 @@ export class Session {
     // Explicit choice wins, then the provider's pin, then the launch directory.
     const cwd = cwdOverride ?? provider.cwd ?? defaultCwd();
     const session = new Session(id, provider, cwd, store);
-    const now = Date.now();
-    store.upsertSession({
-      id,
-      agentSessionId: null,
-      providerId: provider.id,
-      providerName: provider.name,
-      cwd,
-      title: null,
-      status: "active",
-      createdAt: now,
-      updatedAt: now,
-      titleLocked: false,
-    });
+    // Persist only once the agent is actually up. Recording it first left a
+    // phantom conversation in the sidebar whenever a provider failed to start.
     await session.connectOrClose();
+    session.persistMeta();
     return session;
   }
 
@@ -164,6 +156,12 @@ export class Session {
       this.flushText();
       this.append({ type: "agent_exited", code, signal });
       this.busy = false;
+      this.exited = true;
+      // Release anything blocked on a human; nothing is listening any more.
+      for (const resolve of this.pendingPermissions.values()) resolve(null);
+      this.pendingPermissions.clear();
+      this.notifyState();
+      for (const fn of this.exitListeners) fn();
     });
 
     const app = client({ name: "kirochrome" })
@@ -510,7 +508,7 @@ export class Session {
     for (const notify of this.subscribers) notify([full]);
   }
 
-  private persistMeta(): void {
+  persistMeta(): void {
     const now = Date.now();
     this.store.upsertSession({
       id: this.id,
@@ -529,6 +527,12 @@ export class Session {
   /** Everything after `sinceSeq` — the whole of catch-up-after-reconnect. */
   eventsSince(sinceSeq: number): KcEvent[] {
     return this.log.filter((e) => e.seq > sinceSeq);
+  }
+
+  /** Notified when the agent process ends, so the manager can stop treating it as live. */
+  onExit(fn: () => void): () => void {
+    this.exitListeners.add(fn);
+    return () => this.exitListeners.delete(fn);
   }
 
   /** Notified when session metadata changes outside the event stream. */
@@ -555,7 +559,7 @@ export class Session {
       busy: this.busy,
       lastSeq: this.seq,
       title: this.title,
-      live: true,
+      live: !this.exited,
       configOptions: this.configOptions,
       autoApprove: this.autoApprove,
       awaitingInput: this.pendingPermissions.size > 0,

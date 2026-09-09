@@ -27,10 +27,18 @@ export class SessionManager {
 
   private track(session: Session): void {
     this.live.set(session.id, session);
-    session.onStateChange(() => {
+    const broadcast = () => {
       for (const fn of this.changeListeners) fn();
+    };
+    session.onStateChange(broadcast);
+    // A dead agent is not a live session: drop it so prompting reports
+    // SESSION_NOT_LIVE with a way forward, rather than a confusing
+    // "the agent is not connected" from a session the UI still thinks is fine.
+    session.onExit(() => {
+      this.live.delete(session.id);
+      broadcast();
     });
-    for (const fn of this.changeListeners) fn();
+    broadcast();
   }
 
   async open(provider: ProviderConfig, cwd?: string): Promise<Session> {
@@ -98,7 +106,8 @@ export class SessionManager {
     if (session) return session;
     if (this.store.getSession(id)) {
       throw kcError("SESSION_NOT_LIVE", "This conversation has no agent attached.", {
-        remediation: "Start a new chat to continue. Resuming a past session arrives in the next phase.",
+        remediation:
+          "Use 'Resume conversation' to attach an agent and carry on. The transcript is safe either way.",
       });
     }
     throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
