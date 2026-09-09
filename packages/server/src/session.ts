@@ -106,7 +106,7 @@ export class Session {
       updatedAt: now,
       titleLocked: false,
     });
-    await session.connect();
+    await session.connectOrClose();
     return session;
   }
 
@@ -132,8 +132,24 @@ export class Session {
     session.agentSessionId = record.agentSessionId;
     session.seq = store.lastSeq(record.id);
     session.log.push(...store.eventsSince(record.id, 0));
-    await session.connect({ loadSessionId: record.agentSessionId });
+    await session.connectOrClose({ loadSessionId: record.agentSessionId });
     return session;
+  }
+
+  /**
+   * Connects, tearing the agent down if it fails.
+   *
+   * `connect` spawns before it handshakes, so a failure part-way through would
+   * otherwise leave the process running with nothing referencing it — the
+   * orphan case, arriving by a different route.
+   */
+  private async connectOrClose(opts: { loadSessionId?: string } = {}): Promise<void> {
+    try {
+      await this.connect(opts);
+    } catch (err) {
+      this.close();
+      throw err;
+    }
   }
 
   private async connect(opts: { loadSessionId?: string } = {}): Promise<void> {
@@ -206,6 +222,25 @@ export class Session {
           cwd: this.cwd,
           mcpServers: [],
         });
+      } catch (err) {
+        const rpc = err as { code?: unknown; message?: unknown; data?: unknown };
+        throw kcError(
+          "SESSION_NOT_LIVE",
+          `'${this.provider.name}' could not reopen this conversation.`,
+          {
+            remediation:
+              "The agent may no longer have this session in its own storage — agents expire them " +
+              "independently of KiroChrome. The transcript is still readable; start a new chat to continue.",
+            detail: {
+              agentSessionId: opts.loadSessionId,
+              cwd: this.cwd,
+              rpc: { code: rpc?.code, message: rpc?.message, data: rpc?.data },
+              // Its stdout is JSON-RPC; the real reason is always here.
+              stderr: this.proc?.stderr.tail(),
+            },
+            cause: causeOf(err),
+          },
+        );
       } finally {
         this.replaying = false;
         this.textBuffer = "";
@@ -311,12 +346,19 @@ export class Session {
     }
   }
 
+  /**
+   * Asks the agent to abandon the current turn.
+   *
+   * `session/cancel` is a NOTIFICATION, not a request — the agent sends no
+   * reply. Awaiting one here made Stop hang forever and appear to do nothing;
+   * the turn ends when the in-flight `session/prompt` returns.
+   */
   async cancel(): Promise<void> {
-    if (!this.connection || !this.agentSessionId) return;
+    if (!this.connection || !this.agentSessionId || !this.busy) return;
     try {
-      await this.connection.agent.request("session/cancel", { sessionId: this.agentSessionId });
+      await this.connection.agent.notify("session/cancel", { sessionId: this.agentSessionId });
     } catch (err) {
-      this.emitError(kcError("RPC_ERROR", "Cancel failed.", { cause: causeOf(err) }));
+      this.emitError(kcError("RPC_ERROR", "Could not cancel the turn.", { cause: causeOf(err) }));
     }
   }
 

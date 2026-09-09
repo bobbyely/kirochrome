@@ -8,7 +8,13 @@ import { agent, ndJsonStream, PROTOCOL_VERSION } from "@agentclientprotocol/sdk"
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let seq = 0;
 
+const cancelled = new Set();
+
 const app = agent({ name: "mock-agent" })
+  // ACP sends cancellation as a notification, not a request.
+  .onNotification("session/cancel", ({ params }) => {
+    cancelled.add(params.sessionId);
+  })
   .onRequest("initialize", () => ({
     protocolVersion: PROTOCOL_VERSION,
     agentCapabilities: {
@@ -60,6 +66,17 @@ const app = agent({ name: "mock-agent" })
   .onRequest("session/prompt", async ({ params, client }) => {
     const notify = (update) =>
       client.notify("session/update", { sessionId: params.sessionId, update });
+
+    // A long turn, so cancellation has something to interrupt.
+    if (params.prompt?.[0]?.text === "long") {
+      cancelled.delete(params.sessionId);
+      for (let i = 0; i < 100; i++) {
+        if (cancelled.has(params.sessionId)) return { stopReason: "cancelled" };
+        await notify({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "." } });
+        await sleep(100);
+      }
+      return { stopReason: "end_turn" };
+    }
 
     // Session-state updates: these must NOT become transcript rows.
     await notify({ sessionUpdate: "available_commands_update", availableCommands: [] });

@@ -194,7 +194,11 @@ button:disabled { opacity: 0.55; cursor: default; }
   gap: 8px;
 }
 
-.msg { max-width: 82%; padding: 7px 12px; border-radius: 11px; white-space: pre-wrap; word-wrap: break-word; }
+.msg { max-width: 82%; padding: 7px 12px; border-radius: 11px; word-wrap: break-word; }
+/* Raw-text rows only. Agent messages are markdown: pre-wrap there would render
+   the newlines between block elements literally, double-spacing every
+   paragraph on top of its own margin. */
+.msg-user, .msg-thought, .msg-note { white-space: pre-wrap; }
 .msg-user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
 .msg-agent { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
 .msg-note {
