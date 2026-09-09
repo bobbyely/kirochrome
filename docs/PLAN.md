@@ -76,8 +76,25 @@ guarded against PID reuse.
    and stays honest about what the agent claims it did), and whether it survives
    a restart — it will, since the diffs live in the event log.
 
-1. True virtualisation, if the windowed transcript proves insufficient.
-2. Whatever the work machine turns up once Kiro is actually driving it —
+1. **A proper design pass.** The interface has been built feature by feature,
+   each styled as it landed, and it shows: spacing, type scale and colour use
+   are consistent only by accident. Worth treating as one job rather than more
+   incremental patching.
+
+   Specifics already visible: no type scale (font sizes range across 10, 11,
+   11.5, 12, 12.5, 13, 13.5, 14, 15px, mostly ad hoc); spacing values chosen per
+   component rather than from a scale; three different muted greys doing similar
+   work; the header crowding once Export, the context meter and the status pill
+   are all present; and `styles.css` is now one long append-only file, which is
+   the reason the drift was easy.
+
+   Do the tokens first — a type scale, a spacing scale, and a considered use of
+   the existing colour tokens — then re-fit the components to them. Splitting
+   `styles.css` per component would make the next change safer, though CSS
+   custom properties mean it does not have to happen first.
+
+2. True virtualisation, if the windowed transcript proves insufficient.
+3. Whatever the work machine turns up once Kiro is actually driving it —
    including the one protocol question still open since phase 0, below.
 
 ## Phase 0 — Handshake spike
