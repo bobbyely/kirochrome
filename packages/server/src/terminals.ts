@@ -1,9 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { killTree } from "./agentProcess.js";
-import { dataDir } from "./paths.js";
+import { recordProcess } from "./processLedger.js";
 
 /** Backstop cap. Agents implement their own timeouts; this catches the ones that do not. */
 const DEFAULT_TIMEOUT_MS = 10 * 60_000;
@@ -31,12 +29,6 @@ interface Terminal {
  */
 export class TerminalRegistry {
   private readonly terminals = new Map<string, Terminal>();
-  private readonly pidFile = join(dataDir(), "terminals.pid");
-
-  constructor() {
-    mkdirSync(dataDir(), { recursive: true });
-    this.reapOrphans();
-  }
 
   // Nullable fields mirror the ACP schema, which uses null rather than omission.
   create(params: {
@@ -100,7 +92,9 @@ export class TerminalRegistry {
       settle({ exitCode: 127, signal: null }); // 127 is the shell's "command not found"
     });
 
-    if (child.pid !== undefined) this.recordPid(child.pid);
+    if (child.pid !== undefined) {
+      recordProcess(child.pid, [params.command, ...(params.args ?? [])].join(" "));
+    }
     this.terminals.set(id, terminal);
     return { terminalId: id };
   }
@@ -153,43 +147,4 @@ export class TerminalRegistry {
     return terminal;
   }
 
-  private recordPid(pid: number): void {
-    try {
-      appendFileSync(this.pidFile, `${pid}\n`);
-    } catch {
-      // Orphan reaping is best-effort; never fail a command over it.
-    }
-  }
-
-  /**
-   * Kills processes left behind by a server that died without cleaning up.
-   * Without this, a crash leaks every running command until the machine reboots.
-   */
-  private reapOrphans(): void {
-    let pids: number[];
-    try {
-      pids = readFileSync(this.pidFile, "utf8")
-        .split("\n")
-        .map((line) => Number(line.trim()))
-        .filter((pid) => Number.isInteger(pid) && pid > 0);
-    } catch {
-      return;
-    }
-
-    let reaped = 0;
-    for (const pid of pids) {
-      try {
-        process.kill(-pid, "SIGKILL"); // the group, not just the leader
-        reaped++;
-      } catch {
-        // Already gone, or not ours any more.
-      }
-    }
-    if (reaped > 0) console.log(`[terminals] reaped ${reaped} orphaned process group(s)`);
-    try {
-      writeFileSync(this.pidFile, "");
-    } catch {
-      /* best effort */
-    }
-  }
 }

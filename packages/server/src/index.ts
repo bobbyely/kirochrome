@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { startServer } from "./http.js";
+import { reapOrphans } from "./processLedger.js";
 
 /**
  * `node:sqlite` landed in Node 22.5.0. Without this check an older Node fails
@@ -23,6 +24,11 @@ function requireNode(minimum: [number, number]): void {
 }
 
 requireNode([22, 5]);
+
+// Once, before anything spawns: clean up after a server that died without
+// getting the chance to. Never do this per-session — it would kill processes
+// belonging to sessions that are still running.
+reapOrphans();
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webDist = resolve(here, "..", "..", "web", "dist");

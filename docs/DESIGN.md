@@ -171,8 +171,21 @@ Two more rules that matter:
 - **A turn is owned by the server, not the socket.** If the browser
   disconnects mid-turn the turn keeps running and keeps appending; this is the
   main practical payoff of the event log.
-- **Every child PID is recorded.** On startup, reap orphans from a previous
-  server that died without cleaning up.
+- **Every child PID is recorded**, agents included, in a ledger under the data
+  directory. On startup — *once*, before anything spawns — process groups left
+  by a previous server are killed. Doing this per-session would kill processes
+  belonging to sessions that are still alive.
+- **PIDs are recycled by the OS**, so a stale ledger entry could name an
+  unrelated process. Every entry is verified against the live process's command
+  line before anything is killed.
+
+What each kind of shutdown guarantees:
+
+| How the server ends | Agents | Commands the agent started itself |
+|---|---|---|
+| Ctrl-C / SIGTERM | killed, as a group | killed with the group |
+| `kill -9` | exit on stdin EOF, if well-behaved | **leak** — nothing can run at that moment |
+| next startup | — | reaped from the ledger |
 - Stop in the UI maps to `session/cancel`, and must remain responsive even
   when the agent is busy.
 

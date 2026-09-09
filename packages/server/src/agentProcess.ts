@@ -3,6 +3,7 @@ import { Readable, Writable } from "node:stream";
 import { ndJsonStream, type Stream } from "@agentclientprotocol/sdk";
 import { kcError, type KcError } from "@kirochrome/shared";
 import type { ProviderConfig } from "@kirochrome/shared";
+import { recordProcess } from "./processLedger.js";
 import { RingBuffer } from "./ringBuffer.js";
 import { resolveCommand } from "./resolve.js";
 import { trace, traceEnabled } from "./trace.js";
@@ -40,6 +41,12 @@ export function spawnAgent(provider: ProviderConfig, executablePath: string): Ag
     // a "hung" terminal usually is.
     detached: process.platform !== "win32",
   });
+
+  // Agents are detached, so they survive a crashed server; record them so the
+  // next start can reap whatever they left running.
+  if (child.pid !== undefined) {
+    recordProcess(child.pid, [executablePath, ...provider.args].join(" "));
+  }
 
   const stderr = new RingBuffer();
   child.stderr?.setEncoding("utf8");
