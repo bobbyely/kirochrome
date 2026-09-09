@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CHECK_STAGES } from "@kirochrome/shared";
 import type { CheckStage, ProviderCheckResult, ProviderView } from "@kirochrome/shared";
 import { ApiError, fetchProviders, runCheck } from "./api.js";
+import { applyTheme, loadTheme, type Theme } from "./theme.js";
 
 export function Setup() {
   const [providers, setProviders] = useState<ProviderView[] | null>(null);
@@ -60,6 +61,8 @@ export function Setup() {
 
       {loadError && <div className="banner">{loadError}</div>}
 
+      <ThemePicker />
+
       {!providers && !loadError && <p className="muted">Loading providers…</p>}
 
       <div className="cards">
@@ -73,6 +76,39 @@ export function Setup() {
         ))}
       </div>
     </div>
+  );
+}
+
+const THEMES: Array<{ value: Theme; label: string }> = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
+
+function ThemePicker() {
+  const [theme, setTheme] = useState<Theme>(loadTheme);
+
+  const choose = (next: Theme) => {
+    setTheme(next);
+    applyTheme(next);
+  };
+
+  return (
+    <section className="theme">
+      <h2 className="section-label">Appearance</h2>
+      <div className="segmented" role="group" aria-label="Theme">
+        {THEMES.map((option) => (
+          <button
+            key={option.value}
+            className={theme === option.value ? "on" : ""}
+            aria-pressed={theme === option.value}
+            onClick={() => choose(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

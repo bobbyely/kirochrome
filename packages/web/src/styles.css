@@ -15,8 +15,9 @@
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
+/* System preference, unless an explicit choice overrides it. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #16161a;
     --surface: #1e1e24;
     --border: #32323b;
@@ -30,6 +31,22 @@
     --warn: #e0b563;
     --warn-bg: #2a2318;
   }
+}
+
+/* An explicit dark choice wins in either system mode. */
+:root[data-theme="dark"] {
+  --bg: #16161a;
+  --surface: #1e1e24;
+  --border: #32323b;
+  --text: #e8e8e6;
+  --muted: #9a9a96;
+  --accent: #8b9aff;
+  --ok: #6fcf97;
+  --ok-bg: #1a2a21;
+  --fail: #f08a78;
+  --fail-bg: #2c1c1a;
+  --warn: #e0b563;
+  --warn-bg: #2a2318;
 }
 
 * { box-sizing: border-box; }
@@ -318,7 +335,20 @@ button.primary:hover:not(:disabled) { opacity: 0.9; color: #fff; }
 .hljs-title, .hljs-section, .hljs-name { color: #61afef; }
 .hljs-built_in, .hljs-class .hljs-title { color: #e6c07b; }
 .hljs-deletion { color: #e06c75; }
+/* Syntax colours follow the theme, not just the system preference — an
+   explicit Light choice on a dark system must recolour code too. */
 @media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+  .hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-type { color: #a626a4; }
+  .hljs-string, .hljs-attr, .hljs-addition { color: #50a14f; }
+  .hljs-number, .hljs-symbol, .hljs-bullet { color: #b76b01; }
+  .hljs-title, .hljs-section, .hljs-name { color: #4078f2; }
+  .hljs-built_in, .hljs-class .hljs-title { color: #986801; }
+  .hljs-deletion { color: #e45649; }
+  }
+}
+
+:root[data-theme="light"] {
   .hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-type { color: #a626a4; }
   .hljs-string, .hljs-attr, .hljs-addition { color: #50a14f; }
   .hljs-number, .hljs-symbol, .hljs-bullet { color: #b76b01; }
@@ -798,3 +828,17 @@ button.primary:hover:not(:disabled) { opacity: 0.9; color: #fff; }
   overflow: hidden;
 }
 .search-snippet mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text); }
+
+/* ---------- theme picker ---------- */
+.theme { margin: 28px 0 8px; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.segmented button {
+  border: none;
+  border-radius: 0;
+  background: var(--surface);
+  font-size: 13px;
+  padding: 6px 14px;
+}
+.segmented button + button { border-left: 1px solid var(--border); }
+.segmented button:hover { color: var(--text); background: var(--bg); }
+.segmented button.on { background: var(--accent); color: #fff; }
