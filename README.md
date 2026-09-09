@@ -102,6 +102,17 @@ about it. Two common ones:
 - **Claude Code refuses to start** — its ACP adapter will not run nested inside
   an existing Claude Code session. Use a plain terminal.
 
+### What did the agent actually send?
+
+```bash
+node scripts/diagnose.mjs
+```
+
+Lists every conversation with the ACP updates it received and whether the agent
+reported context usage. Counts only — no conversation content is printed. Use it
+when something is missing from the UI and you want to know whether the agent
+sent it at all.
+
 ### Probing an agent directly
 
 To see raw ACP traffic without the UI — useful when a provider misbehaves, or to
