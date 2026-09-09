@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { KcEvent } from "@kirochrome/shared";
+import { latestUsage } from "@kirochrome/shared";
 import { buildRows, toolContent, toolSubtitle } from "../timeline.ts";
 
 const ev = (e: Partial<KcEvent> & { type: KcEvent["type"] }, seq: number): KcEvent =>
@@ -84,5 +85,28 @@ describe("toolContent", () => {
     assert.equal(toolSubtitle([{ rawInput: { command: "ls -la" } }]), "ls -la");
     assert.equal(toolSubtitle([{ rawInput: { file_path: "src/a.ts" } }]), "src/a.ts");
     assert.equal(toolSubtitle([{}]), null);
+  });
+});
+
+describe("latestUsage", () => {
+  it("reads the most recent usage update from the log", () => {
+    const usage = latestUsage([
+      ev({ type: "agent_update", update: { sessionUpdate: "usage_update", used: 10, size: 100 } } as never, 1),
+      ev({ type: "agent_text", text: "hi" } as never, 2),
+      ev({ type: "agent_update", update: { sessionUpdate: "usage_update", used: 30, size: 100, cost: { amount: 0.5, currency: "USD" } } } as never, 3),
+    ]);
+    assert.equal(usage?.used, 30, "the latest update wins");
+    assert.equal(usage?.cost?.currency, "USD");
+  });
+
+  it("returns null when the agent has never reported usage", () => {
+    assert.equal(latestUsage([ev({ type: "agent_text", text: "hi" } as never, 1)]), null);
+  });
+
+  it("ignores a malformed usage update rather than showing nonsense", () => {
+    assert.equal(
+      latestUsage([ev({ type: "agent_update", update: { sessionUpdate: "usage_update" } } as never, 1)]),
+      null,
+    );
   });
 });

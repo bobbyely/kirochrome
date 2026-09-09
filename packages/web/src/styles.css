@@ -945,3 +945,6 @@ kbd {
   border-radius: 20px;
   color: var(--muted);
 }
+
+.context-label { font-size: 11px; color: var(--muted); }
+.context-pct.low { color: var(--warn); font-weight: 600; }

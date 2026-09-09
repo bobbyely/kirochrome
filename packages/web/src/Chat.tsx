@@ -123,7 +123,7 @@ export function Chat({
             Export
           </a>
         )}
-        {usage && <ContextMeter usage={usage} />}
+        {session?.live && <ContextMeter usage={usage} />}
         <span className={`pill ${connected ? "pill-ok" : "pill-stale"}`}>
           {connected ? "Connected" : "Reconnecting…"}
         </span>
@@ -619,20 +619,42 @@ function ConfigPicker({
   );
 }
 
-/** Context-window pressure, read straight out of the log's usage updates. */
-function ContextMeter({ usage }: { usage: SessionUsage }) {
+/**
+ * Context window remaining, read out of the log's usage updates.
+ *
+ * Always rendered for a live session, showing "—" until the agent reports
+ * usage: an absent meter is indistinguishable from a broken one, and not every
+ * agent sends `usage_update` at all.
+ */
+function ContextMeter({ usage }: { usage: SessionUsage | null }) {
+  if (!usage || usage.size <= 0) {
+    return (
+      <div className="context-meter" title="This agent has not reported context usage">
+        <span className="context-label">context</span>
+        <span className="context-pct">—</span>
+      </div>
+    );
+  }
+
   const { used, size, cost } = usage;
-  const pct = size > 0 ? Math.min(100, Math.round((used / size) * 100)) : 0;
+  const usedPct = Math.min(100, Math.round((used / size) * 100));
+  const leftPct = 100 - usedPct;
   const money =
     cost &&
     new Intl.NumberFormat(undefined, { style: "currency", currency: cost.currency }).format(cost.amount);
-  const title = `${used.toLocaleString()} / ${size.toLocaleString()} tokens${money ? ` · ${money}` : ""}`;
+
+  const title =
+    `${(size - used).toLocaleString()} of ${size.toLocaleString()} tokens left ` +
+    `(${used.toLocaleString()} used)${money ? ` · ${money}` : ""}`;
+
   return (
     <div className="context-meter" title={title}>
+      <span className="context-label">context</span>
       <div className="context-bar">
-        <div className={`context-fill ${pct >= 85 ? "high" : ""}`} style={{ width: `${pct}%` }} />
+        {/* The bar fills as the window is consumed; the number says what is left. */}
+        <div className={`context-fill ${usedPct >= 85 ? "high" : ""}`} style={{ width: `${usedPct}%` }} />
       </div>
-      <span className="context-pct">{pct}%</span>
+      <span className={`context-pct ${leftPct <= 15 ? "low" : ""}`}>{leftPct}% left</span>
     </div>
   );
 }
