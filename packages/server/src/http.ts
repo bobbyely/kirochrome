@@ -4,6 +4,7 @@ import { extname, join, normalize } from "node:path";
 import { kcError, type KcError } from "@kirochrome/shared";
 import type { ProviderView } from "@kirochrome/shared";
 import { checkProvider } from "./check.js";
+import { exportFilename, toMarkdown } from "./export.js";
 import { loadConfig } from "./config.js";
 import { SessionManager } from "./sessionManager.js";
 import { Store } from "./store.js";
@@ -90,6 +91,23 @@ async function handleApi(
       lastCheck: store.lastCheck(p.id),
     }));
     return sendJson(res, 200, { providers });
+  }
+
+  // GET /api/sessions/:id/export — the conversation as Markdown.
+  const exportMatch = /^\/api\/sessions\/([^/]+)\/export$/.exec(url.pathname);
+  if (exportMatch && req.method === "GET") {
+    const id = decodeURIComponent(exportMatch[1]!);
+    const record = store.getSession(id);
+    if (!record) {
+      return sendError(res, 404, kcError("SESSION_UNKNOWN", `No conversation with id '${id}'.`));
+    }
+    const markdown = toMarkdown(record, store.eventsSince(id, 0));
+    res.writeHead(200, {
+      "content-type": "text/markdown; charset=utf-8",
+      "content-disposition": `attachment; filename="${exportFilename(record)}"`,
+    });
+    res.end(markdown);
+    return;
   }
 
   // POST /api/providers/:id/check — run the ladder.

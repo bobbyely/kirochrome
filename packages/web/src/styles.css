@@ -842,3 +842,14 @@ button.primary:hover:not(:disabled) { opacity: 0.9; color: #fff; }
 .segmented button + button { border-left: 1px solid var(--border); }
 .segmented button:hover { color: var(--text); background: var(--bg); }
 .segmented button.on { background: var(--accent); color: #fff; }
+
+.head-action {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  text-decoration: none;
+}
+.head-action:hover { color: var(--accent); border-color: var(--accent); }

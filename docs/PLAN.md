@@ -364,7 +364,7 @@ call, no extra tokens.
 - [x] Theme control on the Setup page: light / dark / follow system
 - [ ] Keyboard shortcuts, session switching
 - [ ] Image paste (Kiro advertises `promptCapabilities.image`)
-- [ ] Export a session to markdown
+- [x] Export a conversation to markdown
 
 ---
 

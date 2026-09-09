@@ -79,6 +79,18 @@ export function Chat({
           <strong>{session?.title ?? session?.providerName ?? "Conversation"}</strong>
           {session && <code className="cmd">{session.cwd}</code>}
         </div>
+        {session && (
+          // A plain link: the server sets content-disposition, so the browser
+          // handles the download without any client-side blob juggling.
+          <a
+            className="head-action"
+            href={`/api/sessions/${encodeURIComponent(session.id)}/export`}
+            download
+            title="Export this conversation as Markdown"
+          >
+            Export
+          </a>
+        )}
         {usage && <ContextMeter usage={usage} />}
         <span className={`pill ${connected ? "pill-ok" : "pill-stale"}`}>
           {connected ? "Connected" : "Reconnecting…"}
