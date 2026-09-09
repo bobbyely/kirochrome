@@ -38,7 +38,12 @@ function handleConnection(ws: WebSocket, sessions: SessionManager): void {
   };
 
   // Keep every client's conversation list live, so status shows without a refresh.
-  unsubscribers.push(sessions.onChange(() => send({ type: "sessions", sessions: sessions.list() })));
+  // Each socket remembers whether it wants archived rows, so live pushes match
+  // what it last asked for.
+  const prefs = { includeArchived: false };
+  unsubscribers.push(
+    sessions.onChange(() => send({ type: "sessions", sessions: sessions.list(100, prefs.includeArchived) })),
+  );
   const fail = (error: KcError, sessionId?: string) => send({ type: "error", error, sessionId });
 
   ws.on("message", (raw) => {
@@ -51,7 +56,7 @@ function handleConnection(ws: WebSocket, sessions: SessionManager): void {
       }
 
       try {
-        await dispatch(msg, sessions, send, unsubscribers);
+        await dispatch(msg, sessions, send, unsubscribers, prefs);
       } catch (err) {
         const error =
           typeof err === "object" && err !== null && "code" in err
@@ -74,6 +79,7 @@ async function dispatch(
   sessions: SessionManager,
   send: (msg: ServerMessage) => void,
   unsubscribers: Array<() => void>,
+  prefs: { includeArchived: boolean },
 ): Promise<void> {
   switch (msg.type) {
     case "open": {
@@ -106,7 +112,14 @@ async function dispatch(
     }
 
     case "list_sessions": {
-      send({ type: "sessions", sessions: sessions.list() });
+      prefs.includeArchived = msg.includeArchived ?? false;
+      send({ type: "sessions", sessions: sessions.list(100, prefs.includeArchived) });
+      return;
+    }
+
+    case "archive_session": {
+      sessions.setArchived(msg.sessionId, msg.archived);
+      send({ type: "sessions", sessions: sessions.list(100, prefs.includeArchived) });
       return;
     }
 

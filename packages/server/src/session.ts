@@ -228,11 +228,15 @@ export class Session {
       // Discard the agent's replay; our log is already the transcript.
       this.replaying = true;
       try {
-        await this.connection.agent.request("session/load", {
+        // `session/load` returns modes and configOptions just as `session/new`
+        // does. Discarding the response left a resumed conversation with no
+        // pickers at all.
+        const loaded = (await this.connection.agent.request("session/load", {
           sessionId: opts.loadSessionId,
           cwd: this.cwd,
           mcpServers: [],
-        });
+        })) as Record<string, unknown>;
+        this.configOptions = normaliseConfigOptions(loaded ?? {});
       } catch (err) {
         const rpc = err as { code?: unknown; message?: unknown; data?: unknown };
         throw kcError(
@@ -256,6 +260,7 @@ export class Session {
         this.replaying = false;
         this.textBuffer = "";
       }
+      await this.applyDefaults();
       this.append({ type: "resumed" });
       return;
     }
@@ -636,6 +641,7 @@ export class Session {
       autoApprove: this.autoApprove,
       awaitingInput: this.pendingPermissions.size > 0,
       queued: [...this.queue],
+      archived: false,
     };
   }
 

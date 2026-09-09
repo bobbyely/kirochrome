@@ -18,12 +18,13 @@ export function Sidebar({
   onOpenSetup: () => void;
   setupActive: boolean;
 }) {
-  const { connected, sessions, listSessions, renameSession } = useChat();
+  const { connected, sessions, listSessions, renameSession, archiveSession } = useChat();
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
-    if (connected) listSessions();
-  }, [connected, listSessions, listVersion]);
+    if (connected) listSessions(showArchived);
+  }, [connected, listSessions, listVersion, showArchived]);
 
   return (
     <aside className="sidebar">
@@ -36,7 +37,9 @@ export function Sidebar({
       </button>
 
       <nav className="sidebar-list">
-        {sessions?.length === 0 && <p className="sidebar-empty">No conversations yet.</p>}
+        {sessions?.length === 0 && (
+          <p className="sidebar-empty">{showArchived ? "Nothing here." : "No conversations yet."}</p>
+        )}
         {sessions?.map((session) =>
           renaming === session.id ? (
             <RenameField
@@ -49,7 +52,12 @@ export function Sidebar({
               onCancel={() => setRenaming(null)}
             />
           ) : (
-            <div key={session.id} className={`sidebar-item ${session.id === activeSessionId ? "active" : ""}`}>
+            <div
+              key={session.id}
+              className={`sidebar-item ${session.id === activeSessionId ? "active" : ""} ${
+                session.archived ? "archived" : ""
+              }`}
+            >
               <button
                 className="sidebar-item-main"
                 onClick={() => onOpenSession(session.id)}
@@ -63,12 +71,20 @@ export function Sidebar({
                 <span className="sidebar-item-sub">{session.providerName}</span>
               </button>
               <button
-                className="sidebar-rename"
+                className="sidebar-action"
                 title="Rename"
                 aria-label={`Rename ${session.title ?? "conversation"}`}
                 onClick={() => setRenaming(session.id)}
               >
                 ✎
+              </button>
+              <button
+                className="sidebar-action"
+                title={session.archived ? "Restore" : "Archive"}
+                aria-label={`${session.archived ? "Restore" : "Archive"} ${session.title ?? "conversation"}`}
+                onClick={() => archiveSession(session.id, !session.archived)}
+              >
+                {session.archived ? "⤺" : "⌸"}
               </button>
             </div>
           ),
@@ -78,6 +94,13 @@ export function Sidebar({
       <div className="sidebar-foot">
         <button className={`setup-link ${setupActive ? "active" : ""}`} onClick={onOpenSetup}>
           Setup
+        </button>
+        <button
+          className={`setup-link ${showArchived ? "active" : ""}`}
+          onClick={() => setShowArchived((v) => !v)}
+          title="Archived conversations are hidden from this list"
+        >
+          {showArchived ? "Hide archived" : "Archived"}
         </button>
         <span className={`dot ${connected ? "dot-ok" : "dot-off"}`} title={connected ? "Connected" : "Disconnected"} />
       </div>

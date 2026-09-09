@@ -562,17 +562,17 @@ button.primary:hover:not(:disabled) { opacity: 0.9; color: #fff; }
   border: none;
 }
 .sidebar-item-main:hover { border: none; color: inherit; }
-.sidebar-rename {
+.sidebar-action {
   flex-shrink: 0;
-  padding: 0 9px;
+  padding: 0 6px;
   background: none;
   border: none;
   color: var(--muted);
   font-size: 12px;
   opacity: 0;
 }
-.sidebar-item:hover .sidebar-rename { opacity: 1; }
-.sidebar-rename:hover { color: var(--accent); border: none; }
+.sidebar-item:hover .sidebar-action { opacity: 1; }
+.sidebar-action:hover { color: var(--accent); border: none; }
 .sidebar-rename-input {
   width: 100%;
   font: inherit;
@@ -744,3 +744,6 @@ button.primary:hover:not(:disabled) { opacity: 0.9; color: #fff; }
   padding-left: 12px;
   border-left: 2px solid var(--border);
 }
+
+.sidebar-item.archived .sidebar-item-title { opacity: 0.6; }
+.sidebar-foot { flex-wrap: wrap; }

@@ -67,6 +67,7 @@ export interface SessionSummary {
   awaitingInput: boolean;
   /** Messages typed during a turn, waiting their turn to be sent. */
   queued: string[];
+  archived: boolean;
 }
 
 /**
@@ -135,7 +136,7 @@ export interface SessionRecord {
   providerName: string;
   cwd: string;
   title: string | null;
-  status: "active" | "closed";
+  status: "active" | "closed" | "archived";
   /** True once the user has renamed it, which stops the agent renaming it back. */
   titleLocked: boolean;
   createdAt: number;

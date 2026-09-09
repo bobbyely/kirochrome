@@ -116,7 +116,15 @@ export function useChat() {
     [send],
   );
 
-  const listSessions = useCallback(() => send({ type: "list_sessions" }), [send]);
+  const listSessions = useCallback(
+    (includeArchived = false) => send({ type: "list_sessions", includeArchived }),
+    [send],
+  );
+
+  const archiveSession = useCallback(
+    (id: string, archived: boolean) => send({ type: "archive_session", sessionId: id, archived }),
+    [send],
+  );
   const listWorkspaces = useCallback(() => send({ type: "list_workspaces" }), [send]);
 
   const unqueue = useCallback(
@@ -183,6 +191,7 @@ export function useChat() {
     resumeSession,
     listSessions,
     listWorkspaces,
+    archiveSession,
     renameSession,
     unqueue,
     setConfigOption,

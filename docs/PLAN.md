@@ -359,9 +359,8 @@ call, no extra tokens.
       mark that nods at both ideas (an agent in a browser) avoids that. A
       placeholder ships today; this item is to replace it with something
       designed.
-- [ ] Archive conversations: hide them from the sidebar without deleting the
-      log. `sessions.status` already has room for it; `events` stays untouched,
-      since the log is append-only.
+- [x] Archive conversations: hidden from the sidebar without deleting the log,
+      with an "Archived" toggle to see them and restore any of them
 - [ ] Theme control on the Setup page: light / dark / follow system. Today the
       theme is `prefers-color-scheme` only, with no way to override it.
 - [ ] Keyboard shortcuts, session switching

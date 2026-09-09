@@ -61,7 +61,17 @@ const app = agent({ name: "mock-agent" })
     for (const text of ["OLD ", "HISTORY"]) {
       await notify({ sessionUpdate: "agent_message_chunk", content: { type: "text", text } });
     }
-    return {};
+    // Real agents return these on load as well as on new.
+    return {
+      modes: { currentModeId: "code", availableModes: [{ id: "code", name: "Code" }, { id: "ask", name: "Ask" }] },
+      configOptions: [
+        {
+          id: "model", name: "Model", category: "model", type: "select",
+          currentValue: "mock-large",
+          options: [{ value: "mock-large", name: "Mock Large" }, { value: "mock-small", name: "Mock Small" }],
+        },
+      ],
+    };
   })
   .onRequest("session/prompt", async ({ params, client }) => {
     const notify = (update) =>

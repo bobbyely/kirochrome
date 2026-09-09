@@ -162,11 +162,22 @@ export class Store {
     return row ? toRecord(row) : null;
   }
 
-  listSessions(limit = 100): SessionRecord[] {
-    const rows = this.db
-      .prepare(`SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?`)
-      .all(limit) as Array<Record<string, string | number | null>>;
+  listSessions(limit = 100, includeArchived = false): SessionRecord[] {
+    const sql = includeArchived
+      ? `SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?`
+      : `SELECT * FROM sessions WHERE status != 'archived' ORDER BY updated_at DESC LIMIT ?`;
+    const rows = this.db.prepare(sql).all(limit) as Array<Record<string, string | number | null>>;
     return rows.map(toRecord);
+  }
+
+  /**
+   * Hides a conversation without touching its log. `events` is append-only, so
+   * archiving is a status change and nothing else — it is always reversible.
+   */
+  setArchived(id: string, archived: boolean): void {
+    this.db
+      .prepare(`UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?`)
+      .run(archived ? "archived" : "active", Date.now(), id);
   }
 
   // ---------- provider defaults ----------

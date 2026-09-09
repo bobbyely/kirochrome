@@ -70,6 +70,9 @@ Breaking one of these is a design regression, not a style nit.
   Stop hang forever and appear to do nothing.
 - **`white-space: pre-wrap` must not reach markdown rows.** It renders the
   newlines between block elements literally, double-spacing every paragraph.
+- **`session/load` returns `modes` and `configOptions` too**, exactly as
+  `session/new` does. Discarding its response leaves a resumed conversation
+  with no pickers at all.
 - **Reap orphaned processes once at startup, never per session** — per-session
   reaping kills processes belonging to sessions that are still alive.
 - **Killing a shell does not kill its children.** Kill the process group

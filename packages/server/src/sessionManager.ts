@@ -119,14 +119,36 @@ export class SessionManager {
       autoApprove: false,
       awaitingInput: false,
       queued: [],
+      archived: record.status === "archived",
     };
   }
 
-  list(limit = 100): SessionSummary[] {
-    return this.store.listSessions(limit).map((record) => {
+  list(limit = 100, includeArchived = false): SessionSummary[] {
+    return this.store.listSessions(limit, includeArchived).map((record) => {
       const session = this.live.get(record.id);
-      return session ? session.summary() : { ...this.summary(record.id), title: record.title };
+      const summary = session ? session.summary() : this.summary(record.id);
+      return { ...summary, title: record.title, archived: record.status === "archived" };
     });
+  }
+
+  /**
+   * Archives or restores a conversation.
+   *
+   * Archiving detaches the agent: putting a conversation away should not leave
+   * a subprocess running for it. The log is untouched, so 'Resume conversation'
+   * brings it back.
+   */
+  setArchived(id: string, archived: boolean): void {
+    if (!this.store.getSession(id)) throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
+    if (archived) {
+      const live = this.live.get(id);
+      if (live) {
+        this.live.delete(id);
+        live.close();
+      }
+    }
+    this.store.setArchived(id, archived);
+    for (const fn of this.changeListeners) fn();
   }
 
   /** Requires a live session — prompting a restored one is not possible yet. */

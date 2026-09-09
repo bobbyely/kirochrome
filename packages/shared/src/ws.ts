@@ -8,13 +8,14 @@ export type ClientMessage =
   | { type: "prompt"; sessionId: string; text: string }
   | { type: "cancel"; sessionId: string }
   | { type: "resume"; sessionId: string; sinceSeq: number }
-  | { type: "list_sessions" }
   | { type: "list_workspaces" }
   | { type: "set_config_option"; sessionId: string; configId: string; value: string | boolean }
   | { type: "permission_response"; sessionId: string; requestId: string; optionId: string | null }
   | { type: "set_auto_approve"; sessionId: string; enabled: boolean }
   | { type: "rename_session"; sessionId: string; title: string }
-  | { type: "unqueue"; sessionId: string; index: number };
+  | { type: "unqueue"; sessionId: string; index: number }
+  | { type: "archive_session"; sessionId: string; archived: boolean }
+  | { type: "list_sessions"; includeArchived?: boolean };
 
 /** Server → browser. */
 export type ServerMessage =
