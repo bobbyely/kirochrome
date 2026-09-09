@@ -353,12 +353,8 @@ call, no extra tokens.
 - [x] Remember a default model (and mode) per provider, applied to each new
       session. Stored against the provider and re-applied after `session/new` —
       still never a hardcoded list, just a remembered choice.
-- [ ] A real icon and favicon. Note the obvious approach — combining the Kiro
-      and Chrome marks — borrows two companies' trademarks, so it is fine for a
-      local tool but a problem the moment this is shared publicly. An original
-      mark that nods at both ideas (an agent in a browser) avoids that. A
-      placeholder ships today; this item is to replace it with something
-      designed.
+- [x] An icon: an original mark (a browser window with a terminal prompt in
+      it), avoiding the trademark problem a Kiro/Chrome mashup would have
 - [x] Archive conversations: hidden from the sidebar without deleting the log,
       with an "Archived" toggle to see them and restore any of them
 - [x] Theme control on the Setup page: light / dark / follow system

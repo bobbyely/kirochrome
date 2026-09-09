@@ -7,6 +7,10 @@ import { fileToImage, type PendingImage } from "./images.js";
 import { buildRows, languageFor, toolContent, toolSubtitle, type Row, type ToolDiff } from "./timeline.js";
 import { useChat } from "./useChat.js";
 
+/** Rows rendered initially, and how many more each "show earlier" adds. */
+const INITIAL_ROWS = 60;
+const MORE_ROWS = 60;
+
 export function Chat({
   providerId,
   cwd,
@@ -48,12 +52,22 @@ export function Chat({
     else if (providerId) openSession(providerId, cwd);
   }, [connected, openSession, attachSession, providerId, cwd, sessionId]);
 
-  const rows = useMemo(() => buildRows(events), [events]);
+  const allRows = useMemo(() => buildRows(events), [events]);
+  const [windowSize, setWindowSize] = useState(INITIAL_ROWS);
+
+  // Long conversations render every row otherwise, and each agent message is a
+  // full markdown parse. Show the most recent slice and let the reader ask for
+  // more, which avoids a virtualisation library for a list this shape.
+  const hidden = Math.max(0, allRows.length - windowSize);
+  const rows = hidden > 0 ? allRows.slice(hidden) : allRows;
   const usage = useMemo(() => latestUsage(events), [events]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [rows.length]);
+
+  // A new conversation should not inherit the previous one's expanded window.
+  useEffect(() => setWindowSize(INITIAL_ROWS), [sessionId, providerId]);
 
   useEffect(() => {
     if (session?.live) onStarted?.();
@@ -118,6 +132,11 @@ export function Chat({
             user messages can still sit right while the column stays centred. */}
         <div className="transcript-inner">
           {!session && <p className="muted">{sessionId ? "Loading conversation…" : "Starting agent…"}</p>}
+          {hidden > 0 && (
+            <button className="show-earlier" onClick={() => setWindowSize((n) => n + MORE_ROWS)}>
+              Show earlier messages ({hidden} hidden)
+            </button>
+          )}
           {rows.map((row) => (
             <Message key={row.seq} row={row} onPermission={answerPermission} />
           ))}
