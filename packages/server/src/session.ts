@@ -264,6 +264,7 @@ export class Session {
     this.agentSessionId = active.sessionId;
     const response = active.newSessionResponse as Record<string, unknown>;
     this.configOptions = normaliseConfigOptions(response);
+    await this.applyDefaults();
     this.persistMeta();
   }
 
@@ -336,12 +337,35 @@ export class Session {
   }
 
   /**
+   * Re-applies the picker choices remembered for this provider.
+   *
+   * Only options whose value actually differs, and only ones the agent still
+   * offers — a remembered model that has since been withdrawn is skipped rather
+   * than forced.
+   */
+  private async applyDefaults(): Promise<void> {
+    const defaults = this.store.providerDefaults(this.provider.id);
+    if (defaults.size === 0) return;
+
+    for (const option of this.configOptions) {
+      const wanted = defaults.get(option.id);
+      if (wanted === undefined || wanted === option.currentValue) continue;
+      if (option.type === "select" && !option.options?.some((o) => o.value === wanted)) continue;
+      await this.setConfigOption(option.id, wanted, { remember: false });
+    }
+  }
+
+  /**
    * Changes one of the agent's advertised settings.
    *
    * Writes back in whichever dialect the agent used: the generic
    * `session/set_config_option`, or the older per-kind methods.
    */
-  async setConfigOption(id: string, value: string | boolean): Promise<void> {
+  async setConfigOption(
+    id: string,
+    value: string | boolean,
+    opts: { remember?: boolean } = {},
+  ): Promise<void> {
     const connection = this.connection;
     const agentSessionId = this.agentSessionId;
     if (!connection || !agentSessionId) {
@@ -371,6 +395,8 @@ export class Session {
       this.configOptions = this.configOptions.map((o) =>
         o.id === id ? { ...o, currentValue: value } : o,
       );
+      // A choice the user made sticks for this provider's future sessions.
+      if (opts.remember !== false) this.store.setProviderDefault(this.provider.id, id, value);
     } catch (err) {
       this.emitError(
         kcError("RPC_ERROR", `Could not change ${id}.`, {

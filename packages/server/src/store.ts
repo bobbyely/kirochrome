@@ -51,6 +51,15 @@ export class Store {
       ) WITHOUT ROWID;
 
       CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
+
+      -- Remembered picker choices, re-applied to each new session of a
+      -- provider. Values only; the list of options always comes from the agent.
+      CREATE TABLE IF NOT EXISTS provider_defaults (
+        provider_id TEXT NOT NULL,
+        config_id   TEXT NOT NULL,
+        value       TEXT NOT NULL,   -- JSON, so booleans survive the round trip
+        PRIMARY KEY (provider_id, config_id)
+      ) WITHOUT ROWID;
     `);
 
     this.migrate();
@@ -158,6 +167,33 @@ export class Store {
       .prepare(`SELECT * FROM sessions ORDER BY updated_at DESC LIMIT ?`)
       .all(limit) as Array<Record<string, string | number | null>>;
     return rows.map(toRecord);
+  }
+
+  // ---------- provider defaults ----------
+
+  setProviderDefault(providerId: string, configId: string, value: string | boolean): void {
+    this.db
+      .prepare(
+        `INSERT INTO provider_defaults (provider_id, config_id, value) VALUES (?, ?, ?)
+         ON CONFLICT(provider_id, config_id) DO UPDATE SET value = excluded.value`,
+      )
+      .run(providerId, configId, JSON.stringify(value));
+  }
+
+  providerDefaults(providerId: string): Map<string, string | boolean> {
+    const rows = this.db
+      .prepare(`SELECT config_id, value FROM provider_defaults WHERE provider_id = ?`)
+      .all(providerId) as Array<{ config_id: string; value: string }>;
+
+    const defaults = new Map<string, string | boolean>();
+    for (const row of rows) {
+      try {
+        defaults.set(row.config_id, JSON.parse(row.value) as string | boolean);
+      } catch {
+        // A malformed row should not stop a session from starting.
+      }
+    }
+    return defaults;
   }
 
   // ---------- events (INSERT-only) ----------
