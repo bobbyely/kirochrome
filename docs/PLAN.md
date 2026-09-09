@@ -36,6 +36,31 @@ you have not verified is how you end up debugging a spinner.
 
 ---
 
+## Where this is now
+
+Phases 0–5 are built and running locally against Claude Code. What works: the
+setup check ladder, streaming chat, persistence and resume, per-session working
+directories, agent-advertised model and mode pickers, tool-call cards,
+permission prompts, terminals with orphan-safe process handling, renaming, and
+live per-conversation status.
+
+What is left, in the order I would do it:
+
+1. **Tool card contents** — cards currently expand to raw JSON. Diffs should
+   render as diffs and file reads as highlighted code. This is the largest
+   remaining gap between "works" and "feels like the real thing".
+2. **Queued messages** — a running turn still blocks the composer. Our own
+   steering doc calls this the best turn-handling idea in Kirodex.
+3. **Provider goes `stale` on a runtime failure** — invariant 11 in AGENTS.md
+   describes this, and it is not implemented. Either build it or drop the
+   invariant; a rule nothing enforces is worse than no rule.
+4. Search, keyboard shortcuts, image paste, export.
+
+Still unanswered since phase 0: whether Kiro speaks `configOptions` or the
+older `availableModels`. The code handles both, so nothing is blocked, but
+running the spike on the work machine would let us delete a fallback path
+instead of carrying it on speculation.
+
 ## Phase 0 — Handshake spike
 
 **Goal:** prove ACP works end to end before designing around it.
@@ -279,8 +304,8 @@ screen.
 - [ ] Queue messages typed during a turn, sending them when it ends
 - [x] Advertise `terminal: true`; implement `terminal/create`, `output`,
       `wait_for_exit`, `kill`, `release`
-- [ ] `TerminalRegistry`: wall-clock cap, `outputByteLimit`, process-group kill
-      (SIGTERM → SIGKILL), PID file for orphan reaping at startup
+- [x] `TerminalRegistry`: wall-clock cap, `outputByteLimit`, process-group kill
+      (SIGTERM → SIGKILL), ledger for orphan reaping at startup
 - [x] `agent_exited` surfaced in the UI as a transcript row
 - [x] Stop button → `session/cancel`
 
@@ -324,7 +349,7 @@ call, no extra tokens.
 - [ ] FTS5 search across all sessions
 - [ ] `AGENT_NOT_FOUND` offers per-platform install commands and a manual path
       field, rather than only naming the paths tried
-- [ ] Context-window usage indicator
+- [x] Context-window usage indicator (from `usage_update`)
 - [x] Rename conversations; a manual name locks against the agent renaming it
 - [x] Live status per conversation in the sidebar (working / needs input /
       ready / detached), pushed rather than polled

@@ -60,9 +60,18 @@ Breaking one of these is a design regression, not a style nit.
 
 ## Gotchas that have already bitten this design
 
-- **Models are only known after `session/new`.** The picker cannot be populated
-  before a session exists — hence draft sessions. Do not "fix" this by
-  hardcoding a list.
+- **Models are only known after `session/new`.** The composer's pickers cannot
+  be populated before a session exists, which is why a session is created as
+  soon as a provider is chosen. Do not "fix" this by hardcoding a list.
+- **Agents emit both config dialects at once**, sometimes with different
+  settings in each. Merge `configOptions` with the legacy `models`/`modes`
+  rather than letting one hide the other.
+- **`session/cancel` is a notification, not a request.** Awaiting a reply makes
+  Stop hang forever and appear to do nothing.
+- **`white-space: pre-wrap` must not reach markdown rows.** It renders the
+  newlines between block elements literally, double-spacing every paragraph.
+- **Reap orphaned processes once at startup, never per session** — per-session
+  reaping kills processes belonging to sessions that are still alive.
 - **Killing a shell does not kill its children.** Kill the process group
   (`process.kill(-pid, …)`), SIGTERM then SIGKILL after a grace period, or
   orphans survive and the terminal appears hung.
@@ -118,8 +127,8 @@ Patterns worth adopting, and why:
 - **Typed timeline rows, not a message array.** They fold the event stream into
   rows with an explicit taxonomy (`user-message`, `system-message`,
   `assistant-text`, `work`, `working`, `changed-files`) and per-type height
-  estimates for virtualization. This is what our `toBubbles` should grow into,
-  and it is the same shape our event log already implies.
+  estimates for virtualization. Our `packages/web/src/timeline.ts` does the
+  fold; the row taxonomy and virtualization are what it still lacks.
 - **Queue messages typed during a turn.** `QueuedMessages.tsx` lets the user
   type while the agent runs; messages queue and send when the turn ends, and can
   be reordered, edited or removed first. This is the single best turn-handling
