@@ -5,7 +5,7 @@ import { kcError, type KcError } from "@kirochrome/shared";
 import type { ProviderView } from "@kirochrome/shared";
 import { checkProvider } from "./check.js";
 import { exportFilename, toMarkdown } from "./export.js";
-import { loadConfig } from "./config.js";
+import { loadConfig, updateProvider } from "./config.js";
 import { SessionManager } from "./sessionManager.js";
 import { Store } from "./store.js";
 import { attachWebSocket } from "./ws.js";
@@ -90,7 +90,24 @@ async function handleApi(
       ...p,
       lastCheck: store.lastCheck(p.id),
     }));
-    return sendJson(res, 200, { providers });
+    return sendJson(res, 200, { providers, platform: hostPlatform() });
+  }
+
+  // PATCH /api/providers/:id — correct a command path without editing JSON.
+  const patchMatch = /^\/api\/providers\/([^/]+)$/.exec(url.pathname);
+  if (patchMatch && req.method === "PATCH") {
+    const id = decodeURIComponent(patchMatch[1]!);
+    const body = (await readJson(req)) as { command?: unknown; args?: unknown };
+    const patch: { command?: string; args?: string[] } = {};
+    if (typeof body.command === "string" && body.command.trim()) patch.command = body.command.trim();
+    if (Array.isArray(body.args) && body.args.every((a) => typeof a === "string")) {
+      patch.args = body.args as string[];
+    }
+    if (Object.keys(patch).length === 0) {
+      return sendError(res, 400, kcError("CONFIG_INVALID", "Nothing to update."));
+    }
+    updateProvider(id, patch);
+    return sendJson(res, 200, { ok: true });
   }
 
   // GET /api/sessions/:id/export — the conversation as Markdown.
@@ -124,6 +141,28 @@ async function handleApi(
   }
 
   sendError(res, 404, kcError("INTERNAL", `No route for ${req.method} ${url.pathname}.`));
+}
+
+function hostPlatform(): "darwin" | "linux" | "win32" | "other" {
+  const p = process.platform;
+  return p === "darwin" || p === "linux" || p === "win32" ? p : "other";
+}
+
+/** Reads a JSON request body, with a cap so a bad client cannot exhaust memory. */
+async function readJson(req: IncomingMessage, limit = 64_000): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length;
+    if (size > limit) throw kcError("CONFIG_INVALID", "Request body too large.");
+    chunks.push(chunk as Buffer);
+  }
+  if (chunks.length === 0) return {};
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch (err) {
+    throw kcError("CONFIG_INVALID", "Request body was not valid JSON.", { cause: String(err) });
+  }
 }
 
 function serveStatic(res: ServerResponse, root: string, pathname: string): void {

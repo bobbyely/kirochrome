@@ -63,9 +63,18 @@ export interface ProviderView extends ProviderConfig {
   lastCheck: ProviderCheckResult | null;
 }
 
+/** Where the server ran, so the UI can suggest the right install command. */
+export type HostPlatform = "darwin" | "linux" | "win32" | "other";
+
 /** HTTP API payloads. */
 export interface ProvidersResponse {
   providers: ProviderView[];
+  platform: HostPlatform;
+}
+
+export interface UpdateProviderRequest {
+  command?: string;
+  args?: string[];
 }
 export interface CheckResponse {
   result: ProviderCheckResult;

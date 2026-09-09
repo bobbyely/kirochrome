@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { CHECK_STAGES } from "@kirochrome/shared";
-import type { CheckStage, ProviderCheckResult, ProviderView } from "@kirochrome/shared";
-import { ApiError, fetchProviders, runCheck } from "./api.js";
+import type { CheckStage, HostPlatform, ProviderCheckResult, ProviderView } from "@kirochrome/shared";
+import { ApiError, fetchProviders, runCheck, updateProvider } from "./api.js";
 import { applyTheme, loadTheme, type Theme } from "./theme.js";
 
 export function Setup() {
   const [providers, setProviders] = useState<ProviderView[] | null>(null);
+  const [platform, setPlatform] = useState<HostPlatform>("other");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [running, setRunning] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     try {
-      const { providers } = await fetchProviders();
+      const { providers, platform } = await fetchProviders();
       setProviders(providers);
+      setPlatform(platform);
       setLoadError(null);
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.kc.message : String(err));
@@ -72,7 +74,9 @@ export function Setup() {
             key={provider.id}
             provider={provider}
             running={running.has(provider.id)}
+            platform={platform}
             onCheck={() => void check(provider.id)}
+            onReload={load}
           />
         ))}
       </div>
@@ -113,6 +117,83 @@ function ThemePicker() {
   );
 }
 
+/** Per-platform install hints. Only ever suggestions — never run for the user. */
+const INSTALL_HINTS: Record<string, Partial<Record<HostPlatform, string>>> = {
+  kiro: {
+    darwin: "brew install kiro-cli   # or see https://kiro.dev/docs/cli",
+    linux: "curl -fsSL https://kiro.dev/install.sh | bash",
+    win32: "See https://kiro.dev/docs/cli for Windows install steps",
+  },
+  "claude-code": {
+    darwin: "npm install -g @anthropic-ai/claude-code",
+    linux: "npm install -g @anthropic-ai/claude-code",
+    win32: "npm install -g @anthropic-ai/claude-code",
+  },
+};
+
+/**
+ * What to do when a binary is not found: where it commonly lives, how to
+ * install it, and a field to point at it directly.
+ *
+ * GUI-launched processes often do not inherit a shell PATH, so an absolute
+ * path is frequently the actual fix rather than installing anything.
+ */
+function NotFoundHelp({
+  provider,
+  platform,
+  onReload,
+}: {
+  provider: ProviderView;
+  platform: HostPlatform;
+  onReload: () => Promise<void>;
+}) {
+  const [path, setPath] = useState(provider.command);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const hint = INSTALL_HINTS[provider.id]?.[platform];
+
+  const save = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateProvider(provider.id, { command: path });
+      await onReload();
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.kc.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="notfound">
+      {hint && (
+        <>
+          <p className="notfound-label">Install it</p>
+          <pre className="notfound-cmd">{hint}</pre>
+        </>
+      )}
+      <p className="notfound-label">Or point at it directly</p>
+      <div className="notfound-row">
+        <input
+          value={path}
+          spellCheck={false}
+          placeholder="/absolute/path/to/binary"
+          onChange={(e) => setPath(e.target.value)}
+        />
+        <button onClick={() => void save()} disabled={saving || !path.trim()}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+      <p className="field-hint">
+        Common locations: <code>~/.local/bin/</code>, <code>/usr/local/bin/</code>,
+        <code> /opt/homebrew/bin/</code>
+      </p>
+      {saveError && <p className="remediation">{saveError}</p>}
+    </div>
+  );
+}
+
 const SHORTCUTS: Array<[string, string]> = [
   ["⌘/Ctrl + K", "Search conversations"],
   ["⌘/Ctrl + ⇧ + O", "New chat"],
@@ -139,11 +220,15 @@ function Shortcuts() {
 function ProviderCard({
   provider,
   running,
+  platform,
   onCheck,
+  onReload,
 }: {
   provider: ProviderView;
   running: boolean;
+  platform: HostPlatform;
   onCheck: () => void;
+  onReload: () => Promise<void>;
 }) {
   const check = provider.lastCheck;
   const status = running ? "running" : (check?.status ?? "unchecked");
@@ -175,6 +260,9 @@ function ProviderCard({
             <span>{check.error.message}</span>
           </div>
           {check.error.remediation && <p className="remediation">{check.error.remediation}</p>}
+          {check.error.code === "AGENT_NOT_FOUND" && (
+            <NotFoundHelp provider={provider} platform={platform} onReload={onReload} />
+          )}
           <Details label="Error detail" json={check.error.detail} />
           {check.error.cause && <Details label="Cause" text={check.error.cause} />}
         </div>

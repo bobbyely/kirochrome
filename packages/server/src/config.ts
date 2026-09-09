@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { causeOf, kcError, type ProviderConfig } from "@kirochrome/shared";
@@ -33,6 +33,38 @@ export interface AppConfig {
   providers: ProviderConfig[];
 }
 
+/** Persists an edit to one provider, leaving the rest of the file alone. */
+export function updateProvider(id: string, patch: Partial<ProviderConfig>): AppConfig {
+  const config = loadConfig();
+  const provider = config.providers.find((p) => p.id === id);
+  if (!provider) throw kcError("PROVIDER_UNKNOWN", `No provider configured with id '${id}'.`);
+
+  Object.assign(provider, patch);
+  try {
+    writeConfig(config);
+  } catch (err) {
+    throw kcError("CONFIG_INVALID", `Could not write ${configPath()}.`, { cause: causeOf(err) });
+  }
+  return config;
+}
+
+/**
+ * Writes the config and keeps it private.
+ *
+ * `writeFileSync`'s `mode` only applies when creating a file, so an update to
+ * an existing one silently keeps its old permissions. This file can hold `env`
+ * values, so chmod explicitly.
+ */
+function writeConfig(config: AppConfig): void {
+  const path = configPath();
+  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  try {
+    chmodSync(path, 0o600);
+  } catch {
+    // Best effort; Windows and some filesystems have no equivalent.
+  }
+}
+
 export function loadConfig(): AppConfig {
   mkdirSync(dataDir(), { recursive: true });
   const path = configPath();
@@ -42,7 +74,7 @@ export function loadConfig(): AppConfig {
     raw = readFileSync(path, "utf8");
   } catch {
     const seeded: AppConfig = { providers: defaultProviders() };
-    writeFileSync(path, `${JSON.stringify(seeded, null, 2)}\n`, { mode: 0o600 });
+    writeConfig(seeded);
     return seeded;
   }
 

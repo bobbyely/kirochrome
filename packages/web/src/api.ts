@@ -19,5 +19,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const fetchProviders = () => request<ProvidersResponse>("/api/providers");
 
+export const updateProvider = (id: string, patch: { command?: string; args?: string[] }) =>
+  request<{ ok: true }>(`/api/providers/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+
 export const runCheck = (id: string) =>
   request<CheckResponse>(`/api/providers/${encodeURIComponent(id)}/check`, { method: "POST" });

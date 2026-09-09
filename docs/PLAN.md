@@ -342,7 +342,7 @@ call, no extra tokens.
 ## Phase 6 — Polish
 
 - [x] FTS5 search across all sessions, with highlighted snippets
-- [ ] `AGENT_NOT_FOUND` offers per-platform install commands and a manual path
+- [x] `AGENT_NOT_FOUND` offers per-platform install commands and a manual path
       field, rather than only naming the paths tried
 - [x] Context-window usage indicator (from `usage_update`)
 - [x] Rename conversations; a manual name locks against the agent renaming it
