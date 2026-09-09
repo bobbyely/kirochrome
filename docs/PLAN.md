@@ -122,8 +122,15 @@ guarded against PID reuse.
       legible light theme that does not pretend to be the same design, or drop
       light and simplify the picker. Half-hearted is worse than either.
 
-2. True virtualisation, if the windowed transcript proves insufficient.
-3. Whatever the work machine turns up once Kiro is actually driving it —
+2. **An animated working indicator** to replace the plain "Working…" text.
+   Should convey that the agent is alive, and ideally what it is doing — the
+   grouped work row already knows whether a tool is running, so the indicator
+   can say "reading files" rather than a generic spinner. Must honour
+   `prefers-reduced-motion`, as the existing spinner and pulse do. A good
+   candidate to design alongside the cyberpunk pass rather than before it.
+
+3. True virtualisation, if the windowed transcript proves insufficient.
+4. Whatever the work machine turns up once Kiro is actually driving it —
    including the one protocol question still open since phase 0, below.
 
 ## Phase 0 — Handshake spike

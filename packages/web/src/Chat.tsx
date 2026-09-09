@@ -44,6 +44,9 @@ export function Chat({
 
   const [draft, setDraft] = useState("");
   const [images, setImages] = useState<PendingImage[]>([]);
+  /** Whether the view is following new output, or the reader has scrolled away. */
+  const [following, setFollowing] = useState(true);
+  const transcript = useRef<HTMLDivElement>(null);
   const opened = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
 
@@ -64,9 +67,28 @@ export function Chat({
   const rows = hidden > 0 ? allRows.slice(hidden) : allRows;
   const usage = useMemo(() => latestUsage(events), [events]);
 
+  // Changes as text streams into the last row, not just when a row is added —
+  // otherwise a long reply scrolls once and then stops following.
+  const tail = rows.at(-1);
+  const growth = `${rows.length}:${tail && "text" in tail ? tail.text.length : 0}`;
+
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth" });
-  }, [rows.length]);
+    // Only follow if the reader is already at the bottom. Yanking them back
+    // while they are reading earlier output is worse than not scrolling.
+    if (following) bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [growth, following]);
+
+  const onScroll = () => {
+    const el = transcript.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setFollowing(distanceFromBottom < 120);
+  };
+
+  const jumpToLatest = () => {
+    setFollowing(true);
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  };
 
   // A new conversation should not inherit the previous one's expanded window.
   useEffect(() => setWindowSize(INITIAL_ROWS), [sessionId, providerId]);
@@ -131,7 +153,7 @@ export function Chat({
         </span>
       </header>
 
-      <div className="transcript">
+      <div className="transcript" ref={transcript} onScroll={onScroll}>
         {/* Inner wrapper caps line length; alignment happens inside it, so
             user messages can still sit right while the column stays centred. */}
         <div className="transcript-inner">
@@ -148,6 +170,12 @@ export function Chat({
           <div ref={bottom} />
         </div>
       </div>
+
+      {!following && (
+        <button className="jump-latest" onClick={jumpToLatest}>
+          Jump to latest ↓
+        </button>
+      )}
 
       {error && (
         <div className="banner">
