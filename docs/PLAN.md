@@ -93,6 +93,35 @@ guarded against PID reuse.
    `styles.css` per component would make the next change safer, though CSS
    custom properties mean it does not have to happen first.
 
+   **Direction: neo/cyberpunk modern.** Dark-first, high contrast, deliberately
+   technical. What that should mean here:
+
+   - **Restraint over neon.** One or two saturated accents (a cyan and a
+     magenta, say) against near-black surfaces, used for state and emphasis
+     only. Everything glowing means nothing stands out, and this is a tool
+     people read for hours.
+   - **Sharper geometry.** Tighter corner radii than the current 7–12px,
+     hairline borders, and edges that read as panels rather than cards.
+   - **Monospace as a design element**, not just for code: labels, counts,
+     timestamps and status text. It already suits an agent console.
+   - **Light emitted, not applied.** Glow belongs on things that are genuinely
+     active — a running turn, a blocked permission prompt, a focused input —
+     which makes it informative rather than decorative.
+   - **Texture sparingly.** A scanline or grid wash on empty states and chrome
+     at most; never behind body text or code.
+
+   Three constraints the theme must not break:
+
+   1. **Code and diffs stay legible.** Syntax colours and the diff add/remove
+      backgrounds must keep their contrast against the new surfaces; they are
+      the reason the app exists.
+   2. **Contrast is checked, not assumed.** Saturated-on-black is where
+      accessible contrast usually fails, particularly for muted text.
+   3. **Decide about light mode.** Cyberpunk is dark by nature and we shipped a
+      three-way theme control. Either commit to dark-first with a plain,
+      legible light theme that does not pretend to be the same design, or drop
+      light and simplify the picker. Half-hearted is worse than either.
+
 2. True virtualisation, if the windowed transcript proves insufficient.
 3. Whatever the work machine turns up once Kiro is actually driving it —
    including the one protocol question still open since phase 0, below.
