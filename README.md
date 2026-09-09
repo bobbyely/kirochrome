@@ -60,7 +60,8 @@ Providers are configured in `<dataDir>/config.json`, seeded on first run:
 Set `KIROCHROME_DATA_DIR` to override, and `KIROCHROME_TRACE=1` to log every
 JSON-RPC frame to a JSONL file in that directory.
 
-**Current state:** the setup page works — it verifies each configured provider
-rung by rung and reports exactly where a broken one fails. Chat is phase 2.
+**Current state:** the setup page verifies each configured provider rung by
+rung, and a provider that passes can start a chat with streaming responses.
+Conversations are in memory only — persistence is phase 3.
 
 Runs on macOS and Linux; Windows best-effort. Localhost only by design.

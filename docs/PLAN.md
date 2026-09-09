@@ -133,14 +133,44 @@ to the UI once the WebSocket lands in phase 2.
 
 **Goal:** type a prompt in a browser, watch tokens stream in.
 
-- [ ] ACP client wrapper reused from the check ladder
-- [ ] One session against a verified provider
-- [ ] Message list + composer
-- [ ] Text deltas render as they arrive
-- [ ] RPC timeouts wired to the error types from phase 1
+- [x] ACP client wrapper reused from the check ladder (`agentProcess.ts`)
+- [x] One session against a verified provider
+- [x] Message list + composer
+- [x] Text deltas render as they arrive
+- [x] RPC timeouts wired to the error types from phase 1
+- [x] WebSocket transport with the same `Origin` allowlist as HTTP
+- [x] Sessions torn down on SIGINT/SIGTERM, so no agents are orphaned
 
 **Done when:** prompt in, streaming text out. No persistence, no markdown, one
 session, ugly. End to end is the point.
+
+### Built on the event log from the start
+
+The phase list said "no persistence", and there is none — but the in-memory log
+is already the append-only, `seq`-numbered shape from DESIGN.md rather than ad
+hoc React state. `Session` owns the log and turns; the socket is only a view.
+Phase 3 becomes "write this to SQLite" instead of a rewrite, and invariant 3
+(the browser holds no authoritative state) holds from day one.
+
+### Verified
+
+- Streaming: `user_message → turn_start → agent_text → agent_update ×2 → turn_end`
+- **Delta coalescing works.** The mock emits `"PROBE"`, `"_"`, `"OK"` as three
+  chunks; they arrive as *one* `agent_text` event.
+- **Replay works.** A second socket subscribing from `seq 0` reproduces the full
+  transcript — the page-refresh case.
+- Cross-site WebSocket upgrade rejected with 403; the Vite origin allowed.
+- Path traversal (`/../../etc/passwd`) falls back to the SPA, not the file.
+- No orphaned agents after shutdown.
+
+### Not verified
+
+**The UI has not been opened in a browser.** It builds and typechecks, but there
+is no browser on the dev box, so layout and styling are unconfirmed.
+
+### New dependency
+
+`ws@8.18.0` — Node has no built-in WebSocket *server*. No native build.
 
 ---
 

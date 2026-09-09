@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "1.4.0",
-    "@kirochrome/shared": "*"
+    "@kirochrome/shared": "*",
+    "ws": "8.18.0"
   }
 }

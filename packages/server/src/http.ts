@@ -5,7 +5,9 @@ import { kcError, type KcError } from "@kirochrome/shared";
 import type { ProviderView } from "@kirochrome/shared";
 import { checkProvider } from "./check.js";
 import { loadConfig } from "./config.js";
+import { SessionManager } from "./sessionManager.js";
 import { Store } from "./store.js";
+import { attachWebSocket } from "./ws.js";
 
 const HOST = "127.0.0.1";
 
@@ -35,6 +37,7 @@ const MIME: Record<string, string> = {
 
 export function startServer(port: number, webRoot: string | null): void {
   const store = new Store();
+  const sessions = new SessionManager();
 
   const server = createServer(async (req, res) => {
     if (!originAllowed(req, port)) {
@@ -55,9 +58,21 @@ export function startServer(port: number, webRoot: string | null): void {
     }
   });
 
+  attachWebSocket(server, sessions, (req) => originAllowed(req, port));
+
   server.listen(port, HOST, () => {
     console.log(`KiroChrome on http://${HOST}:${port}`);
   });
+
+  // Agents are child processes; leaving them behind is the orphan bug we
+  // designed against, so tear them down on the way out.
+  const shutdown = () => {
+    sessions.closeAll();
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 2_000).unref();
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 }
 
 async function handleApi(

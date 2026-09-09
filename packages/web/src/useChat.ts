@@ -1,0 +1,107 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ClientMessage, KcError, KcEvent, ServerMessage, SessionSummary } from "@kirochrome/shared";
+
+/**
+ * Owns the WebSocket and mirrors the server's event log.
+ *
+ * The browser holds no authoritative state: it accumulates events by `seq` and
+ * renders them. On reconnect it re-subscribes from its high-water mark, so a
+ * dropped socket costs nothing — the turn kept running on the server.
+ */
+export function useChat() {
+  const [connected, setConnected] = useState(false);
+  const [session, setSession] = useState<SessionSummary | null>(null);
+  const [events, setEvents] = useState<KcEvent[]>([]);
+  const [error, setError] = useState<KcError | null>(null);
+
+  const ws = useRef<WebSocket | null>(null);
+  const lastSeq = useRef(0);
+  const sessionId = useRef<string | null>(null);
+  const retry = useRef<number | null>(null);
+
+  const send = useCallback((msg: ClientMessage) => {
+    if (ws.current?.readyState === WebSocket.OPEN) ws.current.send(JSON.stringify(msg));
+  }, []);
+
+  const connect = useCallback(() => {
+    const socket = new WebSocket(`ws://${location.host}`);
+    ws.current = socket;
+
+    socket.onopen = () => {
+      setConnected(true);
+      // Catch up on anything missed while we were away.
+      if (sessionId.current) {
+        socket.send(
+          JSON.stringify({
+            type: "subscribe",
+            sessionId: sessionId.current,
+            sinceSeq: lastSeq.current,
+          } satisfies ClientMessage),
+        );
+      }
+    };
+
+    socket.onmessage = (raw) => {
+      const msg = JSON.parse(String(raw.data)) as ServerMessage;
+      switch (msg.type) {
+        case "session_opened":
+          sessionId.current = msg.session.id;
+          lastSeq.current = 0;
+          setSession(msg.session);
+          setEvents([]);
+          setError(null);
+          send({ type: "subscribe", sessionId: msg.session.id, sinceSeq: 0 });
+          break;
+        case "events": {
+          if (msg.events.length === 0) break;
+          lastSeq.current = Math.max(lastSeq.current, ...msg.events.map((e) => e.seq));
+          // De-duplicate by seq: a reconnect may overlap with what we hold.
+          setEvents((prev) => {
+            const seen = new Set(prev.map((e) => e.seq));
+            return [...prev, ...msg.events.filter((e) => !seen.has(e.seq))].sort((a, b) => a.seq - b.seq);
+          });
+          break;
+        }
+        case "session_state":
+          setSession(msg.session);
+          break;
+        case "error":
+          setError(msg.error);
+          break;
+      }
+    };
+
+    socket.onclose = () => {
+      setConnected(false);
+      retry.current = window.setTimeout(connect, 1_000);
+    };
+  }, [send]);
+
+  useEffect(() => {
+    connect();
+    return () => {
+      if (retry.current) window.clearTimeout(retry.current);
+      const socket = ws.current;
+      if (socket) {
+        socket.onclose = null; // deliberate close: do not schedule a reconnect
+        socket.close();
+      }
+    };
+  }, [connect]);
+
+  const openSession = useCallback((providerId: string) => send({ type: "open", providerId }), [send]);
+
+  const prompt = useCallback(
+    (text: string) => {
+      if (!sessionId.current) return;
+      send({ type: "prompt", sessionId: sessionId.current, text });
+    },
+    [send],
+  );
+
+  const cancel = useCallback(() => {
+    if (sessionId.current) send({ type: "cancel", sessionId: sessionId.current });
+  }, [send]);
+
+  return { connected, session, events, error, openSession, prompt, cancel };
+}
