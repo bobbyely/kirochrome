@@ -60,9 +60,8 @@ guarded against PID reuse.
 
 ### What is left
 
-1. Reorder and edit queued messages before they send.
-2. True virtualisation, if the windowed transcript proves insufficient.
-3. Whatever the work machine turns up once Kiro is actually driving it —
+1. True virtualisation, if the windowed transcript proves insufficient.
+2. Whatever the work machine turns up once Kiro is actually driving it —
    including the one protocol question still open since phase 0, below.
 
 ## Phase 0 — Handshake spike

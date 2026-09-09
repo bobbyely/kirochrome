@@ -20,6 +20,8 @@ export type ClientMessage =
   | { type: "set_auto_approve"; sessionId: string; enabled: boolean }
   | { type: "rename_session"; sessionId: string; title: string }
   | { type: "unqueue"; sessionId: string; index: number }
+  | { type: "edit_queued"; sessionId: string; index: number; text: string }
+  | { type: "move_queued"; sessionId: string; from: number; to: number }
   | { type: "archive_session"; sessionId: string; archived: boolean }
   | { type: "search"; query: string }
   | { type: "list_sessions"; includeArchived?: boolean };

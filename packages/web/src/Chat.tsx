@@ -36,6 +36,8 @@ export function Chat({
     answerPermission,
     setAutoApprove,
     unqueue,
+    editQueued,
+    moveQueued,
     prompt,
     cancel,
   } = useChat();
@@ -173,17 +175,15 @@ export function Chat({
             <div className="queued">
               <span className="queued-label">Queued ({queued.length})</span>
               {queued.map((text, i) => (
-                <div key={`${i}-${text}`} className="queued-item">
-                  <span className="queued-text">{text}</span>
-                  <button
-                    className="queued-remove"
-                    aria-label="Remove queued message"
-                    title="Remove"
-                    onClick={() => unqueue(i)}
-                  >
-                    ×
-                  </button>
-                </div>
+                <QueuedItem
+                  key={`${i}-${text}`}
+                  text={text}
+                  index={i}
+                  total={queued.length}
+                  onEdit={(next) => editQueued(i, next)}
+                  onMove={(delta) => moveQueued(i, i + delta)}
+                  onRemove={() => unqueue(i)}
+                />
               ))}
             </div>
           )}
@@ -260,6 +260,75 @@ export function Chat({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** A message waiting to send: editable and reorderable until its turn comes. */
+function QueuedItem({
+  text,
+  index,
+  total,
+  onEdit,
+  onMove,
+  onRemove,
+}: {
+  text: string;
+  index: number;
+  total: number;
+  onEdit: (text: string) => void;
+  onMove: (delta: number) => void;
+  onRemove: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(text);
+
+  const commit = () => {
+    setEditing(false);
+    if (draft.trim() !== text) onEdit(draft);
+  };
+
+  if (editing) {
+    return (
+      <input
+        className="queued-edit"
+        value={draft}
+        autoFocus
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") {
+            setDraft(text);
+            setEditing(false);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="queued-item">
+      <span className="queued-text" title={text}>
+        {text}
+      </span>
+      <button aria-label="Move up" title="Move up" disabled={index === 0} onClick={() => onMove(-1)}>
+        ↑
+      </button>
+      <button
+        aria-label="Move down"
+        title="Move down"
+        disabled={index === total - 1}
+        onClick={() => onMove(1)}
+      >
+        ↓
+      </button>
+      <button aria-label="Edit queued message" title="Edit" onClick={() => { setDraft(text); setEditing(true); }}>
+        ✎
+      </button>
+      <button className="queued-remove" aria-label="Remove queued message" title="Remove" onClick={onRemove}>
+        ×
+      </button>
     </div>
   );
 }

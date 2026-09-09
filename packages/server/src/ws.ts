@@ -186,6 +186,20 @@ async function dispatch(
       return;
     }
 
+    case "edit_queued": {
+      const session = sessions.requireLive(msg.sessionId);
+      session.editQueued(msg.index, msg.text);
+      send({ type: "session_state", session: session.summary() });
+      return;
+    }
+
+    case "move_queued": {
+      const session = sessions.requireLive(msg.sessionId);
+      session.moveQueued(msg.from, msg.to);
+      send({ type: "session_state", session: session.summary() });
+      return;
+    }
+
     case "cancel": {
       await sessions.requireLive(msg.sessionId).cancel();
       return;

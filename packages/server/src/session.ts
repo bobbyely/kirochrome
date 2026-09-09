@@ -313,9 +313,31 @@ export class Session {
 
   /** Removes a message that has not been sent yet. */
   unqueue(index: number): void {
-    if (index < 0 || index >= this.queue.length) return;
+    if (!this.inQueue(index)) return;
     this.queue.splice(index, 1);
     this.notifyState();
+  }
+
+  /** Rewrites a queued message before it is sent. */
+  editQueued(index: number, text: string): void {
+    const entry = this.queue[index];
+    if (!entry) return;
+    const trimmed = text.trim();
+    if (!trimmed) return this.unqueue(index);
+    entry.text = trimmed;
+    this.notifyState();
+  }
+
+  /** Moves a queued message, so the order can be corrected before it runs. */
+  moveQueued(from: number, to: number): void {
+    if (!this.inQueue(from) || !this.inQueue(to) || from === to) return;
+    const [entry] = this.queue.splice(from, 1);
+    if (entry) this.queue.splice(to, 0, entry);
+    this.notifyState();
+  }
+
+  private inQueue(index: number): boolean {
+    return Number.isInteger(index) && index >= 0 && index < this.queue.length;
   }
 
   private async runTurn(text: string, attachments: Attachment[] = []): Promise<void> {

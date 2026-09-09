@@ -732,16 +732,30 @@ button.primary:hover:not(:disabled) { opacity: 0.9; color: #fff; }
   font-size: 13px;
 }
 .queued-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.queued-remove {
+.queued-item button {
   flex-shrink: 0;
   padding: 0 5px;
   background: none;
   border: none;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1;
 }
-.queued-remove:hover { color: var(--fail); border: none; }
+.queued-item button:hover:not(:disabled) { color: var(--accent); border: none; }
+.queued-item button:disabled { opacity: 0.3; }
+.queued-remove { font-size: 15px !important; }
+.queued-remove:hover:not(:disabled) { color: var(--fail) !important; }
+.queued-edit {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--accent);
+  background: var(--bg);
+  color: var(--text);
+}
+.queued-edit:focus { outline: none; }
 
 .composer-buttons { display: flex; gap: 8px; align-items: center; }
 

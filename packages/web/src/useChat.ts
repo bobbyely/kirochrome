@@ -153,6 +153,20 @@ export function useChat() {
     [send],
   );
 
+  const editQueued = useCallback(
+    (index: number, text: string) => {
+      if (sessionId.current) send({ type: "edit_queued", sessionId: sessionId.current, index, text });
+    },
+    [send],
+  );
+
+  const moveQueued = useCallback(
+    (from: number, to: number) => {
+      if (sessionId.current) send({ type: "move_queued", sessionId: sessionId.current, from, to });
+    },
+    [send],
+  );
+
   const renameSession = useCallback(
     (id: string, title: string) => send({ type: "rename_session", sessionId: id, title }),
     [send],
@@ -220,6 +234,8 @@ export function useChat() {
     search,
     searchHits,
     unqueue,
+    editQueued,
+    moveQueued,
     setConfigOption,
     answerPermission,
     setAutoApprove,
