@@ -20,6 +20,16 @@ import type { Store } from "./store.js";
 export class SessionManager {
   private readonly live = new Map<string, Session>();
   private readonly changeListeners = new Set<() => void>();
+  /**
+   * Resumes already under way, keyed by session id.
+   *
+   * `resume` awaits a handshake, so without this a second call arriving in that
+   * window sees an empty `live` map and starts a second Session for the same
+   * conversation. Both then append from the same seq — a UNIQUE violation on
+   * (session_id, seq) — and both spawn their own agent. Two tabs, a
+   * double-clicked Resume button, or a reconnect are all enough.
+   */
+  private readonly resuming = new Map<string, Promise<Session>>();
 
   constructor(private readonly store: Store) {}
 
@@ -78,14 +88,21 @@ export class SessionManager {
     const existing = this.live.get(id);
     if (existing) return existing;
 
+    const inFlight = this.resuming.get(id);
+    if (inFlight) return inFlight;
+
     const record = this.store.getSession(id);
     if (!record) throw kcError("SESSION_UNKNOWN", `No session '${id}'.`);
 
-    const session = await this.staleOnFailure(provider, () =>
-      Session.resume(record, provider, this.store),
-    );
-    this.track(session);
-    return session;
+    const attempt = this.staleOnFailure(provider, () => Session.resume(record, provider, this.store))
+      .then((session) => {
+        this.track(session);
+        return session;
+      })
+      .finally(() => this.resuming.delete(id));
+
+    this.resuming.set(id, attempt);
+    return attempt;
   }
 
   getLive(id: string): Session | null {

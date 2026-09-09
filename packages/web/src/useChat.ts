@@ -35,7 +35,10 @@ export function useChat() {
   }, []);
 
   const connect = useCallback(() => {
-    const socket = new WebSocket(`ws://${location.host}`);
+    // Same host as the page, so it works behind Vite's proxy in development
+    // and directly against the server in production.
+    const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${scheme}//${location.host}/ws`);
     ws.current = socket;
 
     socket.onopen = () => {

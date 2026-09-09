@@ -134,6 +134,39 @@ describe("a restored conversation", () => {
   });
 });
 
+describe("concurrent resume", () => {
+  it("returns one session for simultaneous resumes, not two", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    const off = autoApprove(session);
+    await session.prompt("first");
+    off();
+    const id = session.id;
+    session.close();
+    sessions.closeAll();
+
+    const revived = new SessionManager(store);
+    // Two tabs, or a double-clicked Resume: both arrive before the handshake
+    // finishes. Two Session objects would append from the same seq and
+    // violate UNIQUE(session_id, seq).
+    const [a, b, c] = await Promise.all([
+      revived.resume(id, provider),
+      revived.resume(id, provider),
+      revived.resume(id, provider),
+    ]);
+    assert.equal(a, b, "concurrent resumes must share one session");
+    assert.equal(b, c);
+
+    const approve = autoApprove(a);
+    await a.prompt("second");
+    approve();
+
+    const seqs = store.eventsSince(id, 0).map((e) => e.seq);
+    assert.deepEqual(seqs, [...new Set(seqs)], "seq must stay unique on disk");
+    assert.deepEqual(seqs, [...seqs].sort((x, y) => x - y), "and monotonic");
+    revived.closeAll();
+  });
+});
+
 describe("provider defaults", () => {
   it("re-apply to a new session, and survive a withdrawn option", async () => {
     const first = await sessions.open(provider, "/tmp");

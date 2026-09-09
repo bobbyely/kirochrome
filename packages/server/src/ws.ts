@@ -12,6 +12,8 @@ import { SessionManager } from "./sessionManager.js";
  * down on disconnect but the session and any running turn survive, and a
  * returning client catches up by `seq`.
  */
+export const WS_PATH = "/ws";
+
 export function attachWebSocket(
   server: Server,
   sessions: SessionManager,
@@ -20,6 +22,13 @@ export function attachWebSocket(
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (req, socket, head) => {
+    // Our own path: in development Vite serves the page and owns the root
+    // socket for hot reload, so sharing "/" would collide.
+    const path = (req.url ?? "/").split("?")[0];
+    if (path !== WS_PATH) {
+      socket.destroy();
+      return;
+    }
     if (!originAllowed(req)) {
       socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
       socket.destroy();

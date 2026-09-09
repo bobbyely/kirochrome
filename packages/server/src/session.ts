@@ -631,8 +631,16 @@ export class Session {
       this.store.appendEvent(this.id, full);
     } catch (err) {
       // Never let a write failure take down a live turn; the in-memory log
-      // still serves this session, and the failure is visible in the console.
-      console.error(`[session ${this.id}] failed to persist event ${full.seq}:`, err);
+      // still serves this session. A UNIQUE violation here means two Session
+      // objects share this conversation, which should be impossible — say so
+      // rather than logging a bare SQLite error.
+      const unique = String(err).includes("UNIQUE");
+      console.error(
+        `[session ${this.id}] failed to persist event ${full.seq}` +
+          (unique ? " — two sessions appear to share this conversation" : "") +
+          ":",
+        err,
+      );
     }
     for (const notify of this.subscribers) notify([full]);
   }

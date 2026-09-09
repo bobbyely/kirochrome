@@ -20,9 +20,26 @@ const ledgerPath = () => join(dataDir(), "processes.tsv");
 export function recordProcess(pid: number, command: string): void {
   try {
     mkdirSync(dataDir(), { recursive: true });
-    appendFileSync(ledgerPath(), `${pid}\t${command.replace(/\s+/g, " ")}\n`);
+    // The start time is the identity check. Command text is recorded only for
+    // the log: a shell may exec-replace itself (`sh -c "sleep 30"` becomes
+    // `sleep 30` under bash but not dash), so it is not reliable for matching.
+    const started = startTime(pid) ?? "";
+    appendFileSync(ledgerPath(), `${pid}\t${started}\t${command.replace(/\s+/g, " ")}\n`);
   } catch {
     // Leak protection is best-effort; never fail a spawn over bookkeeping.
+  }
+}
+
+/** The process's start time, as the OS reports it. Stable across an exec. */
+function startTime(pid: number): string | null {
+  try {
+    const out = execFileSync("ps", ["-p", String(pid), "-o", "lstart="], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return out.length > 0 ? out : null;
+  } catch {
+    return null;
   }
 }
 
@@ -34,14 +51,14 @@ export function recordProcess(pid: number, command: string): void {
  * first, and skipped when it does not match.
  */
 export function reapOrphans(): void {
-  let entries: Array<{ pid: number; command: string }>;
+  let entries: Array<{ pid: number; started: string; command: string }>;
   try {
     entries = readFileSync(ledgerPath(), "utf8")
       .split("\n")
       .filter(Boolean)
       .map((line) => {
-        const [pid = "", ...rest] = line.split("\t");
-        return { pid: Number(pid), command: rest.join("\t") };
+        const [pid = "", started = "", ...rest] = line.split("\t");
+        return { pid: Number(pid), started, command: rest.join("\t") };
       })
       .filter((e) => Number.isInteger(e.pid) && e.pid > 0);
   } catch {
@@ -50,7 +67,7 @@ export function reapOrphans(): void {
 
   let reaped = 0;
   for (const entry of entries) {
-    if (!stillOurs(entry.pid, entry.command)) continue;
+    if (!stillOurs(entry.pid, entry.started)) continue;
     try {
       process.kill(-entry.pid, "SIGKILL"); // the group, not just the leader
       reaped++;
@@ -72,18 +89,17 @@ export function reapOrphans(): void {
   }
 }
 
-/** Guards against PID reuse: only kill if the command still matches. */
-function stillOurs(pid: number, command: string): boolean {
-  if (!command) return false;
-  try {
-    const live = execFileSync("ps", ["-p", String(pid), "-o", "command="], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-      .trim()
-      .replace(/\s+/g, " ");
-    return live.length > 0 && live === command;
-  } catch {
-    return false; // no such process
-  }
+/**
+ * Guards against PID reuse: only kill if this is still the same process.
+ *
+ * Compared on start time rather than command line. A recycled PID gets a new
+ * start time, while an exec keeps it — so this neither kills a stranger nor
+ * misses an orphan whose shell replaced itself.
+ *
+ * With no recorded start time we decline: failing to reap leaks a process,
+ * whereas a wrong kill takes down something that is not ours.
+ */
+function stillOurs(pid: number, started: string): boolean {
+  if (!started) return false;
+  return startTime(pid) === started;
 }

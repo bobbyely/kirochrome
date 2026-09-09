@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "npm run build -w @kirochrome/shared && npm run build -w @kirochrome/server && npm run build -w @kirochrome/web",
-    "dev": "npm run build -w @kirochrome/shared && npm run dev -w @kirochrome/server & npm run dev -w @kirochrome/web",
+    "dev": "npm run build -w @kirochrome/shared && node scripts/dev.mjs",
     "start": "npm run build && npm start -w @kirochrome/server",
     "typecheck": "tsc -b packages/shared packages/server && npm run typecheck -w @kirochrome/web",
     "test": "npm run build && npm run test:unit && npm run test:server",

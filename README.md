@@ -48,12 +48,21 @@ npm start                 # builds everything, serves http://127.0.0.1:4711
 Open <http://127.0.0.1:4711>, press **Check** on a provider, and once it passes,
 **New chat**.
 
-For a live-reloading UI, run the two halves separately:
+### Development with hot reload
 
 ```bash
-npm start -w @kirochrome/server    # :4711
-npm run dev -w @kirochrome/web     # :5173, proxies /api and the WebSocket
+npm run dev
 ```
+
+One command, three watchers: the UI hot-reloads on <http://127.0.0.1:5173>
+without losing your place, and the server rebuilds and restarts on change.
+Ctrl-C stops all of it.
+
+Vite proxies `/api` and `/ws` through to the server on :4711, so use the 5173
+URL — the 4711 one serves the last built bundle, not your edits.
+
+A server restart detaches running agents. Conversations are persisted, so
+reopening one and pressing **Resume conversation** picks it back up.
 
 ### On a new machine
 

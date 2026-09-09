@@ -73,6 +73,16 @@ Breaking one of these is a design regression, not a style nit.
 - **`session/load` returns `modes` and `configOptions` too**, exactly as
   `session/new` does. Discarding its response leaves a resumed conversation
   with no pickers at all.
+- **Single-flight anything that awaits before registering itself.** `resume`
+  awaits a handshake, so two calls arriving in that window each built a Session
+  for the same conversation — both appending from the same seq, and each with
+  its own agent process.
+- **Identify a process by its start time, not its command line.** A shell may
+  exec-replace itself (`sh -c "sleep 30"` becomes `sleep 30` under bash but not
+  dash), so command text is unreliable; start time survives an exec and changes
+  on PID reuse.
+- **The WebSocket lives at `/ws`.** At `/` it collides with Vite's hot-reload
+  socket, and dev mode silently never connects.
 - **Register a pending resolver before announcing the event that asks for it.**
   `append` notifies subscribers synchronously, so an answer arriving
   synchronously would find no pending entry and be dropped, blocking the agent
