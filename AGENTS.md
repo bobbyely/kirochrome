@@ -69,11 +69,18 @@ Breaking one of these is a design regression, not a style nit.
 
 - **TypeScript strict.** No `any` — use `unknown` and narrow.
 - **Validate at the two boundaries that are not ours**: the WebSocket frame
-  from the browser (`ws.ts`) and the hand-edited `config.json` (`config.ts`).
-  Both are currently `JSON.parse(...) as T`, which is a lie — see the debt
-  section in [PLAN.md](docs/PLAN.md). Agent payloads come from a process we
-  spawned and are narrowed rather than validated; that is a deliberate
-  difference, not an oversight.
+  from the browser (`ws.ts`, via `validateClientMessage` in
+  `shared/src/ws.ts`) and the hand-edited `config.json` (`config.ts`). Both are
+  checked field by field before anything reads them, with hand-rolled guards —
+  the unions are small and closed, and a schema library is a dependency we do
+  not need. A frame that fails is a `MESSAGE_INVALID` back to that client and
+  nothing else; a `config.json` that fails is `CONFIG_INVALID`, except for a
+  single bad provider entry, which is dropped and reported so the setup page
+  still loads. Adding a `ClientMessage` means adding its spec: the table is
+  keyed by the union, so a missing entry is a type error.
+
+  Agent payloads come from a process we spawned and are narrowed rather than
+  validated; that is a deliberate difference, not an oversight.
 - Guard clauses and early returns over nested conditionals.
 - Small modules with one job. `SessionManager` manages sessions; it does not
   also own the database.

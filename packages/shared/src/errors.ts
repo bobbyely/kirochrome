@@ -17,6 +17,7 @@ export const KC_ERROR_CODES = [
   "SESSION_UNKNOWN",
   "PROVIDER_UNKNOWN",
   "CONFIG_INVALID",
+  "MESSAGE_INVALID",
   "INTERNAL",
 ] as const;
 
@@ -75,6 +76,8 @@ export const REMEDIATION: Record<KcErrorCode, string> = {
   SESSION_UNKNOWN: "That conversation no longer exists.",
   PROVIDER_UNKNOWN: "No provider is configured with that id. Check your config file.",
   CONFIG_INVALID: "The configuration file could not be read. Fix or delete it to regenerate defaults.",
+  MESSAGE_INVALID:
+    "The browser sent a message this server does not understand. Reload the page; if it keeps happening, the page and the server are different versions.",
   INTERNAL: "An unexpected internal error. Please report this with the details below.",
 };
 

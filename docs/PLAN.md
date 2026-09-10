@@ -243,13 +243,14 @@ provider — is fixed and now lives as a trap in
 Known, deliberate, and not urgent — written down so it is a decision rather
 than a surprise. Each entry says what would go wrong if it is left.
 
-- **The two untrusted boundaries are cast, not validated.** `ws.ts` does
-  `JSON.parse(raw) as ClientMessage` on a frame from the browser, and
-  `config.ts` does the same on a hand-edited `config.json`. Everything else
-  parsed is either ours or comes from a process we spawned. A malformed frame
-  currently fails somewhere downstream with a confusing error instead of a
-  typed one at the door. The convention in AGENTS.md now names these two
-  specifically rather than claiming a discipline the code does not have.
+- **A dropped provider entry is only reported to stderr.** `loadConfig` now
+  validates `config.json` and skips a broken provider rather than refusing the
+  whole file, and returns what it skipped as `AppConfig.problems` — but the only
+  consumer is a `console.warn`. A user editing the file by hand and getting a
+  typo wrong sees their provider quietly absent from the setup page unless they
+  are watching the server's output. Surfacing `problems` in
+  `ProvidersResponse` and rendering it on the setup page is the fix, and is
+  small; it was left out to keep the validation change to the boundary itself.
 - **No formatter or linter.** Half the conventions section is mechanically
   enforceable and currently is not.
 - **`spike/` is misnamed and load-bearing.** Its README says "throwaway", but
@@ -292,6 +293,14 @@ than a surprise. Each entry says what would go wrong if it is left.
 - Whatever the work machine turns up once Kiro is actually driving it.
 
 ### Done since the roadmap was written
+
+**Both untrusted boundaries are validated, not cast.** A WebSocket frame is
+checked field by field against a table keyed by `ClientMessage["type"]` before
+dispatch, and a bad one is a `MESSAGE_INVALID` reply to that client instead of
+a `TypeError` three calls deeper. `config.json` is checked the same way, with
+one deliberate asymmetry: a single broken provider entry is dropped and
+reported rather than failing the file, because that file holds every route back
+into the app and the setup page is the only way to fix it.
 
 The design pass landed: `styles.css` rebuilt around a type scale, a spacing
 scale and one colour set, in the terminal-noir direction (near-black, one aqua

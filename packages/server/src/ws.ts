@@ -1,6 +1,13 @@
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
-import { causeOf, kcError, type ClientMessage, type KcError, type ServerMessage } from "@kirochrome/shared";
+import {
+  causeOf,
+  kcError,
+  parseClientMessage,
+  type ClientMessage,
+  type KcError,
+  type ServerMessage,
+} from "@kirochrome/shared";
 import { loadConfig } from "./config.js";
 import { defaultCwd } from "./session.js";
 import { SessionManager } from "./sessionManager.js";
@@ -74,27 +81,8 @@ function handleConnection(ws: WebSocket, sessions: SessionManager): void {
     watching = [];
   });
 
-  const fail = (error: KcError, sessionId?: string) => send({ type: "error", error, sessionId });
-
   ws.on("message", (raw) => {
-    void (async () => {
-      let msg: ClientMessage;
-      try {
-        msg = JSON.parse(String(raw)) as ClientMessage;
-      } catch (err) {
-        return fail(kcError("INTERNAL", "Malformed message.", { cause: causeOf(err) }));
-      }
-
-      try {
-        await dispatch(msg, sessions, send, watch, prefs);
-      } catch (err) {
-        const error =
-          typeof err === "object" && err !== null && "code" in err
-            ? (err as KcError)
-            : kcError("INTERNAL", "Unhandled server error.", { cause: causeOf(err) });
-        fail(error, "sessionId" in msg ? msg.sessionId : undefined);
-      }
-    })();
+    void handleFrame(String(raw), sessions, send, watch, prefs);
   });
 
   ws.on("close", () => {
@@ -102,6 +90,41 @@ function handleConnection(ws: WebSocket, sessions: SessionManager): void {
     for (const off of unsubscribers) off();
     unsubscribers.length = 0;
   });
+}
+
+/**
+ * Everything one inbound frame does, and the promise that it does not throw.
+ *
+ * Exported so the suite can drive the door directly: a frame from the browser
+ * is untrusted input, and a bad one must become an `error` message to that
+ * client rather than an unhandled rejection in a socket listener.
+ */
+export async function handleFrame(
+  raw: string,
+  sessions: SessionManager,
+  send: (msg: ServerMessage) => void,
+  watch: (sessionId: string) => void,
+  prefs: { includeArchived: boolean },
+): Promise<void> {
+  const fail = (error: KcError, sessionId?: string) => send({ type: "error", error, sessionId });
+
+  const parsed = parseClientMessage(raw);
+  if (!parsed.ok) {
+    // Named at the door, with the offending field, rather than surfacing three
+    // calls deep as "cannot read properties of undefined".
+    return fail(kcError("MESSAGE_INVALID", `Rejected a message: ${parsed.problem}.`, { cause: parsed.cause }));
+  }
+  const msg = parsed.value;
+
+  try {
+    await dispatch(msg, sessions, send, watch, prefs);
+  } catch (err) {
+    const error =
+      typeof err === "object" && err !== null && "code" in err
+        ? (err as KcError)
+        : kcError("INTERNAL", "Unhandled server error.", { cause: causeOf(err) });
+    fail(error, "sessionId" in msg ? msg.sessionId : undefined);
+  }
 }
 
 async function dispatch(

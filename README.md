@@ -117,6 +117,12 @@ Adding another is a config entry, not code:
 [docs/PROVIDERS.md](docs/PROVIDERS.md) has the recipe and an honest table of
 which ones have actually been run.
 
+The file is checked when it is read. An entry with a mistake in it — `args` as
+a string, a missing `command`, an id used twice — is skipped with a warning on
+the server's output, so the rest of your providers still load and the setup
+page still works. Only a file with nothing usable left in it is an error, and
+that error names each problem. Delete the file to get the defaults back.
+
 | OS | Data directory |
 |---|---|
 | macOS | `~/Library/Application Support/kirochrome/` |
