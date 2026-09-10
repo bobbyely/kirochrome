@@ -139,13 +139,7 @@ Type `@` to complete against the working directory and attach file contents as
 `resource_link` blocks. The completion machinery built for slash commands
 generalises to this, and `fs` is now implemented.
 
-#### 5. Compaction
-
-Kiro has `/compact` and ACP has `compaction_update`. Today the context meter
-turns amber and the user is left to deal with it. At minimum, surface the
-compaction status the protocol already reports.
-
-#### 6. Interrupt and send
+#### 5. Interrupt and send
 
 Today a message typed during a turn queues and goes when the turn ends. The
 other useful thing to do with it is send it *now*.
@@ -170,7 +164,7 @@ Real steering arrives with **ACP v2**, which decouples the prompt response from
 the work lifecycle precisely so queueing and steering are expressible. It is
 Draft; see [PROTOCOL.md](PROTOCOL.md#steering-and-acp-v2).
 
-#### 7. Instructions of your own, across every agent
+#### 6. Instructions of your own, across every agent
 
 Agents already read their own user-level instruction files, and the session's
 `cwd` gives them the project's `AGENTS.md`. What is missing is a KiroChrome
@@ -235,6 +229,42 @@ Record each review in [REVIEWS.md](REVIEWS.md) — date, the commit it ran
 through, and what it found. The range matters more than the date: the next
 review starts where the last ended, and a missing row is indistinguishable from
 a skipped review.
+
+#### Bugs to fix
+
+Wrong, not deferred. Debt below is a decision; this is a defect.
+
+- **One agent exiting marks the whole provider stale.** Symptom: Claude Code is
+  working in an open conversation, but it has vanished from the new-chat list
+  and Setup says "Needs re-check".
+
+  `SessionManager.track` marks the *provider* stale on any unexpected agent
+  exit, and `unexpected` is merely `!this.closing` — set in exactly one place,
+  `close()`. So a crash in one conversation, an adapter exiting on its own, or
+  the Claude Code adapter's nested-session refusal all condemn the provider,
+  while the session running beside it carries on fine. The live session is
+  untouched; what is lost is starting a *new* one, because `NewChat` filters on
+  `lastCheck?.status === "ok"`.
+
+  The other stale path, `staleOnFailure`, is already right: it fires only for
+  the five `PROVIDER_FAULT_CODES`, which do say the provider itself is wrong.
+  It is the exit handler that over-reaches.
+
+  This is the **per-session versus global** shape listed in the review section
+  above, mirrored: per-session evidence driving a global verdict. An agent that
+  ran an hour and then crashed says nothing about whether the binary or the
+  config is right, and it is contradicted by the session still running next to
+  it.
+
+  *Fix:* condemn the provider only when the exit is plausibly its fault — died
+  before the handshake completed, or exited non-zero having never completed a
+  turn. Otherwise leave it as a dead session with a Resume button, which the UI
+  already renders. Ignoring the crash entirely is the wrong other extreme: it
+  is a real signal, just not proof.
+
+  *Test:* `spike/dying-agent.mjs` exists for this. Two sessions on one provider,
+  kill one, assert the provider is still `ok` and the survivor still prompts.
+  Add the gotcha with the fix.
 
 #### Recorded debt
 
