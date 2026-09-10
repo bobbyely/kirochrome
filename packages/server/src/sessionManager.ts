@@ -57,6 +57,13 @@ export class SessionManager {
     // "the agent is not connected" from a session the UI still thinks is fine.
     session.onExit((reason) => {
       this.live.delete(session.id);
+      // Invariant 6: the agent is gone, but the commands it started are not.
+      // Dropping the Session without closing it left its TerminalRegistry
+      // holding live process groups that nothing referenced any more — they
+      // outlived the session and the server both. `close()` is safe here: the
+      // exit handler has already appended `agent_exited` and killTree/release
+      // both no-op on what is already dead.
+      session.close();
       // Invariant 11: a runtime failure contradicts the provider's last check,
       // so stop trusting it until it is re-checked. But only a failure that is
       // about the *provider* — one conversation crashing is not evidence the

@@ -120,6 +120,13 @@ All of these were real races, found the hard way.
   on PID reuse.
 - **Reap orphaned processes once at startup, never per session** — per-session
   reaping kills processes belonging to sessions that are still alive.
+- **Dropping a session is not closing it.** When an agent died, `SessionManager`
+  deleted it from `live` and stopped there, so its `TerminalRegistry` was never
+  released — the commands that agent had started were now referenced by nothing
+  at all, and outlived both the session and the server. "Released on session
+  close" in invariant 6 has to mean *every* way out, and the crash path is the
+  one nobody tests by hand, because it looks fine: the conversation disappears
+  from the sidebar exactly as it should.
 - **Never log `env`** when logging a spawn.
 - **One session's crash is not a verdict on its provider.** Marking a provider
   stale removes it from the new-chat list until someone re-runs the check, so it
@@ -129,6 +136,24 @@ All of these were real races, found the hard way.
   same provider says so too. Only an agent that exits non-zero having never
   answered is real evidence. Per-session evidence driving a global verdict is a
   recurring shape here — ask what happens with two conversations open.
+
+## Security
+
+- **A convenience entry in the Origin allowlist is a permanent hole.**
+  `http://localhost:5173` was in the list unconditionally so the Vite dev server
+  could talk to us — but 5173 is Vite's *default*, so in a built install that
+  entry does not mean "our dev server", it means any project the user happens to
+  be running. `PATCH /api/providers/:id` sets the command we spawn, so a page on
+  an unrelated origin could choose what runs on the machine. Dev-only trust
+  needs a dev-only signal: `KIROCHROME_DEV=1`, set by `scripts/dev.mjs` and
+  nothing else.
+- **Anything stored from the browser and served back to it needs its
+  `Content-Type` re-checked.** An attachment's `mime` was validated as "a
+  string" and echoed straight back as the header, which made `text/html` a way
+  to serve script from our own origin — and from there, same-origin access to
+  the whole API. Validate at the boundary, re-check on the way out because old
+  rows predate the check, and send `nosniff`. SVG counts as script here: it is a
+  document, not an inert raster.
 
 ## Storage
 

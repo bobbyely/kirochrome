@@ -9,7 +9,7 @@ a useful fact, and an absent row is indistinguishable from a skipped review.
 
 | Date | Reviewed through | Range since previous | Findings | Notes |
 |---|---|---|---|---|
-| — | — | — | — | No review yet. First one starts at the root commit. |
+| 2026-09-10 | `cd32fd1` | `f7274a5..cd32fd1` (82 commits) | 10 — one serious, two breaking an invariant | Security-focused pass over `packages/`. Three fixed here; the rest are recorded under *Bugs to fix* in [PLAN.md](PLAN.md) rather than left in a review comment. Checked and clean: static-file path traversal, the export filename, FTS5 quoting, markdown sanitisation. |
 
 ## How to record one
 

@@ -23,7 +23,10 @@ let shuttingDown = false;
 function run(name, command, args, opts = {}) {
   const child = spawn(command, args, {
     cwd: opts.cwd ?? root,
-    env: { ...process.env, FORCE_COLOR: "1" },
+    // KIROCHROME_DEV is what makes the server trust Vite's origin. Only the dev
+    // runner sets it: a built install must not accept requests from whatever
+    // else the user happens to be serving on 5173.
+    env: { ...process.env, FORCE_COLOR: "1", KIROCHROME_DEV: "1" },
     stdio: ["ignore", "pipe", "pipe"],
     // Own process group, so shutting down takes the whole tree with it.
     detached: process.platform !== "win32",

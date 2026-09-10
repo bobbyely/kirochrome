@@ -94,6 +94,21 @@ describe("inbound frame validation", () => {
     assert.deepEqual(sent, [{ type: "sessions", sessions: [] }]);
   });
 
+  // An attachment's mime is echoed back as its Content-Type when the browser
+  // fetches it, so anything but an inert image type is a way to serve script
+  // from our own origin.
+  it("rejects an attachment mime that is not an inert image type", async () => {
+    for (const mime of ["text/html", "application/javascript", "image/svg+xml", "image/png; x=y"]) {
+      const raw = JSON.stringify({
+        type: "prompt",
+        sessionId: "s1",
+        text: "hi",
+        images: [{ mime, data: "aa" }],
+      });
+      assert.match(rejection(await frame(raw)).message, /'images' must be an array/, `${mime} must be refused`);
+    }
+  });
+
   it("never rejects a frame the browser actually sends", async () => {
     const valid = [
       { type: "open", providerId: "mock" },

@@ -109,6 +109,15 @@ export function kcError(
   return { code, message, remediation: REMEDIATION[code], ...extra };
 }
 
+/**
+ * Is this one of ours? Used where a `catch` re-describes a failure: an error
+ * that already carries a code and a remediation should pass through rather
+ * than be relabelled with a guess about what went wrong.
+ */
+export function isKcError(err: unknown): err is KcError {
+  return typeof err === "object" && err !== null && "code" in err && "message" in err;
+}
+
 /** Normalises an unknown thrown value into a preserved `cause` string. */
 export function causeOf(err: unknown): string {
   if (err instanceof Error) return err.stack ?? `${err.name}: ${err.message}`;

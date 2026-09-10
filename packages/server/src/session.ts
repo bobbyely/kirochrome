@@ -3,6 +3,7 @@ import { client, PROTOCOL_VERSION, type ClientConnection } from "@agentclientpro
 import {
   advertisesLoadSession,
   causeOf,
+  isKcError,
   kcError,
   type KcError,
   type KcEvent,
@@ -41,6 +42,18 @@ const LEGACY_SETTERS: Record<string, { method: string; param: string }> = {
 /** Deltas are buffered this long before becoming one event. See docs/DESIGN.md. */
 const TEXT_FLUSH_MS = 250;
 const HANDSHAKE_TIMEOUT_MS = 60_000;
+/**
+ * Opening or re-attaching a conversation: generous, because `session/load`
+ * makes the agent replay its whole history before it answers.
+ */
+const SESSION_TIMEOUT_MS = 60_000;
+/** An in-session request that should be near-instant, so it may be impatient. */
+const OPTION_TIMEOUT_MS = 30_000;
+/** Completion: a suggestion that arrives after this is of no use to anyone. */
+const COMPLETION_TIMEOUT_MS = 5_000;
+// `session/prompt` is the deliberate exception to invariant 10: a turn may
+// legitimately run for an hour, so it is bounded by the agent and by Stop
+// rather than by a clock here.
 
 type Subscriber = (events: KcEvent[]) => void;
 
@@ -344,13 +357,27 @@ export class Session {
         // `session/load` returns modes and configOptions just as `session/new`
         // does. Discarding the response left a resumed conversation with no
         // pickers at all.
-        const loaded = (await this.connection.agent.request("session/load", {
-          sessionId: opts.loadSessionId,
-          cwd: this.cwd,
-          mcpServers: [],
-        })) as Record<string, unknown>;
+        const loaded = (await withTimeout(
+          this.connection.agent.request("session/load", {
+            sessionId: opts.loadSessionId,
+            cwd: this.cwd,
+            mcpServers: [],
+          }),
+          SESSION_TIMEOUT_MS,
+          () =>
+            kcError("RPC_TIMEOUT", `'${this.provider.name}' did not answer session/load in time.`, {
+              remediation:
+                "The agent accepted the request but never replied. Try reopening the conversation; " +
+                "if it keeps happening, re-run the provider check.",
+              detail: { timeoutMs: SESSION_TIMEOUT_MS, agentSessionId: opts.loadSessionId },
+            }),
+        )) as Record<string, unknown>;
         this.configOptions = normaliseConfigOptions(loaded ?? {});
       } catch (err) {
+        // A hang is not an expired session. Relabelling it would send the user
+        // off to start a new chat over a request the agent simply never
+        // answered, so our own typed error passes straight through.
+        if (isKcError(err) && err.code === "RPC_TIMEOUT") throw err;
         const rpc = err as { code?: unknown; message?: unknown; data?: unknown };
         throw kcError(
           "SESSION_NOT_LIVE",
@@ -391,7 +418,14 @@ export class Session {
       return;
     }
 
-    const active = await this.connection.agent.buildSession(this.cwd).start();
+    const active = await withTimeout(
+      this.connection.agent.buildSession(this.cwd).start(),
+      SESSION_TIMEOUT_MS,
+      () =>
+        kcError("RPC_TIMEOUT", `'${this.provider.name}' did not answer session/new in time.`, {
+          detail: { timeoutMs: SESSION_TIMEOUT_MS, cwd: this.cwd },
+        }),
+    );
     this.agentSessionId = active.sessionId;
     const response = active.newSessionResponse as Record<string, unknown>;
     this.configOptions = normaliseConfigOptions(response);
@@ -557,19 +591,34 @@ export class Session {
     // back on failure rather than guessing from the session/new response —
     // agents mid-migration do not always answer both consistently.
     try {
-      try {
-        await connection.agent.request("session/set_config_option", {
-          sessionId: agentSessionId,
-          configId: id,
-          value,
+      const setterTimeout = (method: string) => () =>
+        kcError("RPC_TIMEOUT", `'${this.provider.name}' did not answer ${method} in time.`, {
+          detail: { timeoutMs: OPTION_TIMEOUT_MS, configId: id },
         });
+      try {
+        await withTimeout(
+          connection.agent.request("session/set_config_option", {
+            sessionId: agentSessionId,
+            configId: id,
+            value,
+          }),
+          OPTION_TIMEOUT_MS,
+          setterTimeout("session/set_config_option"),
+        );
       } catch (modernErr) {
+        // A hang says nothing about which dialect the agent speaks, so falling
+        // back would just wait a second time for an agent already not replying.
+        if (isKcError(modernErr) && modernErr.code === "RPC_TIMEOUT") throw modernErr;
         const legacy = LEGACY_SETTERS[id];
         if (!legacy) throw modernErr;
-        await connection.agent.request(legacy.method, {
-          sessionId: agentSessionId,
-          [legacy.param]: value,
-        });
+        await withTimeout(
+          connection.agent.request(legacy.method, {
+            sessionId: agentSessionId,
+            [legacy.param]: value,
+          }),
+          OPTION_TIMEOUT_MS,
+          setterTimeout(legacy.method),
+        );
       }
       this.configOptions = this.configOptions.map((o) =>
         o.id === id ? { ...o, currentValue: value } : o,
@@ -824,11 +873,22 @@ export class Session {
     if (!connection || !agentSessionId) return [];
 
     try {
-      const res = (await connection.agent.request("_kiro.dev/commands/options", {
-        sessionId: agentSessionId,
-        command,
-        partial,
-      })) as { options?: CommandOption[] };
+      // Short: this sits behind a composer that is waiting to show a list. An
+      // agent that has not answered by now has missed its moment, and the
+      // catch below turns that into the same "unsupported" as any other
+      // failure rather than leaving the completion pending for ever.
+      const res = (await withTimeout(
+        connection.agent.request("_kiro.dev/commands/options", {
+          sessionId: agentSessionId,
+          command,
+          partial,
+        }),
+        COMPLETION_TIMEOUT_MS,
+        () =>
+          kcError("RPC_TIMEOUT", `'${this.provider.name}' did not answer commands/options in time.`, {
+            detail: { timeoutMs: COMPLETION_TIMEOUT_MS, command },
+          }),
+      )) as { options?: CommandOption[] };
       return Array.isArray(res?.options) ? res.options.filter((o) => typeof o?.value === "string") : [];
     } catch {
       this.commandOptionsUnsupported = true;
