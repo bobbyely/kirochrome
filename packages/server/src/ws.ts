@@ -11,6 +11,9 @@ import { SessionManager } from "./sessionManager.js";
  * The socket is a view onto sessions, never their owner: subscriptions are torn
  * down on disconnect but the session and any running turn survive, and a
  * returning client catches up by `seq`.
+ *
+ * It views one conversation at a time. Switching is a `subscribe`, not a new
+ * socket — the connection outlives the switch.
  */
 export const WS_PATH = "/ws";
 
@@ -53,6 +56,24 @@ function handleConnection(ws: WebSocket, sessions: SessionManager): void {
   unsubscribers.push(
     sessions.onChange(() => send({ type: "sessions", sessions: sessions.list(100, prefs.includeArchived) })),
   );
+
+  // A socket watches one conversation at a time, so `subscribe` replaces rather
+  // than adds. Accumulating them would stream a background session's turn into
+  // whichever transcript the reader has since switched to.
+  let watching: Array<() => void> = [];
+  const watch = (sessionId: string) => {
+    for (const off of watching) off();
+    watching = [];
+    const live = sessions.getLive(sessionId);
+    if (!live) return; // restored from disk: a transcript, with nothing live to add
+    watching.push(live.subscribe((events) => send({ type: "events", sessionId: live.id, events })));
+    watching.push(live.onStateChange(() => send({ type: "session_state", session: live.summary() })));
+  };
+  unsubscribers.push(() => {
+    for (const off of watching) off();
+    watching = [];
+  });
+
   const fail = (error: KcError, sessionId?: string) => send({ type: "error", error, sessionId });
 
   ws.on("message", (raw) => {
@@ -65,7 +86,7 @@ function handleConnection(ws: WebSocket, sessions: SessionManager): void {
       }
 
       try {
-        await dispatch(msg, sessions, send, unsubscribers, prefs);
+        await dispatch(msg, sessions, send, watch, prefs);
       } catch (err) {
         const error =
           typeof err === "object" && err !== null && "code" in err
@@ -87,7 +108,7 @@ async function dispatch(
   msg: ClientMessage,
   sessions: SessionManager,
   send: (msg: ServerMessage) => void,
-  unsubscribers: Array<() => void>,
+  watch: (sessionId: string) => void,
   prefs: { includeArchived: boolean },
 ): Promise<void> {
   switch (msg.type) {
@@ -102,14 +123,12 @@ async function dispatch(
     }
 
     case "subscribe": {
-      // Backlog first, then live updates — so nothing is missed in between.
-      // Works for restored sessions too; those just have nothing live to add.
-      send({ type: "events", sessionId: msg.sessionId, events: sessions.eventsSince(msg.sessionId, msg.sinceSeq) });
-      const live = sessions.getLive(msg.sessionId);
-      if (live) {
-        unsubscribers.push(live.subscribe((events) => send({ type: "events", sessionId: live.id, events })));
-        unsubscribers.push(live.onStateChange(() => send({ type: "session_state", session: live.summary() })));
-      }
+      // Read the backlog before watching, so the switch away from any previous
+      // conversation happens first and its events cannot land in this batch.
+      // Both calls are synchronous, so nothing can be appended in between.
+      const backlog = sessions.eventsSince(msg.sessionId, msg.sinceSeq);
+      watch(msg.sessionId);
+      send({ type: "events", sessionId: msg.sessionId, events: backlog });
       send({ type: "session_state", session: sessions.summary(msg.sessionId) });
       return;
     }
@@ -160,9 +179,9 @@ async function dispatch(
         );
       }
       const resumed = await sessions.resume(msg.sessionId, provider);
-      unsubscribers.push(
-        resumed.subscribe((events) => send({ type: "events", sessionId: resumed.id, events })),
-      );
+      // The same slot `subscribe` uses: resuming what you are already watching
+      // must not leave you subscribed to it twice.
+      watch(resumed.id);
       send({ type: "events", sessionId: resumed.id, events: resumed.eventsSince(msg.sinceSeq) });
       send({ type: "session_state", session: resumed.summary() });
       return;
