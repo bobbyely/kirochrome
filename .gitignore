@@ -28,6 +28,10 @@ venv/
 .idea/
 .DS_Store
 
+# Worktrees an agent harness creates for itself. Only this path — project
+# settings and agent definitions also live under .claude/ and are worth keeping.
+.claude/worktrees/
+
 # Local data
 *.sqlite
 *.sqlite3
