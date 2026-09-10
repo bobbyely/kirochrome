@@ -230,6 +230,11 @@ export class Session {
           // browser page we have no part in, and advertising a mode we do not
           // render is how agents end up calling a method that fails.
           elicitation: { form: {} },
+          // Agents MUST NOT send compaction updates unless this is advertised,
+          // so without it the context meter can only ever turn amber and stop.
+          // Marked experimental in the schema: if it is withdrawn, agents stop
+          // sending and the row stops appearing. Nothing else depends on it.
+          session: { compaction: {} },
         },
         clientInfo: { name: "kirochrome", version: "0.0.0" },
       }),

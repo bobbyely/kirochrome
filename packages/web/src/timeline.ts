@@ -35,6 +35,15 @@ export type Row =
       answer: { action: ElicitationAction; content?: Record<string, ElicitationValue> } | null;
     }
   | { kind: "note"; seq: number; label: string }
+  /** Where the agent replaced conversation history with a summary. */
+  | {
+      kind: "compaction";
+      seq: number;
+      compactionId: string;
+      status: string;
+      summary: string;
+      error: string | null;
+    }
   /** Consecutive tool calls and thinking, folded into one collapsible run. */
   | { kind: "work"; seq: number; children: Row[]; tools: number; thoughts: number; active: boolean }
   | { kind: "error"; seq: number; code: string; message: string; remediation?: string | undefined }
@@ -82,11 +91,58 @@ function groupWork(rows: Row[]): Row[] {
   return out;
 }
 
+/**
+ * Applies one `compaction_update`, creating the row or patching it in place.
+ *
+ * ACP gives `summary` and `error` patch semantics: omitting a field leaves the
+ * stored value alone, `null` clears it, and a value replaces it. Treating an
+ * omission as "clear" would wipe the summary on the very update that reports
+ * the compaction finished.
+ */
+function foldCompaction(
+  seq: number,
+  update: unknown,
+  rows: Row[],
+  index: Map<string, Extract<Row, { kind: "compaction" }>>,
+): void {
+  const u = update as {
+    compactionId?: string;
+    status?: string;
+    summary?: Array<{ text?: string }> | null;
+    error?: string | null;
+  };
+  if (!u.compactionId) return;
+
+  let row = index.get(u.compactionId);
+  if (!row) {
+    row = {
+      kind: "compaction",
+      seq,
+      compactionId: u.compactionId,
+      status: u.status ?? "in_progress",
+      summary: "",
+      error: null,
+    };
+    index.set(u.compactionId, row);
+    rows.push(row);
+  } else if (u.status) {
+    row.status = u.status;
+  }
+
+  // `summary: []` clears, same as null — the spec spells both out.
+  if (u.summary === null) row.summary = "";
+  else if (Array.isArray(u.summary)) {
+    row.summary = u.summary.map((block) => block?.text ?? "").join("");
+  }
+  if (u.error !== undefined) row.error = u.error;
+}
+
 export function buildRows(events: KcEvent[]): Row[] {
   const rows: Row[] = [];
   const toolRows = new Map<string, Extract<Row, { kind: "tool" }>>();
   const permissionRows = new Map<string, Extract<Row, { kind: "permission" }>>();
   const elicitationRows = new Map<string, Extract<Row, { kind: "elicitation" }>>();
+  const compactionRows = new Map<string, Extract<Row, { kind: "compaction" }>>();
 
   for (const event of events) {
     switch (event.type) {
@@ -176,6 +232,20 @@ export function buildRows(events: KcEvent[]): Row[] {
 
       case "agent_update": {
         const u = event.update as { sessionUpdate?: string; content?: { text?: string } };
+
+        // Compaction is upserted by id: the first update fixes its place in the
+        // timeline and later ones patch it there, rather than adding rows.
+        if (u.sessionUpdate === "compaction_update") {
+          foldCompaction(event.seq, event.update, rows, compactionRows);
+          break;
+        }
+        if (u.sessionUpdate === "compaction_summary_chunk") {
+          const c = event.update as { compactionId?: string; content?: { text?: string } };
+          const row = c.compactionId ? compactionRows.get(c.compactionId) : undefined;
+          if (row) row.summary += c.content?.text ?? "";
+          break;
+        }
+
         if (updateCategory(u.sessionUpdate) === "state") break; // header state, not transcript
         if (u.sessionUpdate === "agent_thought_chunk") {
           const last = rows.at(-1);

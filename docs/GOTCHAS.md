@@ -31,6 +31,15 @@ bug from the next person, who has no reason to know.
   half: advertised by `available_commands_update` and run as ordinary prompt
   text. Kiro exposes reasoning effort only that way, so a missing picker does
   not mean a missing feature.
+- **An update you never advertised is an update you never receive.** Compaction
+  updates are gated on `clientCapabilities.session.compaction`; without it the
+  agent is forbidden from sending them, and the absence looks exactly like an
+  agent that does not compact. Check the capability before concluding an agent
+  does not do something.
+- **`compaction_update` is an upsert, and its fields are patches.** Omitting
+  `summary` means "leave it alone", `null` and `[]` both clear it. The terminal
+  `completed` update usually omits it, so treating omission as "clear" wipes the
+  summary at the moment the compaction succeeds.
 - **`elicitation/create` is a form, not a multiple choice**, and it has a
   second mode that sends the user to a URL. Advertise the modes you actually
   render — we claim `form` alone and decline the rest — and remember that

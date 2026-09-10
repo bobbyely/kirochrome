@@ -597,6 +597,17 @@ kbd {
 .permission-title { font-size: var(--fs-md); }
 .permission-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 
+/* ---------- compaction ---------- */
+/* A seam in the transcript: everything above it is now a summary. */
+.compaction { align-self: stretch; display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--muted); }
+.compaction-rule { flex: 1; height: 1px; background: var(--border); }
+.compaction-label, .compaction-body > summary { text-transform: uppercase; letter-spacing: 0.06em; }
+.compaction-body { max-width: 60%; }
+.compaction-body > summary { cursor: pointer; }
+.compaction-failed { color: var(--fail); }
+.compaction-failed .compaction-rule { background: var(--fail); opacity: 0.4; }
+.compaction-in_progress .compaction-rule { background: var(--accent); opacity: 0.5; }
+
 /* ---------- elicitation ---------- */
 /* A question, not a warning: the accent border, where permissions use warn. */
 .elicitation {

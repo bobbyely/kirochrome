@@ -50,8 +50,8 @@ per-platform install hints and a field to correct a binary path. Providers go
 **Chat:** streaming responses with markdown and syntax highlighting; tool calls
 folded into collapsible cards showing real diffs; runs of tool calls grouped
 into one row; permission prompts that block the agent until answered;
-structured questions rendered as forms; context-window meter; image paste;
-messages queued while a turn runs.
+structured questions rendered as forms; context-window meter and a compaction
+seam when history is replaced; image paste; messages queued while a turn runs.
 
 **Conversations:** persisted and resumable via `session/load`; renameable,
 archivable, exportable to Markdown; full-text search across all of them; a
@@ -323,6 +323,14 @@ agent-supplied argument options landed after that.
 
 CI landed: `npm run typecheck` and `npm test` run on every push and pull
 request, and changes reach `main` through a PR that merges on green.
+
+**Compaction landed, and it too was mis-scoped here.** This file said the
+protocol "already reports" compaction status and we merely failed to surface it.
+In fact agents are forbidden from sending compaction updates unless the client
+advertises `session.compaction`, which we did not — so nothing was arriving. We
+now advertise it and render the compaction as a seam in the transcript, with the
+agent's own summary behind it. See
+[PROTOCOL.md](PROTOCOL.md#compaction-has-to-be-asked-for-and-its-updates-are-patches).
 
 **`elicitation/create` landed, and it is not what this file said it was.** The
 roadmap described a multiple-choice question; ACP actually specifies a *form* —

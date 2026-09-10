@@ -167,6 +167,38 @@ describe("concurrent resume", () => {
   });
 });
 
+describe("compaction", () => {
+  it("is advertised, so the agent is allowed to report it", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    await session.prompt("compact");
+
+    const log = session.eventsSince(0);
+    const said = log.filter((e) => e.type === "agent_text").map((e) => e.text).join("");
+    assert.ok(
+      !said.includes("not advertised"),
+      "the mock refuses to send compaction updates unless we ask for them",
+    );
+
+    // The updates are recorded raw; the transcript derives the row from them.
+    const updates = log
+      .filter((e) => e.type === "agent_update")
+      .map((e) => e.update)
+      .filter((u) => String(u.sessionUpdate).startsWith("compaction"));
+    assert.deepEqual(
+      updates.map((u) => `${u.sessionUpdate}:${u.compactionId}`),
+      [
+        "compaction_update:c1",
+        "compaction_summary_chunk:c1",
+        "compaction_summary_chunk:c1",
+        "compaction_update:c1",
+        "compaction_update:c2",
+        "compaction_update:c2",
+      ],
+    );
+    session.close();
+  });
+});
+
 describe("elicitation", () => {
   it("asks the form, holds the agent open, and returns coerced content", async () => {
     const session = await sessions.open(provider, "/tmp");

@@ -69,6 +69,42 @@ describe("buildRows", () => {
     assert.deepEqual(rows.map((r) => r.kind), ["agent"]);
   });
 
+  it("upserts a compaction by id and keeps a summary an update does not mention", () => {
+    const update = (u: Record<string, unknown>, seq: number) =>
+      ev({ type: "agent_update", update: { sessionUpdate: "compaction_update", ...u } } as never, seq);
+    const chunk = (text: string, seq: number) =>
+      ev({
+        type: "agent_update",
+        update: { sessionUpdate: "compaction_summary_chunk", compactionId: "c1", content: { type: "text", text } },
+      } as never, seq);
+
+    const rows = buildRows([
+      update({ compactionId: "c1", status: "in_progress" }, 1),
+      chunk("Earlier we ", 2),
+      chunk("set up CI.", 3),
+      // No `summary` key: omission must leave the chunks alone, not clear them.
+      update({ compactionId: "c1", status: "completed" }, 4),
+    ]);
+
+    assert.equal(rows.length, 1, "later updates patch the row rather than adding one");
+    const row = rows[0]!;
+    assert.ok(row.kind === "compaction");
+    assert.equal(row.status, "completed");
+    assert.equal(row.summary, "Earlier we set up CI.");
+    assert.equal(row.seq, 1, "it sits where the compaction began");
+  });
+
+  it("clears a compaction summary on an explicit empty one, and keeps an error", () => {
+    const rows = buildRows([
+      ev({ type: "agent_update", update: { sessionUpdate: "compaction_update", compactionId: "c1", status: "in_progress", summary: [{ text: "draft" }] } } as never, 1),
+      ev({ type: "agent_update", update: { sessionUpdate: "compaction_update", compactionId: "c1", status: "failed", summary: [], error: "no" } } as never, 2),
+    ]);
+    const row = rows[0]!;
+    assert.ok(row.kind === "compaction");
+    assert.equal(row.summary, "", "`summary: []` clears, unlike omission");
+    assert.equal(row.error, "no");
+  });
+
   it("folds an elicitation and its answer into one row", () => {
     const fields = [{ key: "channel", label: "Channel", required: true, type: "text" as const }];
     const rows = buildRows([

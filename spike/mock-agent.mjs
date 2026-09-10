@@ -9,21 +9,28 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let seq = 0;
 
 const cancelled = new Set();
+/** Set from the client's `initialize`; gates the compaction updates below. */
+let compactionAllowed = false;
 
 const app = agent({ name: "mock-agent" })
   // ACP sends cancellation as a notification, not a request.
   .onNotification("session/cancel", ({ params }) => {
     cancelled.add(params.sessionId);
   })
-  .onRequest("initialize", () => ({
-    protocolVersion: PROTOCOL_VERSION,
-    agentCapabilities: {
-      loadSession: true,
-      promptCapabilities: { image: true, embeddedContext: true },
-    },
-    agentInfo: { name: "mock-agent", title: "Mock Agent", version: "0.0.0" },
-    authMethods: [],
-  }))
+  .onRequest("initialize", ({ params }) => {
+    // Agents MUST NOT send compaction updates unless the client asked for
+    // them. Recording it here lets a test prove we advertise what we render.
+    compactionAllowed = params?.clientCapabilities?.session?.compaction != null;
+    return {
+      protocolVersion: PROTOCOL_VERSION,
+      agentCapabilities: {
+        loadSession: true,
+        promptCapabilities: { image: true, embeddedContext: true },
+      },
+      agentInfo: { name: "mock-agent", title: "Mock Agent", version: "0.0.0" },
+      authMethods: [],
+    };
+  })
   .onRequest("session/new", () => ({
     sessionId: `mock-session-${++seq}`,
     // Two shapes the composer must cope with: the legacy modes state, and the
@@ -95,6 +102,38 @@ const app = agent({ name: "mock-agent" })
         await notify({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "." } });
         await sleep(100);
       }
+      return { stopReason: "end_turn" };
+    }
+
+    // Context compaction, which the client only sees if it advertised support.
+    if (params.prompt?.[0]?.text === "compact") {
+      if (!compactionAllowed) {
+        await notify({
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "[compaction: not advertised]" },
+        });
+        return { stopReason: "end_turn" };
+      }
+      await notify({ sessionUpdate: "compaction_update", compactionId: "c1", status: "in_progress" });
+      for (const text of ["Earlier we ", "set up CI."]) {
+        await notify({
+          sessionUpdate: "compaction_summary_chunk",
+          compactionId: "c1",
+          content: { type: "text", text },
+        });
+      }
+      // No `summary` field: omission means "leave it alone", so the chunks
+      // above must survive this update rather than being cleared by it.
+      await notify({ sessionUpdate: "compaction_update", compactionId: "c1", status: "completed" });
+
+      // A second, failed compaction — the error is only valid with `failed`.
+      await notify({ sessionUpdate: "compaction_update", compactionId: "c2", status: "in_progress" });
+      await notify({
+        sessionUpdate: "compaction_update",
+        compactionId: "c2",
+        status: "failed",
+        error: "The model refused to summarise.",
+      });
       return { stopReason: "end_turn" };
     }
 
