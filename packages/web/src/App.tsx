@@ -70,9 +70,11 @@ export function App() {
           />
         )}
 
+        {/* Deliberately unkeyed: `Chat` owns the WebSocket, so remounting it per
+            conversation would close and redial the socket on every switch.
+            Switching is a `subscribe` on the connection we already have. */}
         {view.name === "chat" && (
           <Chat
-            key={view.sessionId ?? `${view.providerId}:${view.cwd}`}
             providerId={view.providerId}
             cwd={view.cwd}
             sessionId={view.sessionId}

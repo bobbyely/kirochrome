@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { isProviderFault, latestUsage } from "@kirochrome/shared";
 import type {
   ElicitationAction,
@@ -54,12 +54,19 @@ export function Chat({
   /** Whether the view is following new output, or the reader has scrolled away. */
   const [following, setFollowing] = useState(true);
   const transcript = useRef<HTMLDivElement>(null);
-  const opened = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
+  /** The conversation already asked for, so a re-render does not ask twice. */
+  const attached = useRef<string | null>(null);
 
+  // This component is not remounted per conversation, so attaching is driven by
+  // the target changing rather than by mounting. A dropped socket re-subscribes
+  // itself from its high-water mark, which is why this does not run again on
+  // reconnect.
   useEffect(() => {
-    if (!connected || opened.current) return;
-    opened.current = true;
+    if (!connected) return;
+    const target = sessionId ?? `new:${providerId}:${cwd}`;
+    if (attached.current === target) return;
+    attached.current = target;
     if (sessionId) attachSession(sessionId);
     else if (providerId) openSession(providerId, cwd);
   }, [connected, openSession, attachSession, providerId, cwd, sessionId]);
@@ -79,11 +86,19 @@ export function Chat({
   const tail = rows.at(-1);
   const growth = `${rows.length}:${tail && "text" in tail ? tail.text.length : 0}`;
 
-  useEffect(() => {
+  /** Cleared on switch: the first scroll into a conversation must not animate. */
+  const landed = useRef(false);
+
+  useLayoutEffect(() => {
     // Only follow if the reader is already at the bottom. Yanking them back
     // while they are reading earlier output is worse than not scrolling.
-    if (following) bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [growth, following]);
+    if (!following) return;
+    // Smooth is for output arriving while you watch. On arrival it is a visible
+    // crawl from the top of the backlog, so the first scroll jumps instead —
+    // before paint, so the top is never shown.
+    bottom.current?.scrollIntoView({ behavior: landed.current ? "smooth" : "auto", block: "end" });
+    if (rows.length > 0) landed.current = true;
+  }, [growth, following, rows.length]);
 
   const onScroll = () => {
     const el = transcript.current;
@@ -97,8 +112,14 @@ export function Chat({
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   };
 
-  // A new conversation should not inherit the previous one's expanded window.
-  useEffect(() => setWindowSize(INITIAL_ROWS), [sessionId, providerId]);
+  // A conversation switched to should not inherit the previous one's expanded
+  // window, scroll position or reading state. The component survives the
+  // switch now, so this is reset rather than a fresh mount.
+  useEffect(() => {
+    setWindowSize(INITIAL_ROWS);
+    setFollowing(true);
+    landed.current = false;
+  }, [sessionId, providerId]);
 
   useEffect(() => {
     if (session?.live) onStarted?.();
@@ -192,6 +213,9 @@ export function Chat({
         </div>
       ) : (
         <Composer
+          // Keyed so a half-typed message and its pasted images do not follow
+          // the reader into the next conversation.
+          key={session?.id ?? "new"}
           session={session}
           busy={busy}
           commandOptions={commandOptions}

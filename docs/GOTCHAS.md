@@ -82,6 +82,15 @@ All of these were real races, found the hard way.
   and *that* session's in-memory log disagrees with the disk the browser
   replays from. Flush buffered text before setting the flag, or the last words
   go missing instead.
+- **A socket's subscriptions replace, they do not accumulate.** `subscribe`
+  used to push onto a list that only emptied when the connection closed, so a
+  socket that had viewed two conversations received both. It was invisible only
+  because switching used to redial the socket; the moment the connection
+  survives a switch, a background turn streams its events into whichever
+  transcript is open, interleaved by `seq` and indistinguishable from that
+  conversation's own output. The client filters incoming batches by `sessionId`
+  as a second line of defence, since a batch can already be in flight when the
+  switch happens.
 - **Every map of "requests waiting on a human" must be drained on *both* ways
   out** — a crashed agent and a deliberate `close()`. Elicitations are the
   second such map after permissions, which is why `releasePending()` exists
@@ -130,6 +139,18 @@ All of these were real races, found the hard way.
   now its own component for that reason, and `Message` and `MarkdownBody` are
   memoized as a backstop. Before adding fast-changing state, ask what else is
   rendered by the component you are putting it in.
+- **A `key` on the component that owns the socket rebuilds the socket.** `Chat`
+  calls `useChat`, so `key={sessionId}` meant every switch between conversations
+  closed the connection and redialled one — a visible pause before anything
+  could even be requested, for a server that was happy to serve the switch over
+  the connection already open. React keys are for resetting state; check what
+  else the component owns before reaching for one. What actually wanted
+  resetting was the composer's draft, which is keyed instead.
+- **Smooth scrolling is for output arriving while you watch.** Used on arrival
+  it renders the top of the backlog and then animates all the way down, which
+  reads as slowness rather than polish. Jump for the first scroll into a
+  conversation — from `useLayoutEffect`, so the top is never painted — and go
+  smooth only once the reader is following live output.
 
 ## Working on the repo
 

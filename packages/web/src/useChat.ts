@@ -72,6 +72,9 @@ export function useChat() {
           send({ type: "subscribe", sessionId: msg.session.id, sinceSeq: 0 });
           break;
         case "events": {
+          // A batch for the conversation just switched away from can still be
+          // in flight; its seqs would interleave into this transcript.
+          if (msg.sessionId !== sessionId.current) break;
           if (msg.events.length === 0) break;
           lastSeq.current = Math.max(lastSeq.current, ...msg.events.map((e) => e.seq));
           // De-duplicate by seq: a reconnect may overlap with what we hold.
@@ -82,6 +85,7 @@ export function useChat() {
           break;
         }
         case "session_state":
+          if (msg.session.id !== sessionId.current) break;
           setSession(msg.session);
           break;
         case "sessions":
@@ -126,11 +130,17 @@ export function useChat() {
     [send],
   );
 
-  /** Attaches to a session that already exists, live or restored from disk. */
+  /**
+   * Attaches to a session that already exists, live or restored from disk.
+   * Also used to switch conversations, which is why the previous one's summary
+   * is cleared: leaving it would show the old title and busy state until the
+   * new `session_state` arrives.
+   */
   const attachSession = useCallback(
     (id: string) => {
       sessionId.current = id;
       lastSeq.current = 0;
+      setSession(null);
       setEvents([]);
       setError(null);
       send({ type: "subscribe", sessionId: id, sinceSeq: 0 });

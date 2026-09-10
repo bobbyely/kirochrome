@@ -302,6 +302,18 @@ agent-supplied argument options landed after that.
 CI landed: `npm run typecheck` and `npm test` run on every push and pull
 request, and changes reach `main` through a PR that merges on green.
 
+**Switching conversations no longer rebuilds the WebSocket.** `Chat` owns the
+socket and was keyed on the session, so every switch closed the connection and
+redialled one before it could ask for anything — a wait in front of a server
+that was already able to serve the switch. The key is gone, attaching is driven
+by the target changing, and the socket now views one conversation at a time:
+`subscribe` replaces the previous session's listeners instead of adding to
+them, which the accumulating version made a latent cross-session leak. The
+first scroll into a conversation jumps rather than animating down from the top,
+which was the other half of what felt slow. **The feel is unverified** — still
+no browser on the dev box — but the leak and the switch over one socket are
+both tests now.
+
 **Typing no longer re-renders the transcript.** `draft` lived in `Chat`, which
 also rendered every row, so each keystroke re-rendered up to 60 rows and
 re-parsed the markdown in each of them. The composer — draft, images,
