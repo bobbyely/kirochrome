@@ -44,6 +44,16 @@ type Subscriber = (events: KcEvent[]) => void;
 /** What the UI sends back for an elicitation, before the schema is applied to it. */
 type ElicitationAnswer = { action: ElicitationAction; content?: Record<string, unknown> };
 
+/** Why an agent process ended, and whether that reflects on the provider. */
+export interface ExitReason {
+  /** False when we asked it to stop. */
+  unexpected: boolean;
+  code: number | null;
+  signal: string | null;
+  /** True only when the exit is evidence the provider itself is misconfigured. */
+  providerAtFault: boolean;
+}
+
 /**
  * One conversation: an agent subprocess, an ACP connection, and an append-only
  * event log.
@@ -57,7 +67,14 @@ export class Session {
   private readonly log: KcEvent[] = [];
   private readonly subscribers = new Set<Subscriber>();
   private readonly stateListeners = new Set<() => void>();
-  private readonly exitListeners = new Set<(unexpected: boolean) => void>();
+  private readonly exitListeners = new Set<(reason: ExitReason) => void>();
+  /**
+   * Set once a turn has come back from the agent.
+   *
+   * Proof that this provider is correctly configured, which is what stops a
+   * later crash from condemning it.
+   */
+  private completedATurn = false;
   private exited = false;
   /** Set while we are deliberately shutting the agent down, so its exit is not read as a crash. */
   private closing = false;
@@ -191,9 +208,7 @@ export class Session {
       // Release anything blocked on a human; nothing is listening any more.
       this.releasePending();
       this.notifyState();
-      // A crash says something about the provider; a shutdown we asked for does not.
-      const unexpected = !this.closing;
-      for (const fn of this.exitListeners) fn(unexpected);
+      for (const fn of this.exitListeners) fn(this.exitReason(code, signal));
     });
 
     const app = client({ name: "kirochrome" })
@@ -408,6 +423,8 @@ export class Session {
         prompt: blocks,
       })) as { stopReason?: string };
       this.flushText();
+      // The agent answered, so the provider works. See `exitReason`.
+      this.completedATurn = true;
       this.append({ type: "turn_end", stopReason: res.stopReason ?? "end_turn" });
     } catch (err) {
       this.flushText();
@@ -821,12 +838,40 @@ export class Session {
   }
 
   /**
-   * Notified when the agent process ends. `unexpected` is false when we asked
-   * it to stop, so a normal shutdown is not mistaken for a provider fault.
+   * Notified when the agent process ends.
+   *
+   * `unexpected` is false when we asked it to stop. `providerAtFault` is the
+   * narrower question — see `exitReason`.
    */
-  onExit(fn: (unexpected: boolean) => void): () => void {
+  onExit(fn: (reason: ExitReason) => void): () => void {
     this.exitListeners.add(fn);
     return () => this.exitListeners.delete(fn);
+  }
+
+  /**
+   * Whether this exit says anything about the *provider*, as opposed to this
+   * one conversation.
+   *
+   * Marking a provider stale removes it from the new-chat list until someone
+   * re-runs its check, so the evidence needs to be about the provider itself.
+   * An agent that completed a turn has demonstrated that the binary, the args
+   * and the login are all fine; crashing an hour later says the session died,
+   * not that the configuration is wrong — and it is contradicted by the session
+   * still running beside it on the same provider.
+   *
+   * A signal is somebody else's doing (an OOM kill, a stray `kill`), so only a
+   * non-zero exit code counts. Failures during startup never reach here: they
+   * throw out of `open`/`resume`, where `staleOnFailure` handles the codes that
+   * really do condemn a provider.
+   */
+  private exitReason(code: number | null, signal: string | null): ExitReason {
+    const unexpected = !this.closing;
+    return {
+      unexpected,
+      code,
+      signal,
+      providerAtFault: unexpected && !this.completedATurn && code !== null && code !== 0,
+    };
   }
 
   /** Notified when session metadata changes outside the event stream. */

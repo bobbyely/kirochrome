@@ -167,6 +167,68 @@ describe("concurrent resume", () => {
   });
 });
 
+describe("a dying agent", () => {
+  const dying = {
+    id: "dying",
+    name: "Dying",
+    command: process.execPath,
+    args: [join(here, "..", "..", "..", "spike", "dying-agent.mjs")],
+  };
+
+  /** A provider that has passed its check, which is what staleness undoes. */
+  const markChecked = (id) =>
+    store.saveCheck({
+      providerId: id,
+      status: "ok",
+      stage: "capabilities",
+      stages: [],
+      checkedAt: Date.now(),
+      durationMs: 1,
+    });
+
+  it("does not condemn the provider for one conversation crashing", async () => {
+    markChecked("dying");
+    const first = await sessions.open(dying, "/tmp");
+    // A completed turn proves the provider itself is configured correctly.
+    await first.prompt("hello");
+
+    const second = await sessions.open(dying, "/tmp");
+    await second.prompt("hello");
+
+    // The mock exits 1 shortly after connecting; wait for both to die.
+    await new Promise((r) => setTimeout(r, 1200));
+    assert.equal(first.summary().live, false, "the crash is still noticed");
+
+    assert.equal(
+      store.lastCheck("dying").status,
+      "ok",
+      "a crashed session must not remove the provider from the new-chat list",
+    );
+  });
+
+  it("does condemn a provider whose agent dies before it ever answers", async () => {
+    markChecked("dying");
+    const session = await sessions.open(dying, "/tmp");
+    // No prompt: nothing has shown this provider can do its job.
+    await new Promise((r) => setTimeout(r, 1200));
+
+    assert.equal(session.summary().live, false);
+    assert.equal(
+      store.lastCheck("dying").status,
+      "stale",
+      "an agent that never completed a turn is real evidence against the provider",
+    );
+  });
+
+  it("does not condemn a provider for a shutdown we asked for", async () => {
+    markChecked("mock");
+    const session = await sessions.open(provider, "/tmp");
+    session.close();
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal(store.lastCheck("mock").status, "ok");
+  });
+});
+
 describe("compaction", () => {
   it("is advertised, so the agent is allowed to report it", async () => {
     const session = await sessions.open(provider, "/tmp");
