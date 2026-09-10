@@ -71,30 +71,76 @@ looked missing. Kiro also persists the choice in `~/.kiro/settings/cli.json`, an
 
 ### What is left
 
-1. **A side drawer for file and code changes.** A pull-out panel listing every
-   file the agent has touched in this conversation, with its diff — rather than
-   hunting through the transcript for the tool call that changed something.
+#### 1. The side pane — changes and files
 
-   Most of the data is already there: `ToolCallContent` diffs carry `path`,
-   `oldText` and `newText`, and `timeline.ts` extracts them. The work is
-   aggregating per file across the whole log (last write wins per path, with a
-   running +/− count) and the panel itself. Kirodex does this as `DiffPanel` and
-   `ChangedFilesSummary`.
+A drawer that slides over the transcript, with two tabs. They are one surface,
+not two features: both answer "what is in this project right now".
 
-   Decide when building it: reported diffs only, or read the working tree. The
-   former needs no filesystem access and stays honest about what the agent
-   claims it did. It survives a restart either way, since the diffs are in the
-   event log.
+**Changes.** Every file the agent has touched this conversation, with its diff,
+rather than hunting the transcript for the tool call that did it. The data is
+already there — `ToolCallContent` diffs carry `path`, `oldText`, `newText`, and
+`timeline.ts` extracts them. The work is aggregating per file across the log
+(last write wins per path, with a running +/− count) and the panel.
 
-2. **Verify the design pass on a real screen.** The terminal-noir theme, the K
-   spinner and the theme switch were all built without a browser to look at.
-   Contrast of the muted greys on near-black, and whether the accent-on-black
-   is comfortable for hours, are judgements that need eyes.
+*Decide:* reported diffs only, or read the working tree. Reported diffs need no
+filesystem access and stay honest about what the agent claims it did; the tree
+shows ground truth but can disagree with the transcript. Either survives a
+restart, since the diffs are in the event log.
 
-3. **True virtualisation**, if the windowed transcript proves insufficient.
+**Files.** Browse and read files in the session's working directory. `fs` is
+implemented now, so this is a tree plus the syntax highlighting the tool cards
+already use. Read-only to begin with — editing invites a race with the agent.
 
-4. **Whatever the work machine turns up once Kiro is actually driving it** —
-   including the one protocol question still open since phase 0, below.
+#### 2. `session/list` — conversations the agent already has
+
+Claude Code advertises `sessionCapabilities: {list, resume, fork, delete,
+close}` and keeps its own history, as does Kiro. Listing those lets you open a
+conversation started in the terminal and continue it in the browser.
+
+The biggest capability gain per unit of work on this list, and it changes what
+KiroChrome is: a view onto your agent rather than a separate silo beside it.
+
+*Note:* those sessions have no KiroChrome event log, so the transcript comes
+from the agent's own replay on `session/load`. Our log then starts from the
+point we attached — worth being explicit about in the UI rather than pretending
+we have history we do not.
+
+#### 3. `session/fork` — branch a conversation
+
+"Try a different approach from here" without losing the original. The event log
+makes the branch point natural to show, and neither CLI exposes this well.
+
+#### 4. `elicitation/create` — structured questions
+
+The agent asks a real multiple-choice question and the user clicks an answer,
+instead of asking in prose and hoping the reply is parseable. The
+permission-prompt machinery already does exactly this shape of round trip, so
+it is mostly reuse. Kirodex does it as `QuestionCards`.
+
+#### 5. `@` file mentions in the composer
+
+Type `@` to complete against the working directory and attach file contents as
+`resource_link` blocks. The completion machinery built for slash commands
+generalises to this, and `fs` is now implemented.
+
+#### 6. Compaction
+
+Kiro has `/compact` and ACP has `compaction_update`. Today the context meter
+turns amber and the user is left to deal with it. At minimum, surface the
+compaction status the protocol already reports.
+
+#### Deliberately not doing
+
+- **`nes/*` (next edit suggestions)** and **`document/did*`** — both assume an
+  editor with a cursor and a focused buffer. A browser chat is not that, and
+  faking it would be worse than leaving it to an actual editor integration.
+
+#### Smaller, still open
+
+- Verify the design pass on a real screen: the theme, the K spinner and the
+  switch were all built without a browser to look at.
+- True virtualisation, if the windowed transcript proves insufficient.
+- Whatever the work machine turns up once Kiro is actually driving it.
 
 ### Done since the roadmap was written
 
