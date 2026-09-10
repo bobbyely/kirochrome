@@ -107,11 +107,20 @@ const elicitationAction: Field = {
   expected: "'accept', 'decline' or 'cancel'",
   check: (v) => v === "accept" || v === "decline" || v === "cancel",
 };
+/**
+ * An attachment's `mime` is echoed back as its `Content-Type` when the browser
+ * fetches it, so "any string" here was a way to serve same-origin script from
+ * our own port. SVG is excluded for the same reason: it is a document that can
+ * carry script, not an inert raster.
+ */
+export const isImageMime = (v: unknown): v is string =>
+  typeof v === "string" && /^image\/[a-z0-9.+-]+$/.test(v) && v !== "image/svg+xml";
+
 const images: Field = {
-  expected: "an array of { mime, data } objects",
+  expected: "an array of { mime, data } objects, each mime an image type other than SVG",
   check: (v) =>
     Array.isArray(v) &&
-    v.every((img) => isRecord(img) && typeof img.mime === "string" && typeof img.data === "string"),
+    v.every((img) => isRecord(img) && isImageMime(img.mime) && typeof img.data === "string"),
 };
 const elicitationContent: Field = {
   expected: "an object of strings, numbers, booleans or string arrays",

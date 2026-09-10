@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
-import { kcError, type KcError } from "@kirochrome/shared";
+import { isImageMime, kcError, type KcError } from "@kirochrome/shared";
 import type { AgentSessionsResponse, ProviderView } from "@kirochrome/shared";
 import { listAgentSessions } from "./agentSessions.js";
 import { checkProvider } from "./check.js";
@@ -13,19 +13,26 @@ import { attachWebSocket } from "./ws.js";
 
 const HOST = "127.0.0.1";
 
+const VITE_PORT = 5173;
+
 /**
  * Any page in the user's browser can send requests to a local server, so we
  * check Origin explicitly rather than relying on binding to loopback.
+ *
+ * Vite's dev origin is trusted only when the dev runner asks for it. It used to
+ * be in this list unconditionally, including in a built install — and since
+ * 5173 is Vite's default, *any* other project the user happened to be running
+ * could reach this API. `PATCH /api/providers/:id` chooses which binary we
+ * spawn, so that was a page on one origin choosing what runs on the machine.
  */
-function originAllowed(req: IncomingMessage, port: number): boolean {
+export function originAllowed(req: IncomingMessage, port: number): boolean {
   const origin = req.headers.origin;
   if (origin === undefined) return true; // same-origin fetch or curl
-  const allowed = new Set([
-    `http://localhost:${port}`,
-    `http://127.0.0.1:${port}`,
-    "http://localhost:5173", // vite dev server
-    "http://127.0.0.1:5173",
-  ]);
+  const allowed = new Set([`http://localhost:${port}`, `http://127.0.0.1:${port}`]);
+  if (process.env.KIROCHROME_DEV === "1") {
+    allowed.add(`http://localhost:${VITE_PORT}`);
+    allowed.add(`http://127.0.0.1:${VITE_PORT}`);
+  }
   return allowed.has(origin);
 }
 
@@ -119,7 +126,12 @@ async function handleApi(
 
     const body = Buffer.from(stored.data, "base64");
     res.writeHead(200, {
-      "content-type": stored.mime,
+      // Rows predating the boundary check can hold any string, and this is the
+      // one place stored bytes are served back to the browser: re-check rather
+      // than trust the database, and forbid sniffing so a mislabelled body is
+      // not promoted to script.
+      "content-type": isImageMime(stored.mime) ? stored.mime : "application/octet-stream",
+      "x-content-type-options": "nosniff",
       "content-length": String(body.length),
       // Immutable: attachments are never rewritten once stored.
       "cache-control": "private, max-age=31536000, immutable",

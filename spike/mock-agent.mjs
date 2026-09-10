@@ -136,6 +136,23 @@ const app = agent({ name: "mock-agent" })
       return { stopReason: "end_turn" };
     }
 
+    // A terminal the agent never releases, followed by a crash. Nothing
+    // references that process group afterwards, so if the client does not
+    // release it on the way out, it survives the session and the server both.
+    // The command records its own pid, since only the client knows it.
+    if (params.prompt?.[0]?.text === "leak-then-die") {
+      const dir = process.env.KIROCHROME_DATA_DIR ?? "/tmp";
+      await client.request("terminal/create", {
+        sessionId: params.sessionId,
+        command: "sh",
+        args: ["-c", `echo $$ > "${dir}/leak.pid"; sleep 9993`],
+      });
+      // After the turn completes, so this is a crash and not a verdict on the
+      // provider — see the exit-reason gotcha.
+      setTimeout(() => process.exit(1), 100);
+      return { stopReason: "end_turn" };
+    }
+
     // Context compaction, which the client only sees if it advertised support.
     if (params.prompt?.[0]?.text === "compact") {
       if (!compactionAllowed) {

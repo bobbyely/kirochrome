@@ -1,7 +1,7 @@
 // End-to-end against the mock agent: the behaviours that were previously only
 // verified by throwaway scripts.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +26,25 @@ after(() => {
   sessions?.closeAll();
   rmSync(dir, { recursive: true, force: true });
 });
+
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** Polls until `fn()` is true, or gives up — for state a process changes. */
+async function until(fn, timeoutMs = 3_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (fn()) return true;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return fn();
+}
 
 /** Answers permission prompts so a turn can complete unattended. */
 function autoApprove(session) {
@@ -226,6 +245,24 @@ describe("a dying agent", () => {
     session.close();
     await new Promise((r) => setTimeout(r, 400));
     assert.equal(store.lastCheck("mock").status, "ok");
+  });
+});
+
+describe("an agent that dies on its own", () => {
+  it("has its terminals released, so its commands do not outlive it", async () => {
+    const pidFile = join(dir, "leak.pid");
+    const session = await sessions.open(provider, "/tmp");
+
+    // The mock creates a terminal, never releases it, and exits a moment later.
+    await session.prompt("leak-then-die");
+    await until(() => existsSync(pidFile));
+    const pid = Number(readFileSync(pidFile, "utf8").trim());
+
+    assert.ok(pid > 0, "the leaked terminal should have recorded its own pid");
+    // Dropping the session from the registry is not enough: nothing else holds
+    // a reference to this process group, so releasing it is the only way it
+    // ever dies. Before the fix it outlived the session and the server both.
+    assert.ok(await until(() => !alive(pid)), "a crashed agent's terminals must be killed, not orphaned");
   });
 });
 

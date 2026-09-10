@@ -228,9 +228,41 @@ a skipped review.
 
 Wrong, not deferred. Debt below is a decision; this is a defect.
 
-None open. The last one — a single agent exit condemning its whole
-provider — is fixed and now lives as a trap in
-[GOTCHAS.md](GOTCHAS.md#processes), which is where a fixed bug belongs.
+Found by the first review — see [REVIEWS.md](REVIEWS.md) — and left open. The
+three it fixed (the Origin allowlist, terminals surviving a crashed agent, the
+missing session RPC timeouts) are traps in [GOTCHAS.md](GOTCHAS.md) now, which
+is where a fixed bug belongs.
+
+- **`updateProvider` writes back the validated list, erasing what was dropped.**
+  `config.ts:99`. `loadConfig` deliberately skips a malformed provider so the
+  setup page still loads — but saving from that view makes the omission
+  permanent, so correcting one provider's path in the UI silently deletes a
+  hand-edited entry that had a typo in it. A lenient read is only safe while
+  nothing writes back from it.
+- **A read failure while serving a static file kills the server.**
+  `http.ts:193`. `createReadStream(...).pipe(res)` has no `error` listener, and
+  an unhandled `'error'` is fatal — a file that vanishes between the
+  `existsSync` check and the read takes every running turn down with it.
+- **Renaming an archived conversation un-archives it.** `session.ts:839`.
+  `persistMeta()` hardcodes `status: "active"`, so any metadata write puts the
+  conversation back in the sidebar.
+- **A turn killed mid-flight leaves no `turn_end`.** A restart, or an agent
+  dying during a turn, ends the transcript mid-answer with nothing saying why
+  and leaves `turn_start` unmatched in the log — six of them in one development
+  database. `runTurn`'s catch appends an error but never closes the turn, and
+  `close()` sets `closing` before anything else can. Item 5 above needs exactly
+  this event, so the two are worth doing together.
+- **Agent-supplied diff paths are interpolated raw into the export's HTML.**
+  `export.ts:43`. The export is a local Markdown file, so this is malformed
+  output rather than a live injection — but the path comes from the agent.
+- **`outputByteLimit` is unvalidated and counts UTF-16 units.**
+  `terminals.ts:138`. An agent passing `0` or a negative number silently empties
+  the whole output buffer instead of being told the value is wrong.
+- **Orphan reaping is a silent no-op on Windows.** `processLedger.ts:36` shells
+  out to `ps` for a start time, which does not exist there, so every ledger row
+  records a blank one and `reapOrphans` declines them all. Windows is
+  best-effort by design — but doing nothing quietly is worse than not
+  supporting it.
 
 #### Recorded debt
 

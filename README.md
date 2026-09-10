@@ -138,7 +138,10 @@ that error names each problem. Delete the file to get the defaults back.
 
 `KIROCHROME_DATA_DIR` overrides it. `KIROCHROME_PORT` changes the port.
 `KIROCHROME_TRACE=1` logs every JSON-RPC frame to a JSONL file in the data
-directory.
+directory. `KIROCHROME_DEV=1` additionally trusts Vite's origin on port 5173 —
+`npm run dev` sets it for you, and a normal run should not: 5173 is Vite's
+default port, so trusting it means trusting any project you happen to have
+running there.
 
 If a provider fails, the setup page names the rung it failed on and what to do
 about it. Two common ones:
