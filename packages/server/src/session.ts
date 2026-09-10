@@ -22,6 +22,7 @@ import { coerceContent, toFields } from "./elicitation.js";
 import { readTextFile, writeTextFile } from "./fs.js";
 import type { Store } from "./store.js";
 import { TerminalRegistry } from "./terminals.js";
+import { titleFromMessage } from "./title.js";
 
 /**
  * The older per-kind config methods, by option id.
@@ -399,10 +400,14 @@ export class Session {
 
     this.busy = true;
     this.notifyState();
-    // First message names the session, so the list is browsable.
+    // First message names the session, so the list is browsable. Only until the
+    // agent sends a title of its own, which is better and supersedes this.
     if (this.title === null && !this.titleLocked) {
-      this.title = text.length > 60 ? `${text.slice(0, 57)}…` : text;
-      this.persistMeta();
+      const derived = titleFromMessage(text);
+      if (derived) {
+        this.title = derived;
+        this.persistMeta();
+      }
     }
     this.append(
       attachments.length > 0 ? { type: "user_message", text, attachments } : { type: "user_message", text },
