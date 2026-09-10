@@ -218,10 +218,18 @@ cd ../kirochrome-worktrees/<topic>
 #   ... work, commit ...
 git push -u origin <topic>
 gh pr create
-gh pr merge --rebase --delete-branch   # after the check passes
-cd -                                   # back to the main checkout
+cd -                                   # back to the main checkout, and stay there
+gh pr merge <n> --rebase               # after the check passes
 npm run wt -- done <topic>             # removes the worktree and the branch
 ```
+
+**Merge from the main checkout, not from the worktree.** `gh pr merge` wants to
+update your local `main` afterwards, and cannot: `main` is checked out in
+another worktree, so it fails with `'main' is already used by worktree at …` —
+*after* merging on GitHub, leaving a merged PR and a half-finished cleanup.
+Drop `--delete-branch` as well; `wt done` deletes the local branch and prunes
+the remote-tracking ref, which is the part `--delete-branch` cannot do here
+anyway.
 
 `npm run wt -- list` shows every worktree with its PR state. `prune` sweeps
 every merged one at once, and prints what it would remove unless given `--yes`.

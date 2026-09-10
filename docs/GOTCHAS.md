@@ -116,6 +116,11 @@ All of these were real races, found the hard way.
   the command lists nothing — branches accumulate locally looking unmerged, and
   the pile is indistinguishable from work still in flight. Ask GitHub instead
   (`gh pr view <branch> --json state`), which is what `npm run wt -- prune` does.
+- **Do not run `gh pr merge` from inside a worktree.** It updates your local
+  `main` after merging, and cannot: the main checkout holds that branch, so it
+  fails with `'main' is already used by worktree at …`. The merge on GitHub has
+  already happened by then, so you are left with a merged PR, an error, and no
+  cleanup. `cd` to the main checkout and merge from there.
 - **A branch deleted on the remote still shows in `git branch -r`.** The
   remote-tracking ref is a local cache; `gh pr merge --delete-branch` cannot
   touch it. `git fetch --prune` clears it, and `wt done` runs that for you.
