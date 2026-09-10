@@ -158,6 +158,11 @@ Before you call anything finished:
   actually ships. Node's type stripping does not rewrite `.js` specifiers to
   `.ts`, which is why these are plain `.mjs` importing the build.
 
+**CI runs `npm run typecheck` and `npm test` on every push to `main` and every
+pull request** (`.github/workflows/ci.yml`, Node pinned from `.nvmrc`). It
+installs `spike/` separately, because that is where the mock agent's copy of the
+ACP SDK lives and the server suite spawns it.
+
 `session.test.mjs` drives the real mock agent over ACP, so it covers the
 behaviours that are easy to break: delta coalescing, queue ordering, replay
 suppression on resume, and defaults surviving a withdrawn option.
