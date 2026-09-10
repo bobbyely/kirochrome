@@ -35,6 +35,8 @@ export type Row =
       answer: { action: ElicitationAction; content?: Record<string, ElicitationValue> } | null;
     }
   | { kind: "note"; seq: number; label: string }
+  /** Where a conversation the agent owns was taken over: history above, our log below. */
+  | { kind: "adopted"; seq: number; providerName: string }
   /** Where the agent replaced conversation history with a summary. */
   | {
       kind: "compaction";
@@ -247,6 +249,20 @@ export function buildRows(events: KcEvent[]): Row[] {
         }
 
         if (updateCategory(u.sessionUpdate) === "state") break; // header state, not transcript
+
+        // An adopted conversation's own history arrives as ACP updates rather
+        // than as our `user_message` events, so what the user said is a
+        // `user_message_chunk`. Without this it would render as an unnamed
+        // note, or worse, look like something the agent said.
+        if (u.sessionUpdate === "user_message_chunk") {
+          const text = u.content?.text ?? "";
+          if (!text) break;
+          const last = rows.at(-1);
+          if (last?.kind === "user") last.text += text;
+          else rows.push({ kind: "user", seq: event.seq, text, attachments: [] });
+          break;
+        }
+
         if (u.sessionUpdate === "agent_thought_chunk") {
           const last = rows.at(-1);
           const text = u.content?.text ?? "";
@@ -270,6 +286,10 @@ export function buildRows(events: KcEvent[]): Row[] {
 
       case "resumed":
         rows.push({ kind: "note", seq: event.seq, label: "Agent re-attached" });
+        break;
+
+      case "adopted":
+        rows.push({ kind: "adopted", seq: event.seq, providerName: event.providerName });
         break;
 
       case "agent_exited":

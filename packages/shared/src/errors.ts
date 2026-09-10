@@ -11,6 +11,7 @@ export const KC_ERROR_CODES = [
   "AGENT_PROTOCOL_MISMATCH",
   "AGENT_AUTH_REQUIRED",
   "AGENT_SESSION_FAILED",
+  "AGENT_CANNOT_ADOPT",
   "RPC_TIMEOUT",
   "RPC_ERROR",
   "SESSION_NOT_LIVE",
@@ -69,6 +70,8 @@ export const REMEDIATION: Record<KcErrorCode, string> = {
     "The agent needs you to log in before it will start a session. Use one of the authentication methods listed below.",
   AGENT_SESSION_FAILED:
     "The handshake succeeded but the agent refused to open a session. The stderr output below usually explains why.",
+  AGENT_CANNOT_ADOPT:
+    "This agent can list its own conversations but cannot reopen one. ACP gates listing on `sessionCapabilities.list` and reopening on the separate `loadSession` capability, and this agent advertises only the first. Continue that conversation in the agent's own CLI, or start a new chat here.",
   RPC_TIMEOUT: "The agent stopped responding. Re-run the check, and restart the agent if it persists.",
   RPC_ERROR: "The agent returned an error. See the details below.",
   SESSION_NOT_LIVE:

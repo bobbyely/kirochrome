@@ -11,6 +11,7 @@ import {
 } from "@kirochrome/shared";
 import { resolveProvider, spawnAgent, type AgentProcess } from "./agentProcess.js";
 import { defaultCwd } from "./session.js";
+import { withTimeout } from "./timeout.js";
 
 /** JSON-RPC code an ACP agent returns when it needs the client to authenticate. */
 const AUTH_REQUIRED = -32000;
@@ -238,19 +239,4 @@ function rpcDetail(err: unknown): unknown {
   const e = err as { code?: unknown; message?: unknown; data?: unknown };
   if (e?.code === undefined && e?.data === undefined) return undefined;
   return { code: e.code, message: e.message, data: e.data };
-}
-
-/** Every RPC gets a timeout. A hung request must become an error, never a spinner. */
-async function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: () => KcError): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(onTimeout()), ms);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
 }

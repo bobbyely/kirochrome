@@ -86,6 +86,59 @@ export interface UpdateProviderRequest {
   command?: string;
   args?: string[];
 }
+
+/**
+ * One conversation the *agent* is holding, from `session/list`.
+ *
+ * Narrowed from ACP's `SessionInfo`: the schema requires `sessionId` and `cwd`
+ * and makes the rest optional. This is not a KiroChrome conversation — it has
+ * no event log here until it is adopted.
+ */
+export interface AgentSessionInfo {
+  sessionId: string;
+  cwd: string;
+  title: string | null;
+  /** ISO 8601, as the agent reported it. Never re-parsed on the server. */
+  updatedAt: string | null;
+}
+
+export interface AgentSessionsResponse {
+  /** False when the agent did not advertise `sessionCapabilities.list`. */
+  supported: boolean;
+  sessions: AgentSessionInfo[];
+  /** True when the agent had more pages than we were willing to fetch. */
+  truncated: boolean;
+  /**
+   * Agent session ids already adopted, mapped to the KiroChrome conversation
+   * that holds them — so the UI offers "open" instead of adopting again.
+   */
+  adopted: Record<string, string>;
+}
+
+/**
+ * Whether the agent advertised `session/list`.
+ *
+ * `sessionCapabilities` sits inside `agentCapabilities` in the `initialize`
+ * response, and each sub-capability is an *object* — `{}` means supported —
+ * rather than a boolean, so this tests presence and not the truth of a flag.
+ * Reads the capabilities the check ladder already recorded, so the chat flow
+ * trusts the check rather than spawning an agent to re-ask (invariant 11).
+ */
+export function advertisesSessionList(capabilities: unknown): boolean {
+  const caps = capabilities as { sessionCapabilities?: { list?: unknown } } | null | undefined;
+  return caps?.sessionCapabilities?.list != null;
+}
+
+/**
+ * Whether the agent advertised `session/load`, which is what adopting needs.
+ *
+ * Deliberately separate from the above: ACP still gates loading on the
+ * top-level `loadSession` boolean, so an agent can advertise one without the
+ * other. See docs/PROTOCOL.md.
+ */
+export function advertisesLoadSession(capabilities: unknown): boolean {
+  return (capabilities as { loadSession?: unknown } | null | undefined)?.loadSession === true;
+}
 export interface CheckResponse {
   result: ProviderCheckResult;
 }

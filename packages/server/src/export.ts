@@ -21,8 +21,12 @@ export function toMarkdown(record: SessionRecord, events: KcEvent[]): string {
   // Tool calls fold by id, exactly as the UI does, so the export reads like
   // the transcript rather than like the raw log.
   const toolTitles = new Map<string, string>();
+  /** Set while the last event was a replayed user chunk, so the next extends it. */
+  let afterUserChunk = false;
 
   for (const event of events) {
+    const continuing = afterUserChunk;
+    afterUserChunk = isUserChunk(event);
     switch (event.type) {
       case "user_message":
         lines.push(`## You`, "", event.text, "");
@@ -61,11 +65,41 @@ export function toMarkdown(record: SessionRecord, events: KcEvent[]): string {
         lines.push(`> Agent exited (${event.signal ?? `code ${event.code}`})`, "");
         break;
 
+      case "adopted":
+        lines.push(
+          `> Adopted from ${event.providerName}. Everything above was replayed by the agent ` +
+            `rather than logged by KiroChrome.`,
+          "",
+        );
+        break;
+
+      // An adopted conversation's history arrives as ACP updates, so what the
+      // user said is a chunk rather than a `user_message`. Without this the
+      // export shows only the agent's half of a conversation we took over.
+      case "agent_update": {
+        const update = event.update as { sessionUpdate?: string; content?: { text?: string } };
+        if (update.sessionUpdate !== "user_message_chunk") break;
+        const text = update.content?.text ?? "";
+        if (!text) break;
+        // Chunks split mid-sentence, so a continuation extends the paragraph
+        // already written rather than starting a new one.
+        const body = lines.length - 2;
+        if (continuing && body >= 0) lines[body] += text;
+        else lines.push(`## You`, "", text, "");
+        break;
+      }
+
       // turn markers and state updates carry no transcript content
     }
   }
 
   return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()}\n`;
+}
+
+/** A replayed user message, which arrives as an ACP update rather than an event of ours. */
+function isUserChunk(event: KcEvent): boolean {
+  if (event.type !== "agent_update") return false;
+  return (event.update as { sessionUpdate?: string }).sessionUpdate === "user_message_chunk";
 }
 
 function collectDiffs(raw: unknown): Array<{ path: string; body: string }> {

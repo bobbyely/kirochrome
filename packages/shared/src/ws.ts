@@ -11,6 +11,13 @@ import type {
 /** Browser → server. */
 export type ClientMessage =
   | { type: "open"; providerId: string; cwd?: string }
+  /**
+   * Take over a conversation the agent already has, found via `session/list`.
+   *
+   * Answered with `session_opened`, exactly like `open` — from the browser's
+   * point of view the difference is only where the transcript came from.
+   */
+  | { type: "adopt"; providerId: string; agentSessionId: string; cwd: string; title?: string }
   | { type: "subscribe"; sessionId: string; sinceSeq: number }
   | {
       type: "prompt";
@@ -130,6 +137,9 @@ interface MessageSpec {
  */
 const CLIENT_MESSAGE_SPECS: Record<ClientMessage["type"], MessageSpec> = {
   open: { required: { providerId: str }, optional: { cwd: str } },
+  // `cwd` is required here, unlike `open`: it is the listed session's own
+  // directory as the agent reported it, not a choice the user is making.
+  adopt: { required: { providerId: str, agentSessionId: str, cwd: str }, optional: { title: str } },
   subscribe: { required: { sessionId: str, sinceSeq: num } },
   prompt: { required: { sessionId: str, text: str }, optional: { images } },
   cancel: { required: { sessionId: str } },

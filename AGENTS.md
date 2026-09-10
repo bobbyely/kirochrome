@@ -99,12 +99,14 @@ Breaking one of these is a design regression, not a style nit.
 | File | Job |
 |---|---|
 | `index.ts` | Boot: reap orphans *once*, then serve |
-| `http.ts` | JSON API (providers, checks, search, export) + SPA, with the `Origin` allowlist |
+| `http.ts` | JSON API (providers, checks, the agent's own sessions, search, export) + SPA, with the `Origin` allowlist |
 | `ws.ts` | The socket at `/ws`; client message dispatch |
 | `sessionManager.ts` | Session registry and single-flight resume |
 | `session.ts` | **The big one.** ACP connection, event log, turns, queue, permissions, config options, commands |
 | `agentProcess.ts` | Spawn in a process group, stdio → `ndJsonStream`, stderr ring buffer |
 | `check.ts` | The seven-rung provider check ladder |
+| `agentSessions.ts` | The `session/list` probe: conversations an agent holds of its own |
+| `timeout.ts` | `withTimeout` — invariant 10, in one place rather than three |
 | `config.ts` | Provider registry in `config.json` |
 | `configOptions.ts` | Merges `configOptions` with the legacy `models`/`modes` |
 | `elicitation.ts` | Flattens an elicitation's JSON Schema into typed fields |

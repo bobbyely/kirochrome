@@ -417,3 +417,79 @@ describe("provider defaults", () => {
     third.close();
   });
 });
+
+describe("adopting a conversation the agent already has", () => {
+  const listed = { agentSessionId: "cli-1", cwd: "/tmp/one", title: "First" };
+
+  it("captures the agent's replay, because our log is the only place it can live", async () => {
+    const session = await sessions.adopt(provider, listed);
+
+    const log = session.eventsSince(0);
+    // The replay is discarded on a resume, where we already hold the history.
+    // Here we hold nothing, so it is the transcript and must be appended.
+    const agent = log.filter((e) => e.type === "agent_text").map((e) => e.text);
+    assert.ok(agent.some((t) => t.includes("OLD HISTORY")), `expected the replay, got ${JSON.stringify(agent)}`);
+
+    // The user's half of it arrives as an ACP update, not as a user_message.
+    const asked = log.filter(
+      (e) => e.type === "agent_update" && e.update.sessionUpdate === "user_message_chunk",
+    );
+    assert.equal(asked.length, 1, "the replayed user message must be kept too");
+
+    // The seam comes last: agent history above it, KiroChrome's log below.
+    const seam = log.at(-1);
+    assert.equal(seam.type, "adopted");
+    assert.equal(seam.agentSessionId, "cli-1");
+    assert.equal(seam.providerName, "Mock");
+
+    // Append-only, and durable: the captured replay is on disk like anything else.
+    assert.deepEqual(log.map((e) => e.seq), log.map((_, i) => i + 1));
+    assert.deepEqual(store.eventsSince(session.id, 0).map((e) => e.seq), log.map((e) => e.seq));
+
+    assert.equal(session.summary().live, true);
+    assert.equal(session.summary().title, "First", "the listed title names the conversation");
+    session.close();
+  });
+
+  it("reopens the same conversation rather than adopting it twice", async () => {
+    const first = await sessions.adopt(provider, listed);
+    const again = await sessions.adopt(provider, listed);
+    assert.equal(again.id, first.id, "one agent session must never have two logs appending to it");
+    first.close();
+  });
+
+  it("does not duplicate the captured history when it is later resumed", async () => {
+    const session = await sessions.adopt(provider, { ...listed, agentSessionId: "cli-2" });
+    const id = session.id;
+    const captured = session.eventsSince(0).length;
+    session.close();
+
+    // A restart, then a reopen: this time the replay must be discarded, because
+    // the adoption already captured it.
+    const revived = new SessionManager(store);
+    const resumed = await revived.resume(id, provider);
+    const replays = resumed
+      .eventsSince(0)
+      .filter((e) => e.type === "agent_text" && e.text.includes("OLD HISTORY"));
+    assert.equal(replays.length, 1, "the history must appear once, not once per reopen");
+    assert.equal(
+      resumed.eventsSince(0).length,
+      captured + 1,
+      "a resume adds only its own marker",
+    );
+    revived.closeAll();
+  });
+
+  it("refuses when the agent can list but not load", async () => {
+    // ACP gates the two on different capabilities, so this really can happen.
+    const cannotLoad = { ...provider, id: "mock-no-load", env: { MOCK_NO_LOAD_SESSION: "1" } };
+    await assert.rejects(
+      () => sessions.adopt(cannotLoad, { ...listed, agentSessionId: "cli-3" }),
+      (err) => {
+        assert.equal(err.code, "AGENT_CANNOT_ADOPT");
+        assert.ok(err.remediation);
+        return true;
+      },
+    );
+  });
+});

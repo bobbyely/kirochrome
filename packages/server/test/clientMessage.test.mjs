@@ -62,6 +62,7 @@ describe("inbound frame validation", () => {
       ['{"type":"set_auto_approve","sessionId":"s1","enabled":"yes"}', /'enabled' must be a boolean/],
       ['{"type":"archive_session","sessionId":"s1","archived":1}', /'archived' must be a boolean/],
       ['{"type":"search","query":["x"]}', /'query' must be a string/],
+      ['{"type":"adopt","providerId":"mock","cwd":"/tmp"}', /'adopt' is missing 'agentSessionId'/],
       ['{"type":"subscribe","sessionId":"s1","sinceSeq":"0"}', /'sinceSeq' must be a finite number/],
       [
         '{"type":"elicitation_response","sessionId":"s1","requestId":"r","action":"maybe"}',
@@ -97,6 +98,8 @@ describe("inbound frame validation", () => {
     const valid = [
       { type: "open", providerId: "mock" },
       { type: "open", providerId: "mock", cwd: "/tmp" },
+      { type: "adopt", providerId: "mock", agentSessionId: "cli-1", cwd: "/tmp" },
+      { type: "adopt", providerId: "mock", agentSessionId: "cli-1", cwd: "/tmp", title: "First" },
       { type: "subscribe", sessionId: "s1", sinceSeq: 0 },
       { type: "prompt", sessionId: "s1", text: "hi" },
       { type: "prompt", sessionId: "s1", text: "hi", images: [{ mime: "image/png", data: "aa" }] },

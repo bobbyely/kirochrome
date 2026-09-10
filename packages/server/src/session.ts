@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { client, PROTOCOL_VERSION, type ClientConnection } from "@agentclientprotocol/sdk";
 import {
+  advertisesLoadSession,
   causeOf,
   kcError,
   type KcError,
@@ -23,6 +24,7 @@ import { readTextFile, writeTextFile } from "./fs.js";
 import type { Store } from "./store.js";
 import { TerminalRegistry } from "./terminals.js";
 import { titleFromMessage } from "./title.js";
+import { withTimeout } from "./timeout.js";
 
 /**
  * The older per-kind config methods, by option id.
@@ -41,6 +43,18 @@ const TEXT_FLUSH_MS = 250;
 const HANDSHAKE_TIMEOUT_MS = 60_000;
 
 type Subscriber = (events: KcEvent[]) => void;
+
+interface ConnectOptions {
+  /** Re-attach to this agent session with `session/load` instead of opening a new one. */
+  loadSessionId?: string;
+  /**
+   * Append the agent's `session/load` replay instead of discarding it.
+   *
+   * True only when adopting a conversation the agent owns and we have never
+   * logged. See `Session.adopt`.
+   */
+  captureReplay?: boolean;
+}
 
 /** What the UI sends back for an elicitation, before the schema is applied to it. */
 type ElicitationAnswer = { action: ElicitationAction; content?: Record<string, unknown> };
@@ -101,8 +115,10 @@ export class Session {
    * True while `session/load` is replaying the agent's own history.
    *
    * The agent re-sends every past message as `session/update` before answering
-   * the load. We already hold that history in our log, so those updates must be
-   * discarded — appending them would duplicate the whole transcript.
+   * the load. On a resume we already hold that history in our log, so those
+   * updates must be discarded — appending them would duplicate the whole
+   * transcript. When *adopting* a conversation the agent owns, our log is empty
+   * and the replay is the transcript, so this stays false and it is kept.
    */
   private replaying = false;
   /** Permission requests waiting on the UI, keyed by request id. */
@@ -178,13 +194,43 @@ export class Session {
   }
 
   /**
+   * Takes over a conversation started in the agent's own CLI.
+   *
+   * The same `session/load` as `resume`, with the replay *kept* rather than
+   * discarded. `resume` throws the replay away because our log already holds
+   * that history; here our log is empty, so the agent's replay is the only copy
+   * of the transcript in existence as far as KiroChrome is concerned. Dropping
+   * it would leave the conversation looking like it began the moment we
+   * attached, and keeping it in the browser instead would break invariant 3 —
+   * it would vanish on refresh.
+   *
+   * Capturing is still append-only: these are INSERTs into a fresh conversation
+   * (invariant 2). It happens exactly once, at adoption, because this is a new
+   * KiroChrome session id — every later reopen goes through `resume` and
+   * discards the replay, so the transcript cannot be duplicated.
+   */
+  static async adopt(
+    id: string,
+    provider: ProviderConfig,
+    store: Store,
+    listed: { agentSessionId: string; cwd: string; title: string | null },
+  ): Promise<Session> {
+    const session = new Session(id, provider, listed.cwd, store);
+    session.agentSessionId = listed.agentSessionId;
+    session.title = listed.title;
+    await session.connectOrClose({ loadSessionId: listed.agentSessionId, captureReplay: true });
+    session.persistMeta();
+    return session;
+  }
+
+  /**
    * Connects, tearing the agent down if it fails.
    *
    * `connect` spawns before it handshakes, so a failure part-way through would
    * otherwise leave the process running with nothing referencing it — the
    * orphan case, arriving by a different route.
    */
-  private async connectOrClose(opts: { loadSessionId?: string } = {}): Promise<void> {
+  private async connectOrClose(opts: ConnectOptions = {}): Promise<void> {
     try {
       await this.connect(opts);
     } catch (err) {
@@ -193,7 +239,7 @@ export class Session {
     }
   }
 
-  private async connect(opts: { loadSessionId?: string } = {}): Promise<void> {
+  private async connect(opts: ConnectOptions = {}): Promise<void> {
     const resolved = resolveProvider(this.provider);
     if ("code" in resolved) throw resolved;
 
@@ -273,16 +319,27 @@ export class Session {
     this.supportsImages = promptCapabilities?.image === true;
 
     if (opts.loadSessionId) {
-      const capabilities = init.agentCapabilities as { loadSession?: boolean } | undefined;
-      if (!capabilities?.loadSession) {
+      if (!advertisesLoadSession(init.agentCapabilities)) {
+        // Adopting is the case worth naming: the conversation was listed, so
+        // the user has been shown something they cannot in fact open, and the
+        // two capabilities are separate fields in ACP rather than one.
+        if (opts.captureReplay) {
+          throw kcError(
+            "AGENT_CANNOT_ADOPT",
+            `'${this.provider.name}' lists its own conversations but cannot reopen them.`,
+            { detail: { agentSessionId: opts.loadSessionId } },
+          );
+        }
         throw kcError(
           "SESSION_NOT_LIVE",
           `'${this.provider.name}' cannot reopen past conversations.`,
           { remediation: "This agent does not support session/load. Start a new chat instead." },
         );
       }
-      // Discard the agent's replay; our log is already the transcript.
-      this.replaying = true;
+      // Keep the replay only when adopting, where it is the entire transcript.
+      // On an ordinary resume our log already holds this history, so appending
+      // it would duplicate the conversation.
+      this.replaying = !opts.captureReplay;
       try {
         // `session/load` returns modes and configOptions just as `session/new`
         // does. Discarding the response left a resumed conversation with no
@@ -313,11 +370,24 @@ export class Session {
           },
         );
       } finally {
+        // A captured replay's last chunk is still buffered; flush it before the
+        // seam so the seam really is the last thing above our own log.
+        if (opts.captureReplay) this.flushText();
         this.replaying = false;
         this.textBuffer = "";
       }
       await this.applyDefaults();
-      this.append({ type: "resumed" });
+      // The seam goes *after* the replay: everything above it came from the
+      // agent, and KiroChrome's log starts below it.
+      this.append(
+        opts.captureReplay
+          ? {
+              type: "adopted",
+              agentSessionId: opts.loadSessionId,
+              providerName: this.provider.name,
+            }
+          : { type: "resumed" },
+      );
       return;
     }
 
@@ -959,18 +1029,4 @@ export class Session {
  */
 export function defaultCwd(): string {
   return process.env.KIROCHROME_CWD ?? process.env.INIT_CWD ?? process.cwd();
-}
-
-async function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: () => KcError): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(onTimeout()), ms);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
 }

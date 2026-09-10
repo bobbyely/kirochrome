@@ -131,6 +131,24 @@ export function useChat() {
   );
 
   /**
+   * Takes over a conversation the agent already had, from `session/list`.
+   *
+   * Answered with `session_opened` like `openSession`, so nothing downstream
+   * needs to know which of the two happened.
+   */
+  const adoptSession = useCallback(
+    (providerId: string, listed: { agentSessionId: string; cwd: string; title: string | null }) =>
+      send({
+        type: "adopt",
+        providerId,
+        agentSessionId: listed.agentSessionId,
+        cwd: listed.cwd,
+        ...(listed.title ? { title: listed.title } : {}),
+      }),
+    [send],
+  );
+
+  /**
    * Attaches to a session that already exists, live or restored from disk.
    * Also used to switch conversations, which is why the previous one's summary
    * is cleared: leaving it would show the old title and busy state until the
@@ -264,6 +282,7 @@ export function useChat() {
     events,
     error,
     openSession,
+    adoptSession,
     attachSession,
     resumeSession,
     listSessions,

@@ -607,6 +607,19 @@ kbd {
 .compaction-failed { color: var(--fail); }
 .compaction-failed .compaction-rule { background: var(--fail); opacity: 0.4; }
 .compaction-in_progress .compaction-rule { background: var(--accent); opacity: 0.5; }
+/* The same seam, marking where the agent's own history ends and ours begins. */
+.compaction-adopted .compaction-rule { background: var(--accent); opacity: 0.35; }
+
+/* ---------- the agent's own conversations ---------- */
+.agent-sessions { display: flex; flex-direction: column; gap: var(--sp-1); margin-top: var(--sp-2); }
+.agent-session {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start; text-align: left;
+  padding: var(--sp-2); border: 1px solid var(--border); background: var(--raised);
+  color: inherit; cursor: pointer; font: inherit;
+}
+.agent-session:hover:not(:disabled) { border-color: var(--accent); }
+.agent-session:disabled { cursor: default; opacity: 0.55; }
+.agent-session .muted { font-size: var(--fs-xs); }
 
 /* ---------- elicitation ---------- */
 /* A question, not a warning: the accent border, where permissions use warn. */

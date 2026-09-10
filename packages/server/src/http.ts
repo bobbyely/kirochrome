@@ -2,7 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { kcError, type KcError } from "@kirochrome/shared";
-import type { ProviderView } from "@kirochrome/shared";
+import type { AgentSessionsResponse, ProviderView } from "@kirochrome/shared";
+import { listAgentSessions } from "./agentSessions.js";
 import { checkProvider } from "./check.js";
 import { exportFilename, toMarkdown } from "./export.js";
 import { loadConfig, updateProvider } from "./config.js";
@@ -142,6 +143,30 @@ async function handleApi(
     });
     res.end(markdown);
     return;
+  }
+
+  // GET /api/providers/:id/sessions — conversations the *agent* is holding.
+  //
+  // HTTP rather than the socket: this runs before any conversation exists, so
+  // it is a request/response with nothing to stream, and it needs its own
+  // short-lived probe agent — exactly the shape of the check below.
+  const listMatch = /^\/api\/providers\/([^/]+)\/sessions$/.exec(url.pathname);
+  if (listMatch && req.method === "GET") {
+    const id = decodeURIComponent(listMatch[1]!);
+    const provider = config.providers.find((p) => p.id === id);
+    if (!provider) {
+      return sendError(res, 404, kcError("PROVIDER_UNKNOWN", `No provider configured with id '${id}'.`));
+    }
+    const listed = await listAgentSessions(provider);
+    // Which of them we already hold, so the UI opens those instead of
+    // adopting one agent session into a second conversation.
+    const adopted: Record<string, string> = {};
+    for (const info of listed.sessions) {
+      const held = store.sessionByAgentSessionId(info.sessionId);
+      if (held) adopted[info.sessionId] = held.id;
+    }
+    const body: AgentSessionsResponse = { ...listed, adopted };
+    return sendJson(res, 200, body);
   }
 
   // POST /api/providers/:id/check — run the ladder.

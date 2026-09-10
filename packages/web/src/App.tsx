@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Chat } from "./Chat.js";
-import { NewChat } from "./NewChat.js";
+import { NewChat, type AdoptTarget } from "./NewChat.js";
 import { Setup } from "./Setup.js";
 import { Sidebar } from "./Sidebar.js";
 import { useShortcuts } from "./useShortcuts.js";
@@ -9,7 +9,14 @@ type View =
   | { name: "welcome" }
   | { name: "setup" }
   | { name: "new" }
-  | { name: "chat"; providerId?: string; cwd?: string; sessionId?: string };
+  | {
+      name: "chat";
+      providerId?: string;
+      cwd?: string;
+      sessionId?: string;
+      /** Set when taking over a conversation the agent already had. */
+      adopt?: AdoptTarget;
+    };
 
 /**
  * App shell: a persistent sidebar of conversations beside one main view.
@@ -66,6 +73,8 @@ export function App() {
         {view.name === "new" && (
           <NewChat
             onStart={(providerId, cwd) => setView({ name: "chat", providerId, cwd })}
+            onAdopt={(providerId, adopt) => setView({ name: "chat", providerId, adopt })}
+            onOpenSession={openSession}
             onNeedsSetup={() => setView({ name: "setup" })}
           />
         )}
@@ -78,6 +87,7 @@ export function App() {
             providerId={view.providerId}
             cwd={view.cwd}
             sessionId={view.sessionId}
+            adopt={view.adopt}
             onStarted={refreshList}
             onOpenSetup={() => setView({ name: "setup" })}
           />

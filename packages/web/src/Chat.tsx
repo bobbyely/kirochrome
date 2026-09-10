@@ -21,12 +21,15 @@ export function Chat({
   providerId,
   cwd,
   sessionId,
+  adopt,
   onStarted,
   onOpenSetup,
 }: {
   providerId?: string;
   cwd?: string;
   sessionId?: string;
+  /** A conversation the agent already had, being taken over for the first time. */
+  adopt?: { agentSessionId: string; cwd: string; title: string | null };
   onStarted?: () => void;
   onOpenSetup?: () => void;
 }) {
@@ -36,6 +39,7 @@ export function Chat({
     events,
     error,
     openSession,
+    adoptSession,
     attachSession,
     resumeSession,
     setConfigOption,
@@ -64,12 +68,15 @@ export function Chat({
   // reconnect.
   useEffect(() => {
     if (!connected) return;
-    const target = sessionId ?? `new:${providerId}:${cwd}`;
+    const target =
+      sessionId ??
+      (adopt ? `adopt:${providerId}:${adopt.agentSessionId}` : `new:${providerId}:${cwd}`);
     if (attached.current === target) return;
     attached.current = target;
     if (sessionId) attachSession(sessionId);
+    else if (providerId && adopt) adoptSession(providerId, adopt);
     else if (providerId) openSession(providerId, cwd);
-  }, [connected, openSession, attachSession, providerId, cwd, sessionId]);
+  }, [connected, openSession, adoptSession, attachSession, providerId, cwd, sessionId, adopt]);
 
   const allRows = useMemo(() => buildRows(events), [events]);
   const [windowSize, setWindowSize] = useState(INITIAL_ROWS);
@@ -119,7 +126,7 @@ export function Chat({
     setWindowSize(INITIAL_ROWS);
     setFollowing(true);
     landed.current = false;
-  }, [sessionId, providerId]);
+  }, [sessionId, providerId, adopt?.agentSessionId]);
 
   useEffect(() => {
     if (session?.live) onStarted?.();
@@ -284,6 +291,8 @@ const Message = memo(function Message({
       return <div className="msg msg-note">{row.label}</div>;
     case "compaction":
       return <CompactionRow row={row} />;
+    case "adopted":
+      return <AdoptedRow row={row} />;
     case "work":
       return <WorkGroup row={row} onPermission={onPermission} onElicitation={onElicitation} />;
     case "divider":
@@ -526,6 +535,30 @@ function CompactionRow({ row }: { row: Extract<Row, { kind: "compaction" }> }) {
       ) : (
         <span className="compaction-label">{label}</span>
       )}
+      <span className="compaction-rule" />
+    </div>
+  );
+}
+
+/**
+ * Where a conversation started in the agent's own CLI was taken over.
+ *
+ * Says so plainly, because the transcript above the seam is whatever the agent
+ * chose to replay and KiroChrome never saw it happen — it may be shorter than
+ * the real conversation, and it holds no tool output we recorded ourselves.
+ */
+function AdoptedRow({ row }: { row: Extract<Row, { kind: "adopted" }> }) {
+  return (
+    <div className="compaction compaction-adopted">
+      <span className="compaction-rule" />
+      <details className="compaction-body">
+        <summary>Adopted from {row.providerName}</summary>
+        <p className="remediation">
+          Everything above this line was replayed by {row.providerName} when this conversation was
+          opened here, so it is the agent&rsquo;s own record rather than KiroChrome&rsquo;s.
+          KiroChrome&rsquo;s log starts below it.
+        </p>
+      </details>
       <span className="compaction-rule" />
     </div>
   );

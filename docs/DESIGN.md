@@ -152,6 +152,20 @@ new chat
   → later: reopen           → `session/load` re-hydrates the agent
 ```
 
+**The other way in: adoption.** Where an agent keeps conversations of its own,
+`session/list` offers them and choosing one calls `session/load` against a
+freshly minted KiroChrome conversation. Listing is an HTTP endpoint rather than
+a socket message because it happens before any conversation exists — there is
+nothing to stream, and it needs its own short-lived probe agent, which is
+exactly the shape of the check ladder. Adopting *is* a socket message, because
+it produces a live session and those belong to `SessionManager`.
+
+This is the one place `session/load`'s replay is appended rather than
+discarded: our log is empty, so the replay is the transcript. An `adopted`
+event marks the seam, and every later reopen is an ordinary resume, so the
+history is captured exactly once. See
+[PROTOCOL.md](PROTOCOL.md#an-adopted-conversation-is-the-one-case-where-the-replay-is-kept).
+
 **The wrinkle:** models are only known *after* `session/new`, so the picker
 cannot be populated before a session exists. Hence **draft sessions** — picking
 a provider creates one immediately so the pickers can populate; it is promoted

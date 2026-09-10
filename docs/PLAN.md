@@ -55,7 +55,8 @@ seam when history is replaced; image paste; messages queued while a turn runs.
 
 **Conversations:** persisted and resumable via `session/load`; renameable,
 archivable, exportable to Markdown; full-text search across all of them; a
-sidebar with live per-conversation status.
+sidebar with live per-conversation status. Conversations started in the agent's
+own CLI can be listed with `session/list` and taken over here.
 
 **Process safety:** agents and their commands run in their own process groups
 and are killed as groups; a ledger reaps anything a crashed server left behind,
@@ -114,32 +115,25 @@ Worth deciding early: whether the tree also shows files ignored by git. Showing
 `node_modules` makes it useless; hiding it by reading `.gitignore` is more work
 than it sounds, and hiding files the agent is actively editing would be worse.
 
-#### 2. `session/list` — conversations the agent already has
-
-Claude Code advertises `sessionCapabilities: {list, resume, fork, delete,
-close}` and keeps its own history, as does Kiro. Listing those lets you open a
-conversation started in the terminal and continue it in the browser.
-
-The biggest capability gain per unit of work on this list, and it changes what
-KiroChrome is: a view onto your agent rather than a separate silo beside it.
-
-*Note:* those sessions have no KiroChrome event log, so the transcript comes
-from the agent's own replay on `session/load`. Our log then starts from the
-point we attached — worth being explicit about in the UI rather than pretending
-we have history we do not.
-
-#### 3. `session/fork` — branch a conversation
+#### 2. `session/fork` — branch a conversation
 
 "Try a different approach from here" without losing the original. The event log
 makes the branch point natural to show, and neither CLI exposes this well.
 
-#### 4. `@` file mentions in the composer
+**It is the one unstable capability of the five.** The v1 schema marks `fork`
+"not part of the spec yet, and may be removed or changed at any point", while
+`list`, `resume`, `delete` and `close` carry no such warning — found while
+building `session/list`, and written up in
+[PROTOCOL.md](PROTOCOL.md#sessionlist-is-real-v1-and-planmd-was-nearly-right-about-it).
+So this one needs a way to degrade when it disappears, which listing did not.
+
+#### 3. `@` file mentions in the composer
 
 Type `@` to complete against the working directory and attach file contents as
 `resource_link` blocks. The completion machinery built for slash commands
 generalises to this, and `fs` is now implemented.
 
-#### 5. Interrupt and send
+#### 4. Interrupt and send
 
 Today a message typed during a turn queues and goes when the turn ends. The
 other useful thing to do with it is send it *now*.
@@ -164,7 +158,7 @@ Real steering arrives with **ACP v2**, which decouples the prompt response from
 the work lifecycle precisely so queueing and steering are expressible. It is
 Draft; see [PROTOCOL.md](PROTOCOL.md#steering-and-acp-v2).
 
-#### 6. Instructions of your own, across every agent
+#### 5. Instructions of your own, across every agent
 
 Agents already read their own user-level instruction files, and the session's
 `cwd` gives them the project's `AGENTS.md`. What is missing is a KiroChrome
@@ -293,6 +287,23 @@ than a surprise. Each entry says what would go wrong if it is left.
 - Whatever the work machine turns up once Kiro is actually driving it.
 
 ### Done since the roadmap was written
+
+**`session/list` landed, and this file was nearly right about it.** The method
+is stable v1, not draft — but `sessionCapabilities` lives *inside*
+`agentCapabilities` and its sub-capabilities are objects rather than booleans,
+and of the five only `fork` is marked unstable. The correction that changed the
+design: ACP still gates loading on the separate top-level `loadSession`, so an
+agent can offer a conversation it cannot reopen. That has its own error code.
+See [PROTOCOL.md](PROTOCOL.md#sessionlist-is-real-v1-and-planmd-was-nearly-right-about-it).
+
+The note about those conversations having no event log turned out to be the
+crux. Adopting one keeps the agent's `session/load` replay — the single case
+where we do, because our log is empty and the replay is the only transcript
+that exists — while an ordinary resume still discards it. Adoption mints a new
+conversation id and every later reopen is a resume, so the history is captured
+exactly once. An `adopted` event marks the seam, which is why the UI can say
+where the agent's record ends and ours begins without holding that in the
+browser.
 
 **Both untrusted boundaries are validated, not cast.** A WebSocket frame is
 checked field by field against a table keyed by `ClientMessage["type"]` before
