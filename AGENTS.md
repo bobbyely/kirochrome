@@ -70,6 +70,10 @@ Breaking one of these is a design regression, not a style nit.
   Stop hang forever and appear to do nothing.
 - **`white-space: pre-wrap` must not reach markdown rows.** It renders the
   newlines between block elements literally, double-spacing every paragraph.
+- **Only advertise a capability you implement.** We claimed
+  `fs.readTextFile`/`fs.writeTextFile` for months without handlers; agents check
+  the capability and then call, so their file operations failed with a bare
+  "method not found". Adding to `clientCapabilities` is a promise.
 - **Probe an optional extension once, then stop.** `_kiro.dev/commands/options`
   is an ACP extension, not the standard; a failed call marks it unsupported for
   that session rather than being retried on every keystroke.

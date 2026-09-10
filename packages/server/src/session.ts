@@ -16,6 +16,7 @@ import {
 } from "@kirochrome/shared";
 import { resolveProvider, spawnAgent, type AgentProcess } from "./agentProcess.js";
 import { normaliseConfigOptions } from "./configOptions.js";
+import { readTextFile, writeTextFile } from "./fs.js";
 import type { Store } from "./store.js";
 import { TerminalRegistry } from "./terminals.js";
 
@@ -191,6 +192,9 @@ export class Session {
     const app = client({ name: "kirochrome" })
       .onNotification("session/update", ({ params }) => this.onUpdate(params.update))
       .onRequest("session/request_permission", ({ params }) => this.requestPermission(params))
+      // We advertise these, so agents may call them.
+      .onRequest("fs/read_text_file", ({ params }) => readTextFile(params))
+      .onRequest("fs/write_text_file", ({ params }) => writeTextFile(params))
       // We advertise terminal: true, so the agent delegates command execution
       // to us and their lifetimes become our responsibility.
       .onRequest("terminal/create", ({ params }) => this.terminals.create(params))
