@@ -105,6 +105,7 @@ Breaking one of these is a design regression, not a style nit.
 | `terminals.ts` | `TerminalRegistry` — caps, truncation, group kill |
 | `processLedger.ts` | PID ledger and startup reaping |
 | `fs.ts` | `fs/read_text_file`, `fs/write_text_file` |
+| `title.ts` | Names a conversation from its first message, when the agent sends none |
 | `export.ts`, `resolve.ts`, `ringBuffer.ts`, `paths.ts`, `trace.ts` | Markdown export, `PATH` resolution, stderr buffer, per-OS data dir, frame trace |
 
 **`packages/shared`** — `events.ts` (event payloads, usage derivation),

@@ -323,6 +323,20 @@ unverified:** there is still no browser on the dev box, so this was reasoned
 rather than measured, and the discriminating test remains whether typing
 degrades as the transcript grows.
 
+**Conversations named by the agent, and a fallback worth reading.** The agent's
+own `session_info_update` title was already used and already free — it comes
+with work the agent is doing anyway. What was poor was the fallback for agents
+that send none: the first 60 characters of the first message, markdown and
+"can you please" included. `title.ts` now takes the first prose line, drops
+list markers, headings, fences and a leading pleasantry, and truncates that.
+
+**Summarising it ourselves was considered and rejected.** We are an ACP client
+with no model, so a "name this chat" call means either spawning a second agent
+subprocess to title a conversation or spending the user's own context window on
+it. The tokens would be trivial; the machinery is not, and the second option
+puts a housekeeping exchange in the transcript. Trimming the first line gets
+most of the benefit for nothing.
+
 **A closed session no longer appends.** Its agent exits a moment after
 `close()` returns, and if the conversation had been resumed in that window the
 two Sessions claimed the same `seq` — one INSERT failed and its log disagreed
