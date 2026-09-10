@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # `spike/` sits outside the workspace with its own lockfile, and
+      # session.test.mjs spawns spike/mock-agent.mjs — which imports the ACP
+      # SDK from spike/node_modules. Without this the server suite cannot run.
+      - run: npm ci
+        working-directory: spike
+
+      - run: npm run typecheck
+
+      - run: npm test
