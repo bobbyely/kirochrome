@@ -108,3 +108,23 @@ All of these were real races, found the hard way.
   newlines between block elements literally, double-spacing every paragraph.
 - **The WebSocket lives at `/ws`.** At `/` it collides with Vite's hot-reload
   socket, and dev mode silently never connects.
+
+## Working on the repo
+
+- **`git branch --merged main` is useless here.** We rebase-merge, which
+  rewrites the commits, so a merged branch is never an ancestor of `main` and
+  the command lists nothing — branches accumulate locally looking unmerged, and
+  the pile is indistinguishable from work still in flight. Ask GitHub instead
+  (`gh pr view <branch> --json state`), which is what `npm run wt -- prune` does.
+- **A branch deleted on the remote still shows in `git branch -r`.** The
+  remote-tracking ref is a local cache; `gh pr merge --delete-branch` cannot
+  touch it. `git fetch --prune` clears it, and `wt done` runs that for you.
+- **Worktrees belong outside the repo directory.** Nested under it, the npm
+  workspace glob, `tsc -b` and vite's watcher all find a second copy of the
+  tree and behave in ways that take a while to attribute.
+- **A worktree has its own `node_modules`, and `spike/` needs its own install.**
+  A fresh worktree looks broken in the same way a fresh clone does: the server
+  suite spawns the mock agent, which needs the ACP SDK that lives in `spike/`.
+- **Two dev servers cannot run at once.** They share ports 4711 and 5173 *and*
+  one sqlite database, so the second one to start fails on the port if you are
+  lucky and interleaves conversations in one database if you are not.

@@ -72,6 +72,24 @@ URL — the 4711 one serves the last built bundle, not your edits.
 A server restart detaches running agents. Conversations are persisted, so
 reopening one and pressing **Resume conversation** picks it back up.
 
+### Working on several features at once
+
+Each change gets its own git worktree, beside the repo rather than inside it:
+
+```bash
+npm run wt -- new <topic>     # branch + ../kirochrome-worktrees/<topic> + install
+npm run wt -- list            # every worktree, with its PR state
+npm run wt -- done <topic>    # once the PR is merged: removes worktree and branch
+npm run wt -- prune           # sweep every merged one (--yes to actually remove)
+```
+
+`done` and `prune` ask GitHub whether the PR was merged, because rebase-merging
+means `git branch --merged` never says so. Both refuse to remove a worktree
+holding uncommitted or unpushed work.
+
+Only run one dev server at a time — worktrees share ports 4711 and 5173, and a
+single database.
+
 ### On a new machine
 
 `.git/config` does not travel with a clone, so set your commit identity before
