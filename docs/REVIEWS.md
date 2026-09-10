@@ -35,6 +35,6 @@ generic checklist.
 
 ## When a review finds something
 
-Fix it, add the test, and add the gotcha to [AGENTS.md](../AGENTS.md). Every
-gotcha in there exists because something was once wrong; a fix without one
+Fix it, add the test, and add the gotcha to [GOTCHAS.md](GOTCHAS.md). Every
+entry in there exists because something was once wrong; a fix without one
 invites the same bug from the next person who does not know.

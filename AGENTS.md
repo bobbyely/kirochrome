@@ -1,7 +1,17 @@
 # Steering — KiroChrome
 
-Read this before writing code. [docs/DESIGN.md](docs/DESIGN.md) explains *why*;
-this file is the rules. [docs/PLAN.md](docs/PLAN.md) says what to build next.
+Read this before writing code. This file is **the rules**; everything else is
+one click away.
+
+| Document | What it is for |
+|---|---|
+| [docs/DESIGN.md](docs/DESIGN.md) | Why the architecture is the way it is |
+| [docs/PLAN.md](docs/PLAN.md) | What to build next, and recorded debt |
+| [docs/PROTOCOL.md](docs/PROTOCOL.md) | What we implement of ACP, and how it actually behaves |
+| [docs/PROVIDERS.md](docs/PROVIDERS.md) | Adding an agent, and what has really been run |
+| [docs/GOTCHAS.md](docs/GOTCHAS.md) | Traps that have already cost someone a day |
+| [docs/REVIEWS.md](docs/REVIEWS.md) | The review log — read the range, not the date |
+| [docs/PRIOR-ART.md](docs/PRIOR-ART.md) | Kirodex: what to borrow, what not to port |
 
 ## What this is
 
@@ -28,7 +38,8 @@ Breaking one of these is a design regression, not a style nit.
    never cancel or lose a running turn.
 5. **Never hardcode provider, model or mode lists.** Render whatever the agent
    advertises via `configOptions` (or the legacy `availableModels` /
-   `availableModes`). A new model appearing must require no code change.
+   `availableModes`). A new model appearing must require no code change, and no
+   code branches on a provider `id` — branch on what was advertised.
 6. **Every spawned process is tracked and killable.** Registered on create,
    spawned in its own process group, killed as a group, released on session
    close. No exceptions — this is where hangs come from.
@@ -44,11 +55,19 @@ Breaking one of these is a design regression, not a style nit.
 11. **A provider is usable only after its setup check passes.** The chat flow
     does not re-diagnose; it trusts the check. Runtime failures mark the
     provider `stale` and send the user back to setup.
+12. **Advertising a capability is a promise.** Anything added to
+    `clientCapabilities` must have a handler before it ships. Agents check the
+    capability and then call.
 
 ## Conventions
 
-- **TypeScript strict.** No `any` — use `unknown` and narrow. Protocol payloads
-  are parsed at the boundary, not cast.
+- **TypeScript strict.** No `any` — use `unknown` and narrow.
+- **Validate at the two boundaries that are not ours**: the WebSocket frame
+  from the browser (`ws.ts`) and the hand-edited `config.json` (`config.ts`).
+  Both are currently `JSON.parse(...) as T`, which is a lie — see the debt
+  section in [PLAN.md](docs/PLAN.md). Agent payloads come from a process we
+  spawned and are narrowed rather than validated; that is a deliberate
+  difference, not an oversight.
 - Guard clauses and early returns over nested conditionals.
 - Small modules with one job. `SessionManager` manages sessions; it does not
   also own the database.
@@ -58,56 +77,97 @@ Breaking one of these is a design regression, not a style nit.
   `node:sqlite` is built in, and avoiding a build toolchain is a portability
   requirement, not a preference.
 
-## Gotchas that have already bitten this design
+## Where things live
 
-- **Models are only known after `session/new`.** The composer's pickers cannot
-  be populated before a session exists, which is why a session is created as
-  soon as a provider is chosen. Do not "fix" this by hardcoding a list.
-- **Agents emit both config dialects at once**, sometimes with different
-  settings in each. Merge `configOptions` with the legacy `models`/`modes`
-  rather than letting one hide the other.
-- **`session/cancel` is a notification, not a request.** Awaiting a reply makes
-  Stop hang forever and appear to do nothing.
-- **`white-space: pre-wrap` must not reach markdown rows.** It renders the
-  newlines between block elements literally, double-spacing every paragraph.
-- **Only advertise a capability you implement.** We claimed
-  `fs.readTextFile`/`fs.writeTextFile` for months without handlers; agents check
-  the capability and then call, so their file operations failed with a bare
-  "method not found". Adding to `clientCapabilities` is a promise.
-- **Probe an optional extension once, then stop.** `_kiro.dev/commands/options`
-  is an ACP extension, not the standard; a failed call marks it unsupported for
-  that session rather than being retried on every keystroke.
-- **Not every agent setting is a `configOption`.** Slash commands are the other
-  half: advertised by `available_commands_update` and run as ordinary prompt
-  text. Kiro exposes reasoning effort only that way, so a missing picker does
-  not mean a missing feature.
-- **`session/load` returns `modes` and `configOptions` too**, exactly as
-  `session/new` does. Discarding its response leaves a resumed conversation
-  with no pickers at all.
-- **Single-flight anything that awaits before registering itself.** `resume`
-  awaits a handshake, so two calls arriving in that window each built a Session
-  for the same conversation — both appending from the same seq, and each with
-  its own agent process.
-- **Identify a process by its start time, not its command line.** A shell may
-  exec-replace itself (`sh -c "sleep 30"` becomes `sleep 30` under bash but not
-  dash), so command text is unreliable; start time survives an exec and changes
-  on PID reuse.
-- **The WebSocket lives at `/ws`.** At `/` it collides with Vite's hot-reload
-  socket, and dev mode silently never connects.
-- **Register a pending resolver before announcing the event that asks for it.**
-  `append` notifies subscribers synchronously, so an answer arriving
-  synchronously would find no pending entry and be dropped, blocking the agent
-  forever. This is exactly how the permission race was found.
-- **Reap orphaned processes once at startup, never per session** — per-session
-  reaping kills processes belonging to sessions that are still alive.
-- **Killing a shell does not kill its children.** Kill the process group
-  (`process.kill(-pid, …)`), SIGTERM then SIGKILL after a grace period, or
-  orphans survive and the terminal appears hung.
-- **Do not write a database row per streamed token.** Coalesce deltas on a
-  ~250ms flush.
-- **`node:sqlite` warns on Node 22**, stable on 24. Pin via `.nvmrc`. Do not
-  swap it for a native module to silence the warning.
-- **Never log `env`** when logging a spawn.
+`shared` is imported by both sides, so the wire format cannot drift.
+
+**`packages/server`** — the ACP client.
+
+| File | Job |
+|---|---|
+| `index.ts` | Boot: reap orphans *once*, then serve |
+| `http.ts` | JSON API (providers, checks, search, export) + SPA, with the `Origin` allowlist |
+| `ws.ts` | The socket at `/ws`; client message dispatch |
+| `sessionManager.ts` | Session registry and single-flight resume |
+| `session.ts` | **The big one.** ACP connection, event log, turns, queue, permissions, config options, commands |
+| `agentProcess.ts` | Spawn in a process group, stdio → `ndJsonStream`, stderr ring buffer |
+| `check.ts` | The seven-rung provider check ladder |
+| `config.ts` | Provider registry in `config.json` |
+| `configOptions.ts` | Merges `configOptions` with the legacy `models`/`modes` |
+| `store.ts` | `node:sqlite`: events, sessions, checks, FTS5 search |
+| `terminals.ts` | `TerminalRegistry` — caps, truncation, group kill |
+| `processLedger.ts` | PID ledger and startup reaping |
+| `fs.ts` | `fs/read_text_file`, `fs/write_text_file` |
+| `export.ts`, `resolve.ts`, `ringBuffer.ts`, `paths.ts`, `trace.ts` | Markdown export, `PATH` resolution, stderr buffer, per-OS data dir, frame trace |
+
+**`packages/shared`** — `events.ts` (event payloads, usage derivation),
+`errors.ts` (`KcError`, the closed code enum, remediations), `providers.ts`
+(provider config, check results, HTTP payloads), `ws.ts` (socket messages).
+
+**`packages/web`** — `App.tsx` routes; `Chat.tsx` is **the other big one**
+(transcript, composer, completion, every row renderer); `timeline.ts` folds
+events into typed rows; `useChat.ts` is the socket and resume-by-seq;
+`Setup.tsx` is the ladder UI; then `Sidebar`, `NewChat`, `commands`, `diff`,
+`images`, `theme`, `useShortcuts`, `Markdown`, `KSpinner`, `api`.
+
+**`spike/`** is misnamed — see the debt section in [PLAN.md](docs/PLAN.md).
+`mock-agent.mjs` is a load-bearing test fixture and a seeded provider, not a
+throwaway; `handshake.mjs` is the probe you use when onboarding an agent.
+
+## Definition of done
+
+Before you call anything finished:
+
+1. **`npm test`** — builds, then runs both suites. Not "should work".
+   Behaviour claims are verified by running something.
+2. **Docs updated in the same commit.** Which one depends on what changed:
+
+   | You changed | Update |
+   |---|---|
+   | An invariant, a convention, the code map | `AGENTS.md` |
+   | The architecture, or a decision behind it | `docs/DESIGN.md` |
+   | Scope, roadmap, or debt | `docs/PLAN.md` |
+   | Anything about how ACP behaves | `docs/PROTOCOL.md` |
+   | A provider, or what has been run against | `docs/PROVIDERS.md` |
+   | Anything user-visible: flags, env vars, setup | `README.md` |
+
+   Docs drift silently and are found much later. `README.md` claimed
+   "implementation not started" through six shipped phases.
+3. **A new failure path needs an error code and a remediation.** A new `throw`
+   without one is incomplete work.
+4. **A fixed bug needs its test and its gotcha.** Add the case to the suite and
+   the trap to [docs/GOTCHAS.md](docs/GOTCHAS.md). Every entry in there exists
+   because something was once wrong.
+5. **A review gets a row** in [docs/REVIEWS.md](docs/REVIEWS.md), even a review
+   that found nothing. An absent row is indistinguishable from a skipped one.
+
+## Tests
+
+`npm test` builds, then runs both suites. No test dependencies: `node:test` and
+`--experimental-strip-types` are built into Node 22.
+
+- `packages/web/src/__tests__/*.test.ts` — pure logic (diffing, folding the
+  event log into rows), run directly as TypeScript.
+- `packages/server/test/*.test.mjs` — run against `dist`, so they exercise what
+  actually ships. Node's type stripping does not rewrite `.js` specifiers to
+  `.ts`, which is why these are plain `.mjs` importing the build.
+
+`session.test.mjs` drives the real mock agent over ACP, so it covers the
+behaviours that are easy to break: delta coalescing, queue ordering, replay
+suppression on resume, and defaults surviving a withdrawn option.
+
+## Debugging
+
+When something misbehaves, in this order:
+
+1. **Read the agent's stderr.** Its stdout is the JSON-RPC channel and carries
+   nothing human-readable; crashes and stack traces go to stderr. The ring
+   buffer is on the session, and its tail is attached to error reports.
+2. **Turn on the frame trace** — `KIROCHROME_TRACE=1` writes every JSON-RPC
+   message in both directions to JSONL. Use it before theorising.
+3. **Re-run the provider check.** It reports the exact rung that failed.
+
+Preserve these three. Removing diagnostics to "clean up" is a regression.
 
 ## Committing
 
@@ -125,90 +185,18 @@ repo owner ends up listed as a co-author on their own work, and the contributor
 graph is wrong. It happened here: the first nine commits had to be rewritten.
 The session-supplied email identifies the user; it does not stamp authorship.
 
-## Prior art: Kirodex
-
-[thabti/kirodex](https://github.com/thabti/kirodex) — MIT, Tauri 2 + Rust +
-React — is the same problem in a different shell: a desktop UI over `kiro-cli`,
-**also built on ACP**. Independent confirmation that our transport choice is
-right, and the most useful reference we have for interaction design.
-
-**Read it for interaction design and event shaping. Do not port code.** It is
-Tauri with Rust IPC, `portable-pty` and `redb`; we are a browser talking to a
-Node server over a WebSocket. Its plumbing assumptions do not transfer, its UI
-decisions do.
-
-Where to look, by problem:
-
-| Problem | Look at |
-|---|---|
-| Folding an event log into renderable rows | `MessageList.logic.ts`, `TimelineRows.tsx`, `WorkGroupRow.tsx` |
-| Tool call rendering | `ToolCallEntry.tsx` (collapsed) vs `ToolCallDisplay.tsx` (expanded), `tool-call-utils.ts` |
-| Read/edit tool output | `ReadOutput.tsx` (syntax-highlighted), `InlineDiff.tsx` |
-| Turn boundaries and progress | `WorkingRow.tsx`, `CompletionDivider.tsx`, `ThinkingDisplay.tsx` |
-| Approvals | `PermissionBanner.tsx`, `AutoApproveToggle.tsx`, `QuestionCards.tsx` |
-| Model / mode / effort selection | `ModelPicker.tsx`, `ModelPickerPanel.tsx`, `ReasoningEffortPicker.tsx` |
-| CLI detection and first-run setup | `OnboardingCliSection.tsx` |
-| Context window pressure | `ContextUsageBar.tsx`, `ContextRing.tsx`, `CompactSuggestBanner.tsx` |
-
-Patterns worth adopting, and why:
-
-- **Typed timeline rows, not a message array.** They fold the event stream into
-  rows with an explicit taxonomy (`user-message`, `system-message`,
-  `assistant-text`, `work`, `working`, `changed-files`) and per-type height
-  estimates for virtualization. Our `packages/web/src/timeline.ts` does the
-  fold; the row taxonomy and virtualization are what it still lacks.
-- **Queue messages typed during a turn.** `QueuedMessages.tsx` lets the user
-  type while the agent runs; messages queue and send when the turn ends, and can
-  be reordered, edited or removed first. This is the single best turn-handling
-  idea in the repo — a running turn should never block the composer.
-- **Collapsed by default, expandable on demand.** A tool call is one dense line
-  until you open it. A transcript of expanded tool output is unreadable.
-- **Selection is per-thread, live, and restored.** Model and mode changes apply
-  mid-session and survive reconnects and restarts — which is exactly what ACP
-  `configOptions` allows, and why we never cache a model list in code.
-- **Detection with a manual fallback.** Their onboarding auto-detects the CLI,
-  offers per-platform install commands when it fails, and lets the user browse
-  to a path. Our `AGENT_NOT_FOUND` should grow the same two affordances.
-
-## Tests
-
-`npm test` builds, then runs both suites. No test dependencies: `node:test` and
-`--experimental-strip-types` are built into Node 22.
-
-- `packages/web/src/__tests__/*.test.ts` — pure logic (diffing, folding the
-  event log into rows), run directly as TypeScript.
-- `packages/server/test/*.test.mjs` — run against `dist`, so they exercise what
-  actually ships. Node's type stripping does not rewrite `.js` specifiers to
-  `.ts`, which is why these are plain `.mjs` importing the build.
-
-`session.test.mjs` drives the real mock agent over ACP, so it covers the
-behaviours that are easy to break: delta coalescing, queue ordering, replay
-suppression on resume, and defaults surviving a withdrawn option.
-
-**When you fix a bug, add the case.** Every test in there exists because
-something was once wrong.
-
-## Debugging
-
-When something misbehaves, in this order:
-
-1. **Read the agent's stderr.** Its stdout is the JSON-RPC channel and carries
-   nothing human-readable; crashes and stack traces go to stderr. The ring
-   buffer is on the session, and its tail is attached to error reports.
-2. **Turn on the frame trace** — `KIROCHROME_TRACE=1` writes every JSON-RPC
-   message in both directions to JSONL. Use it before theorising.
-3. **Re-run the provider check.** It reports the exact rung that failed.
-
-Preserve these three. Removing diagnostics to "clean up" is a regression.
+**Message style:** a prose sentence saying what the change does, in the
+imperative — "Support the agent's slash commands, which is where Kiro hides
+effort". Not Conventional Commits; no `feat:` prefixes.
 
 ## Working style
 
 - Research → plan → implement. Read the existing code before adding to it.
-- Follow [docs/PLAN.md](docs/PLAN.md) phase order. Each phase must end in
-  something runnable; do not build phase 4 scaffolding during phase 1.
+- Follow [docs/PLAN.md](docs/PLAN.md). Each item must end in something
+  runnable; do not build scaffolding for a later one.
 - When the protocol is unclear, **check the spec at
   <https://agentclientprotocol.com>** rather than guessing. This project has
-  already been rewritten once because of an assumption about a CLI's interface.
+  already been rewritten once because of an assumption about a CLI's interface,
+  and every protocol note in [docs/PROTOCOL.md](docs/PROTOCOL.md) was found by
+  reading the spec after the fact.
 - Verify claims about behaviour by running something. "Should work" is not done.
-- **When adding a failure path, add an error code and remediation with it.**
-  A new `throw` without a code is incomplete work.

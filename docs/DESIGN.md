@@ -1,7 +1,12 @@
 # KiroChrome — Design
 
-**Status:** proposed
-**Last updated:** 2026-09-09
+**Status:** implemented, and amended where reality disagreed
+**Last updated:** 2026-09-10
+
+This is the *why*. It has been amended in place where building it proved a
+detail wrong — the `events` primary key is the clearest case. Protocol facts
+learned since have moved to [PROTOCOL.md](PROTOCOL.md); the rules that came out
+of all this are in [AGENTS.md](../AGENTS.md).
 
 ## Goal
 

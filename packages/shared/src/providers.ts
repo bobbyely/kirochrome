@@ -16,6 +16,16 @@ export interface ProviderConfig {
   env?: Record<string, string>;
   /** Chosen ACP auth method id, once the user has picked one. */
   authMethodId?: string;
+  /**
+   * Per-platform install suggestion, shown when the binary is not found.
+   * Lives here rather than in the UI so a provider added to config.json can
+   * carry its own hint — the setup page renders whatever it is given.
+   *
+   * Only ever displayed. We never run it for the user.
+   */
+  install?: Partial<Record<HostPlatform, string>>;
+  /** Where to read about this agent, shown alongside the install hint. */
+  docsUrl?: string;
 }
 
 export type ProviderStatus = "ok" | "failed" | "stale" | "unchecked";

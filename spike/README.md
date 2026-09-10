@@ -1,6 +1,11 @@
-# Phase 0 spike
+# The probe and the mock agent
 
-Throwaway ACP handshake probe. Its findings feed the phase 1 check ladder.
+Named for the phase 0 spike, but neither file is throwaway any more — see the
+debt note in [../docs/PLAN.md](../docs/PLAN.md).
+
+`handshake.mjs` is the ACP probe you run when onboarding a new agent
+([../docs/PROVIDERS.md](../docs/PROVIDERS.md) has the recipe). `mock-agent.mjs`
+is a seeded provider *and* the fixture `session.test.mjs` drives.
 
 ```bash
 cd spike && npm install

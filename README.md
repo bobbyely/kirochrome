@@ -3,7 +3,8 @@
 A browser-based chat UI for CLI coding agents — the ergonomics of desktop apps
 like Claude Code and Codex, in a browser, backed by [Kiro CLI](https://kiro.dev).
 
-**Status:** design complete, implementation not started.
+**Status:** working. Setup, streaming chat, tool calls, persistence, resume
+and search all run; see [docs/PLAN.md](docs/PLAN.md) for what is next.
 
 ## How it works
 
@@ -30,9 +31,12 @@ parser.
 
 ## Docs
 
+- [AGENTS.md](AGENTS.md) — the rules, for anyone (or anything) writing code here
 - [docs/DESIGN.md](docs/DESIGN.md) — architecture and the reasoning behind it
-- [docs/PLAN.md](docs/PLAN.md) — phased implementation plan
-- [AGENTS.md](AGENTS.md) — steering rules for agents working on this repo
+- [docs/PLAN.md](docs/PLAN.md) — what is next, and recorded debt
+- [docs/PROTOCOL.md](docs/PROTOCOL.md) — what we implement of ACP, and how it behaves
+- [docs/PROVIDERS.md](docs/PROVIDERS.md) — adding an agent, and what has been run
+- [docs/GOTCHAS.md](docs/GOTCHAS.md) — traps that already cost someone a day
 
 ## Development
 
@@ -75,15 +79,19 @@ git config user.name  "bobbyely"
 git config user.email "robert.w.ely@gmail.com"
 ```
 
-Verify with `git log -1 --format='%an <%ae>'` after committing. A `.mailmap`
-canonicalises past mistakes for git's own tooling, but it does not fix GitHub's
-contributor graph — get the identity right at commit time.
+Verify with `git log -1 --format='%an <%ae>'` after committing. Getting it right
+at commit time is the only fix that works: a `.mailmap` would canonicalise the
+display for git's own tooling, but GitHub ignores it for the contributor graph.
 
 ### Providers
 
 Configured in `<dataDir>/config.json`, seeded on first run with Kiro, Claude
-Code, and — when running from a checkout — an offline mock agent that always
-passes, so you can try the chat with no agent installed.
+Code, Gemini CLI, Codex, and — when running from a checkout — an offline mock
+agent that always passes, so you can try the chat with no agent installed.
+
+Adding another is a config entry, not code:
+[docs/PROVIDERS.md](docs/PROVIDERS.md) has the recipe and an honest table of
+which ones have actually been run.
 
 | OS | Data directory |
 |---|---|
@@ -125,9 +133,8 @@ node handshake.mjs kiro          # or: claude-code, mock
 
 ## Prior art
 
-## Prior art
-
 [Kirodex](https://github.com/thabti/kirodex) solves the same problem as a Tauri
-desktop app, also over ACP. See [AGENTS.md](AGENTS.md) for what to borrow.
+desktop app, also over ACP. See [docs/PRIOR-ART.md](docs/PRIOR-ART.md) for what
+to borrow and what not to port.
 
 Runs on macOS and Linux; Windows best-effort. Localhost only by design.

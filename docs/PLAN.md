@@ -20,7 +20,8 @@ kirochrome/
 │   ├── shared/   types: WS messages, event payloads, error codes, config
 │   ├── server/   ACP client, SessionManager, TerminalRegistry, store, WS
 │   └── web/      React + Vite
-└── docs/
+├── spike/        the mock agent and the handshake probe — see debt, below
+└── docs/         DESIGN (why) · PLAN (next) · PROTOCOL · PROVIDERS · GOTCHAS · REVIEWS
 ```
 
 npm workspaces. `shared` is imported by both sides so the wire format cannot
@@ -58,16 +59,10 @@ sidebar with live per-conversation status.
 and are killed as groups; a ledger reaps anything a crashed server left behind,
 guarded against PID reuse.
 
-### Slash commands
-
-ACP advertises an agent's commands via `available_commands_update`, and they are
-run by sending their text as an ordinary prompt — no dedicated method, nothing
-agent-specific. We were receiving that notification and discarding it as noise.
-
-This is how Kiro's reasoning effort is reachable: `/effort low|medium|high|xhigh|max`.
-It is not a `configOption`, so it never appeared in a picker — which is why it
-looked missing. Kiro also persists the choice in `~/.kiro/settings/cli.json`, and
-`chat.modelDefaults` there sets a per-model default independently of any client.
+**Slash commands:** advertised by `available_commands_update` and run as
+ordinary prompt text. This is how Kiro's reasoning effort is reachable, and why
+it never appeared in a picker — see
+[PROTOCOL.md](PROTOCOL.md#slash-commands-are-the-other-half-of-configuration).
 
 ### What is left
 
@@ -197,6 +192,35 @@ through, and what it found. The range matters more than the date: the next
 review starts where the last ended, and a missing row is indistinguishable from
 a skipped review.
 
+#### Recorded debt
+
+Known, deliberate, and not urgent — written down so it is a decision rather
+than a surprise. Each entry says what would go wrong if it is left.
+
+- **The two untrusted boundaries are cast, not validated.** `ws.ts` does
+  `JSON.parse(raw) as ClientMessage` on a frame from the browser, and
+  `config.ts` does the same on a hand-edited `config.json`. Everything else
+  parsed is either ours or comes from a process we spawned. A malformed frame
+  currently fails somewhere downstream with a confusing error instead of a
+  typed one at the door. The convention in AGENTS.md now names these two
+  specifically rather than claiming a discipline the code does not have.
+- **No CI.** The test suite is good and nothing runs it automatically. This is
+  the cheapest gap to close and the one most likely to bite when several people
+  or agents are committing.
+- **No formatter or linter.** Half the conventions section is mechanically
+  enforceable and currently is not.
+- **`spike/` is misnamed and load-bearing.** Its README says "throwaway", but
+  `mock-agent.mjs` is a seeded provider *and* the fixture `session.test.mjs`
+  drives, and `handshake.mjs` is the documented way to onboard an agent. It
+  also sits outside the workspace with its own pin of
+  `@agentclientprotocol/sdk`, so the SDK version has two places to bump and can
+  drift between the probe and the server. Renaming it is a rename plus a path
+  in two files.
+- **`packages/web/src` is flat** — twenty files, no directories. Fine now,
+  awkward once the side pane lands.
+- **`session.ts` (799) and `Chat.tsx` (770) do several jobs each.** Covered by
+  the review section above; listed here so the debt is in one place.
+
 #### Smaller, still open
 
 - Verify the design pass on a real screen: the theme, the K spinner and the
@@ -229,22 +253,16 @@ print every `session/update` raw.
 
 ### Findings
 
-- **ACP works as designed.** `initialize` against the real Claude Code adapter
-  returned `protocolVersion: 1`, `loadSession: true`, prompt capabilities, and
-  an `authMethods` entry — the whole basis of the check ladder, confirmed.
-- **The SDK client API** is `client({name})` → `.onNotification("session/update")`
-  / `.onRequest("session/request_permission")` → `connectWith(ndJsonStream(…))`.
-  `buildSession(cwd).start()` wraps `session/new`.
-- **The stderr buffer paid for itself immediately.** The adapter failed
-  `session/new` with `-32603 "Query closed before response received"` — useless
-  on its own. stderr held the real cause: it refuses to run nested inside
-  another Claude Code session. Keep this diagnostic; it is not optional.
-- **The package was renamed** to `@agentclientprotocol/claude-agent-acp`.
-- **Both config shapes exist at once.** The mock returns `configOptions` *and* a
-  legacy `modes` state, and the client read both — so phase 4's pickers must
-  handle either, as designed.
-- **Streaming shapes confirmed:** `agent_message_chunk`, `tool_call`,
-  `tool_call_update`, terminating with `stopReason`.
+**ACP works as designed.** `initialize` against the real Claude Code adapter
+returned `protocolVersion: 1`, `loadSession: true`, prompt capabilities and an
+`authMethods` entry — the whole basis of the check ladder, confirmed. What the
+spike learned about the protocol itself now lives in
+[PROTOCOL.md](PROTOCOL.md).
+
+**The stderr buffer paid for itself immediately.** The adapter failed
+`session/new` with `-32603 "Query closed before response received"` — useless on
+its own. stderr held the real cause: it refuses to run nested inside another
+Claude Code session. Keep this diagnostic; it is not optional.
 
 **Open:** whether Kiro uses `configOptions` or the older `availableModels`.
 Needs a run on the work machine. Not blocking — the design handles both.
@@ -431,14 +449,10 @@ screen.
 
 ### Two protocol findings
 
-- **`session/set_model` is not in the SDK's v1 method registry**, though Kiro's
-  docs still list it — model selection moved to `session/set_config_option`.
-  So a config change tries the standard method and falls back to the per-kind
-  one, rather than guessing the dialect from the `session/new` response.
-- **Agents can emit both dialects at once**, and not with the same settings in
-  each. `configOptions` and the legacy `models`/`modes` are merged rather than
-  letting one hide the other — the mock exposed this by advertising a model in
-  one and a mode in the other.
+`session/set_model` is not in the v1 method registry, and agents emit both
+config dialects at once. Both are written up in
+[PROTOCOL.md](PROTOCOL.md#findings); they shaped the fallback and the merge in
+`configOptions.ts`.
 
 ---
 

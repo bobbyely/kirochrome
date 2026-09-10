@@ -1,5 +1,0 @@
-# Canonical identities. Git's log, shortlog and blame honour this, so a commit
-# that slips through with a plus-alias still displays as the right person.
-# Belt-and-braces only — the real fix is committing with the right identity.
-# See the Committing section in AGENTS.md.
-bobbyely <robert.w.ely@gmail.com> <robert.w.ely+claude@gmail.com>

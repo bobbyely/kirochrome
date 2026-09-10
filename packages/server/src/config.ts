@@ -8,15 +8,62 @@ import { configPath, dataDir } from "./paths.js";
  * Seed providers. These are starting points, not a hardcoded catalogue — the
  * user edits config.json, and a provider's models/modes always come from the
  * protocol, never from here.
+ *
+ * Not all of these have been run end to end; docs/PROVIDERS.md says which. A
+ * seed that turns out to be wrong fails at a named rung on the setup page with
+ * an editable command, which is the whole point of the check ladder.
  */
 function defaultProviders(): ProviderConfig[] {
   const providers: ProviderConfig[] = [
-    { id: "kiro", name: "Kiro CLI", command: "kiro-cli", args: ["acp"] },
+    {
+      id: "kiro",
+      name: "Kiro CLI",
+      command: "kiro-cli",
+      args: ["acp"],
+      install: {
+        darwin: "brew install kiro-cli   # or see https://kiro.dev/docs/cli",
+        linux: "curl -fsSL https://kiro.dev/install.sh | bash",
+        win32: "See https://kiro.dev/docs/cli for Windows install steps",
+      },
+      docsUrl: "https://kiro.dev/docs/cli/acp/",
+    },
     {
       id: "claude-code",
       name: "Claude Code",
       command: "npx",
       args: ["-y", "@agentclientprotocol/claude-agent-acp"],
+      install: {
+        darwin: "npm install -g @anthropic-ai/claude-code",
+        linux: "npm install -g @anthropic-ai/claude-code",
+        win32: "npm install -g @anthropic-ai/claude-code",
+      },
+      docsUrl: "https://github.com/anthropics/claude-code",
+    },
+    {
+      id: "gemini",
+      name: "Gemini CLI",
+      command: "gemini",
+      // `--experimental-acp` is deprecated in favour of `--acp`; verified
+      // against @google/gemini-cli 0.59.0.
+      args: ["--acp"],
+      install: {
+        darwin: "npm install -g @google/gemini-cli",
+        linux: "npm install -g @google/gemini-cli",
+        win32: "npm install -g @google/gemini-cli",
+      },
+      docsUrl: "https://github.com/google-gemini/gemini-cli",
+    },
+    {
+      id: "codex",
+      name: "Codex",
+      command: "npx",
+      args: ["-y", "@zed-industries/codex-acp"],
+      install: {
+        darwin: "npm install -g @openai/codex",
+        linux: "npm install -g @openai/codex",
+        win32: "npm install -g @openai/codex",
+      },
+      docsUrl: "https://github.com/zed-industries/codex-acp",
     },
   ];
 

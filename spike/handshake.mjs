@@ -1,8 +1,10 @@
-// Phase 0 spike: prove ACP works end to end, and capture what each agent
-// actually advertises. Throwaway — its findings feed the phase 1 check ladder.
+// The ACP probe: spawn an agent, complete the handshake, and dump exactly what
+// it advertises. Run this first when onboarding a new agent — docs/PROVIDERS.md
+// has the recipe.
 //
 //   node handshake.mjs claude-code
-//   node handshake.mjs kiro           # on the work machine
+//   node handshake.mjs kiro                    # on the work machine
+//   node handshake.mjs -- some-agent --acp     # anything not in the list below
 
 import { spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
@@ -16,12 +18,23 @@ const PROVIDERS = {
   // plain terminal, not from within Claude Code.
   "claude-code": { command: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp"] },
   kiro: { command: "kiro-cli", args: ["acp"] },
+  // `--experimental-acp` is deprecated in favour of `--acp`.
+  gemini: { command: "gemini", args: ["--acp"] },
+  codex: { command: "npx", args: ["-y", "@zed-industries/codex-acp"] },
 };
 
-const id = process.argv[2] ?? "claude-code";
-const provider = PROVIDERS[id];
-if (!provider) {
-  console.error(`unknown provider '${id}'. known: ${Object.keys(PROVIDERS).join(", ")}`);
+// Anything after `--` is a raw command, so a brand-new agent can be probed
+// before it is written down anywhere. The shortcuts above are convenience.
+const argv = process.argv.slice(2);
+const rawAt = argv.indexOf("--");
+const provider =
+  rawAt === -1
+    ? PROVIDERS[argv[0] ?? "claude-code"]
+    : { command: argv[rawAt + 1], args: argv.slice(rawAt + 2) };
+
+if (!provider?.command) {
+  console.error(`unknown provider '${argv[0]}'. known: ${Object.keys(PROVIDERS).join(", ")}`);
+  console.error("or probe anything directly:  node handshake.mjs -- <command> [args...]");
   process.exit(1);
 }
 
