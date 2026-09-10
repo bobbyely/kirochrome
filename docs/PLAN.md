@@ -296,6 +296,12 @@ agent-supplied argument options landed after that.
 CI landed: `npm run typecheck` and `npm test` run on every push and pull
 request, and changes reach `main` through a PR that merges on green.
 
+**A closed session no longer appends.** Its agent exits a moment after
+`close()` returns, and if the conversation had been resumed in that window the
+two Sessions claimed the same `seq` — one INSERT failed and its log disagreed
+with the disk a reconnecting browser replays from. This was the source of the
+`UNIQUE constraint failed` lines the test suite had been printing all along.
+
 **The stale-provider bug is fixed.** A provider is condemned only by an agent
 that exits non-zero having never completed a turn; a crash after a successful
 turn leaves a dead session and an untouched provider. Two sessions on one

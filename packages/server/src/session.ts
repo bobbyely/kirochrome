@@ -796,6 +796,14 @@ export class Session {
 
   /** The only way anything enters the log. Append-only, monotonic seq, durable. */
   private append(event: KcEventInput): void {
+    // A closed session must not write again. The conversation may already have
+    // been taken over by a resumed Session, which read `lastSeq` the moment it
+    // was asked for and has claimed the seq this append would use — archive
+    // then reopen, or a reconnect arriving as the old agent dies. The loser of
+    // that race fails its INSERT and its in-memory log then disagrees with the
+    // disk a reconnecting browser replays from.
+    if (this.closing) return;
+
     const full = { ...event, seq: ++this.seq, ts: Date.now() } as KcEvent;
     this.log.push(full);
     try {
@@ -924,11 +932,13 @@ export class Session {
   }
 
   close(): void {
+    // Buffered text is the session's last words: flush it while the log still
+    // accepts writes, because `closing` stops `append` for good.
+    this.flushText();
     this.closing = true;
     // Release anything blocked on a human; the agent is going away regardless.
     this.releasePending();
     this.terminals.releaseAll();
-    this.flushText();
     this.connection?.close();
     this.proc?.kill();
   }

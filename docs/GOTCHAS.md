@@ -50,7 +50,7 @@ bug from the next person, who has no reason to know.
 
 ## Concurrency
 
-Both of these were real races, found the hard way.
+All of these were real races, found the hard way.
 
 - **Single-flight anything that awaits before registering itself.** `resume`
   awaits a handshake, so two calls arriving in that window each built a Session
@@ -60,6 +60,14 @@ Both of these were real races, found the hard way.
   `append` notifies subscribers synchronously, so an answer arriving
   synchronously would find no pending entry and be dropped, blocking the agent
   forever. This is exactly how the permission race was found.
+- **A closed session must stop appending.** `close()` returns immediately but
+  the agent exits milliseconds later, and its exit handler appends. If the
+  conversation has been resumed in the meantime — archive then reopen, or a
+  reconnect arriving as the old agent dies — the new Session read `lastSeq`
+  before that append landed and has claimed the same seq. One INSERT then fails
+  and *that* session's in-memory log disagrees with the disk the browser
+  replays from. Flush buffered text before setting the flag, or the last words
+  go missing instead.
 - **Every map of "requests waiting on a human" must be drained on *both* ways
   out** — a crashed agent and a deliberate `close()`. Elicitations are the
   second such map after permissions, which is why `releasePending()` exists
