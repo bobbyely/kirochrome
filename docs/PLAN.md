@@ -263,20 +263,17 @@ than a surprise. Each entry says what would go wrong if it is left.
   second install and the drift.
 - **`packages/web/src` is flat** — twenty files, no directories. Fine now,
   awkward once the side pane lands.
-- **Every keystroke re-renders the whole transcript.** `draft` is `useState` in
-  `Chat` and the rows render from the same component, with no `React.memo`
-  anywhere in the file — so one character re-renders up to `INITIAL_ROWS` (60)
-  rows, and each prose row re-parses its markdown through `react-markdown` and
-  re-highlights its code blocks. `buildRows` is memoized, so the fold is not
-  re-running; the rendering is. Cheap fix: `React.memo` on the row renderer —
-  row objects are referentially stable between keystrokes, so it becomes a
-  bail-out. Real fix: move the composer, its completion state and its images out
-  of `Chat`, which the split below does anyway. **Found by reading, not
-  measured** — the discriminating test is whether typing degrades as the
-  transcript grows.
-- **`session.ts` (799) and `Chat.tsx` (770) do several jobs each.** Covered by
-  the review section above; listed here so the debt is in one place. The
-  composer living inside `Chat` is what makes the typing entry above possible.
+- **`session.ts` (971) does several jobs.** Covered by the review section above;
+  listed here so the debt is in one place. `Chat.tsx` has come down from 992 to
+  711 with the composer split out, but it still owns the transcript, the scroll
+  behaviour and every row renderer.
+- **`buildRows` allocates fresh row objects on every event.** Harmless while
+  typing, since the memo is keyed on an unchanged `events` array — but during a
+  turn every delta rebuilds every row, so the `Message` memo bails out for none
+  of them even though only the last row changed. Reusing unchanged rows across
+  folds would make streaming cost proportional to what actually changed.
+  **Not measured**, and it needs the fold to become incremental, which is a
+  bigger change than it sounds.
 
 #### Smaller, still open
 
@@ -295,6 +292,15 @@ agent-supplied argument options landed after that.
 
 CI landed: `npm run typecheck` and `npm test` run on every push and pull
 request, and changes reach `main` through a PR that merges on green.
+
+**Typing no longer re-renders the transcript.** `draft` lived in `Chat`, which
+also rendered every row, so each keystroke re-rendered up to 60 rows and
+re-parsed the markdown in each of them. The composer — draft, images,
+completion, the queue and the config pickers — is now `Composer.tsx`, and
+`Message` and `MarkdownBody` are memoized as a backstop. **The improvement is
+unverified:** there is still no browser on the dev box, so this was reasoned
+rather than measured, and the discriminating test remains whether typing
+degrades as the transcript grows.
 
 **A closed session no longer appends.** Its agent exits a moment after
 `close()` returns, and if the conversation had been resumed in that window the
