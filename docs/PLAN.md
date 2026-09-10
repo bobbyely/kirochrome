@@ -267,8 +267,20 @@ than a surprise. Each entry says what would go wrong if it is left.
   in two files.
 - **`packages/web/src` is flat** — twenty files, no directories. Fine now,
   awkward once the side pane lands.
+- **Every keystroke re-renders the whole transcript.** `draft` is `useState` in
+  `Chat` and the rows render from the same component, with no `React.memo`
+  anywhere in the file — so one character re-renders up to `INITIAL_ROWS` (60)
+  rows, and each prose row re-parses its markdown through `react-markdown` and
+  re-highlights its code blocks. `buildRows` is memoized, so the fold is not
+  re-running; the rendering is. Cheap fix: `React.memo` on the row renderer —
+  row objects are referentially stable between keystrokes, so it becomes a
+  bail-out. Real fix: move the composer, its completion state and its images out
+  of `Chat`, which the split below does anyway. **Found by reading, not
+  measured** — the discriminating test is whether typing degrades as the
+  transcript grows.
 - **`session.ts` (799) and `Chat.tsx` (770) do several jobs each.** Covered by
-  the review section above; listed here so the debt is in one place.
+  the review section above; listed here so the debt is in one place. The
+  composer living inside `Chat` is what makes the typing entry above possible.
 
 #### Smaller, still open
 
