@@ -229,6 +229,34 @@ describe("a dying agent", () => {
   });
 });
 
+describe("a closed session", () => {
+  it("stops appending, so its successor cannot collide with it", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    const off = autoApprove(session);
+    await session.prompt("hello");
+    off();
+    const id = session.id;
+
+    // Close and resume in the same breath — archive-then-reopen, or a reconnect
+    // arriving as the old agent dies. `close()` returns immediately and the
+    // process exits milliseconds later, by which time the resumed session has
+    // already read `lastSeq` and claimed the next one.
+    const revived = new SessionManager(store);
+    session.close();
+    const resumed = await revived.resume(id, provider);
+    await new Promise((r) => setTimeout(r, 300));
+
+    // The log on disk is what a reconnecting browser replays, so it must be
+    // exactly what the live session believes happened.
+    assert.deepEqual(
+      store.eventsSince(id, 0).map((e) => `${e.seq}:${e.type}`),
+      resumed.eventsSince(0).map((e) => `${e.seq}:${e.type}`),
+      "disk and memory must agree",
+    );
+    revived.closeAll();
+  });
+});
+
 describe("compaction", () => {
   it("is advertised, so the agent is allowed to report it", async () => {
     const session = await sessions.open(provider, "/tmp");
