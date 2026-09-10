@@ -192,6 +192,11 @@ renderer. Neither is urgent, but they are where the next subtle bug will hide.
 **When you fix something a review finds, add the test and the gotcha.** That is
 why the list above is specific enough to be useful.
 
+Record each review in [REVIEWS.md](REVIEWS.md) — date, the commit it ran
+through, and what it found. The range matters more than the date: the next
+review starts where the last ended, and a missing row is indistinguishable from
+a skipped review.
+
 #### Smaller, still open
 
 - Verify the design pass on a real screen: the theme, the K spinner and the
