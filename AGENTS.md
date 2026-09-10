@@ -201,19 +201,47 @@ The session-supplied email identifies the user; it does not stamp authorship.
 imperative — "Support the agent's slash commands, which is where Kiro hides
 effort". Not Conventional Commits; no `feat:` prefixes.
 
-### Changes land through a pull request
+### Changes land through a pull request, in their own worktree
 
 **Branch, push, open a PR, and merge only once CI is green.** Not because
 anyone is waiting to review it — because the check is what stops bad code
 reaching `main`, and fixing `main` after the fact is strictly worse than
 fixing a branch.
 
+**Each change gets a worktree**, so several can be in flight at once without
+stashing, and the main checkout stays on `main` and stays buildable.
+`scripts/wt.mjs` drives the whole cycle:
+
 ```bash
-git checkout -b <topic>
+npm run wt -- new <topic>              # branch + worktree + npm install
+cd ../kirochrome-worktrees/<topic>
+#   ... work, commit ...
 git push -u origin <topic>
 gh pr create
 gh pr merge --rebase --delete-branch   # after the check passes
+cd -                                   # back to the main checkout
+npm run wt -- done <topic>             # removes the worktree and the branch
 ```
+
+`npm run wt -- list` shows every worktree with its PR state. `prune` sweeps
+every merged one at once, and prints what it would remove unless given `--yes`.
+
+**Use the helper rather than raw `git worktree`.** Rebase-merging rewrites the
+commits, so a merged branch is never an ancestor of `main` and `git branch
+--merged` reports nothing — cleanup has to ask GitHub whether the PR merged,
+which is exactly the step that gets skipped. `done` asks, and refuses to remove
+a worktree holding uncommitted or unpushed work.
+
+**Worktrees are siblings of the repo**, at `../kirochrome-worktrees/<topic>`,
+not folders inside it: a nested checkout would be picked up by the npm
+workspace glob, by `tsc -b` and by vite's watcher. Each has its own
+`node_modules`, which is the real cost of this and the reason `wt new` installs
+for you — including `spike/`, which installs separately.
+
+**One dev server at a time.** Worktrees share ports 4711 and 5173 and a single
+database, so stop the one that is running before starting another. Per-worktree
+ports and data directories were considered and dropped: more machinery than the
+problem is worth, when stopping one server is free.
 
 **Rebase, never merge-commit.** The history here is linear and worth keeping
 that way.
