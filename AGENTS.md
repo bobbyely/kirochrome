@@ -112,10 +112,13 @@ Breaking one of these is a design regression, not a style nit.
 (provider config, check results, HTTP payloads), `ws.ts` (socket messages).
 
 **`packages/web`** — `App.tsx` routes; `Chat.tsx` is **the other big one**
-(transcript, composer, completion, every row renderer); `timeline.ts` folds
-events into typed rows; `useChat.ts` is the socket and resume-by-seq;
-`Setup.tsx` is the ladder UI; then `Sidebar`, `NewChat`, `commands`, `diff`,
-`images`, `theme`, `useShortcuts`, `Markdown`, `KSpinner`, `api`.
+(transcript, scroll-following, every row renderer); `Composer.tsx` is the
+message box and everything that changes per keystroke — draft, images,
+completion, the queue and the config pickers — kept out of `Chat` so typing does
+not re-render the transcript; `timeline.ts` folds events into typed rows;
+`useChat.ts` is the socket and resume-by-seq; `Setup.tsx` is the ladder UI; then
+`Sidebar`, `NewChat`, `commands`, `diff`, `images`, `theme`, `useShortcuts`,
+`Markdown`, `KSpinner`, `api`.
 
 **`spike/`** is misnamed — see the debt section in [PLAN.md](docs/PLAN.md).
 `mock-agent.mjs` is a load-bearing test fixture and a seeded provider, not a

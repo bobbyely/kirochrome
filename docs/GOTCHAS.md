@@ -108,6 +108,14 @@ All of these were real races, found the hard way.
   newlines between block elements literally, double-spacing every paragraph.
 - **The WebSocket lives at `/ws`.** At `/` it collides with Vite's hot-reload
   socket, and dev mode silently never connects.
+- **State that changes per keystroke does not belong in the transcript's
+  component.** `draft` was `useState` in `Chat`, which also rendered every row,
+  so one character re-rendered up to 60 rows and each prose row re-parsed its
+  markdown and re-highlighted its code blocks. `buildRows` being memoized did
+  not help — the fold was not re-running, the *rendering* was. The composer is
+  now its own component for that reason, and `Message` and `MarkdownBody` are
+  memoized as a backstop. Before adding fast-changing state, ask what else is
+  rendered by the component you are putting it in.
 
 ## Working on the repo
 
