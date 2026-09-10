@@ -135,6 +135,37 @@ compaction status the protocol already reports.
   editor with a cursor and a focused buffer. A browser chat is not that, and
   faking it would be worse than leaving it to an actual editor integration.
 
+#### Periodic code review
+
+Review after each roadmap item lands, not at some distant tidy-up. This
+codebase has produced 25 recorded gotchas across 56 commits, and they cluster —
+so a review here should look for the shapes that have actually bitten, rather
+than generic style points:
+
+- **Claims we do not honour.** We advertised `fs` capabilities for weeks with no
+  handlers. Anything added to `clientCapabilities`, or any invariant written
+  into AGENTS.md, is a promise — check it is kept.
+- **Awaits that register too late.** The permission race and the concurrent
+  resume were both "check, await, then register", where a second caller arrives
+  in the window. Any new `async` path that looks something up before creating it
+  deserves a second read.
+- **Per-session versus global.** Orphan reaping and `TerminalRegistry` both
+  started per-session and had to become global; the failure was quiet and
+  cross-session. Ask what happens with two conversations open.
+- **Protocol assumptions.** `session/cancel` being a notification,
+  `session/load` returning config, both dialects arriving at once — every one
+  was found by reading the spec after the fact. Check new protocol code against
+  <https://agentclientprotocol.com>, not against what seems reasonable.
+
+Two files have grown past comfortable and are the obvious first targets:
+`session.ts` (799 lines) and `Chat.tsx` (770). Both do several jobs now —
+`Session` owns process lifecycle, protocol handlers, the queue, permissions and
+persistence, and `Chat` owns transport wiring, completion, and every row
+renderer. Neither is urgent, but they are where the next subtle bug will hide.
+
+**When you fix something a review finds, add the test and the gotcha.** That is
+why the list above is specific enough to be useful.
+
 #### Smaller, still open
 
 - Verify the design pass on a real screen: the theme, the K spinner and the
