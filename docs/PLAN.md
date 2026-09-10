@@ -417,9 +417,14 @@ benefit. `Origin` checking is implemented now and the WebSocket arrives in phase
 ### Known rough edge
 
 A non-ACP process only fails after the full 60s handshake timeout, which is a
-long stare at a spinner. The timeout is generous because `npx` may download an
-adapter on first run. Worth a per-provider override, or streaming rung progress
-to the UI once the WebSocket lands in phase 2.
+long stare at a spinner. Worth a per-provider override, or streaming rung
+progress to the UI.
+
+**The reason given for the generous timeout was wrong.** It said `npx` may
+download an adapter on first run — but `npx -y` re-resolves on *every* spawn,
+which measured 81s against 0.5s for the same binary, so the seeded Claude Code
+provider failed the ladder every time on a warm cache. The seeds now name
+binaries; see the spawning gotcha.
 
 ---
 

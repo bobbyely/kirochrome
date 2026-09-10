@@ -48,6 +48,20 @@ bug from the next person, who has no reason to know.
   `session/new` does. Discarding its response leaves a resumed conversation
   with no pickers at all.
 
+## Spawning agents
+
+- **Never seed a provider as `npx -y <package>`.** `-y` means "do not prompt",
+  not "use the cache": npx re-resolves the package against the registry on
+  every spawn. Measured on a dev machine, `npx -y @agentclientprotocol/claude-agent-acp`
+  took **81 seconds** to answer `initialize`, against **0.5 seconds** for the
+  same adapter's binary — so the check died at the 60s handshake timeout, every
+  time, with a warm cache.
+
+  The damage is not the delay, it is the diagnosis. `AGENT_HANDSHAKE_TIMEOUT`
+  says the command may not be an ACP server, which sends you to inspect a
+  perfectly healthy agent. Seed the binary: a missing one fails at `resolve` in
+  7ms with an install hint and a path field, which is the error you want.
+
 ## Concurrency
 
 All of these were real races, found the hard way.

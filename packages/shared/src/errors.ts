@@ -61,7 +61,7 @@ export const REMEDIATION: Record<KcErrorCode, string> = {
   AGENT_EXITED:
     "The agent exited unexpectedly. Check the stderr output below for the cause.",
   AGENT_HANDSHAKE_TIMEOUT:
-    "The agent started but never completed the ACP handshake. Confirm the command really starts an ACP server (for Kiro that is `kiro-cli acp`).",
+    "The agent started but never completed the ACP handshake. Confirm the command really starts an ACP server (for Kiro that is `kiro-cli acp`). If it is wrapped in `npx`, that is the likely cause: npx re-resolves the package against the registry on every spawn and can use the whole timeout before the agent runs. Install the agent and point at its binary instead.",
   AGENT_PROTOCOL_MISMATCH:
     "This agent speaks an ACP version we do not support. Update the agent, or update KiroChrome.",
   AGENT_AUTH_REQUIRED:
