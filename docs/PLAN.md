@@ -308,6 +308,15 @@ than a surprise. Each entry says what would go wrong if it is left.
 
 #### Smaller, still open
 
+- **Tool calls should stay collapsed, including while the turn runs.** The
+  individual cards already are — `ToolCard` renders a `<details>` with no
+  `open`. What expands is the *group*: `WorkGroup` initialises `open` from
+  `row.active` and keeps following it until the user touches it, so a run of
+  tools opens while it is working and collapses when the turn ends. The intent
+  was to show live progress; the effect is that the transcript is at its most
+  open exactly when it is moving fastest, and the page jumps. Collapse by
+  default instead, and make the summary line carry enough — tool count, status
+  mark, the command once it is known — to decide whether to open it.
 - Verify the design pass on a real screen: the theme, the K spinner and the
   switch were all built without a browser to look at.
 - True virtualisation, if the windowed transcript proves insufficient.
