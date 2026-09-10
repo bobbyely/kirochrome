@@ -1,4 +1,11 @@
-import type { Attachment, KcEvent, PermissionOption } from "@kirochrome/shared";
+import type {
+  Attachment,
+  ElicitationAction,
+  ElicitationField,
+  ElicitationValue,
+  KcEvent,
+  PermissionOption,
+} from "@kirochrome/shared";
 import { updateCategory } from "@kirochrome/shared";
 
 /**
@@ -17,6 +24,16 @@ export type Row =
   | { kind: "thought"; seq: number; text: string }
   | { kind: "tool"; seq: number; toolCallId: string; title: string; toolKind: string; status: string; details: unknown[] }
   | { kind: "permission"; seq: number; requestId: string; title: string; options: PermissionOption[]; answeredWith: string | null }
+  | {
+      kind: "elicitation";
+      seq: number;
+      requestId: string;
+      message: string;
+      title: string | undefined;
+      fields: ElicitationField[];
+      /** Null while the question is still open. */
+      answer: { action: ElicitationAction; content?: Record<string, ElicitationValue> } | null;
+    }
   | { kind: "note"; seq: number; label: string }
   /** Consecutive tool calls and thinking, folded into one collapsible run. */
   | { kind: "work"; seq: number; children: Row[]; tools: number; thoughts: number; active: boolean }
@@ -69,6 +86,7 @@ export function buildRows(events: KcEvent[]): Row[] {
   const rows: Row[] = [];
   const toolRows = new Map<string, Extract<Row, { kind: "tool" }>>();
   const permissionRows = new Map<string, Extract<Row, { kind: "permission" }>>();
+  const elicitationRows = new Map<string, Extract<Row, { kind: "elicitation" }>>();
 
   for (const event of events) {
     switch (event.type) {
@@ -132,6 +150,27 @@ export function buildRows(events: KcEvent[]): Row[] {
       case "permission_resolved": {
         const row = permissionRows.get(event.requestId);
         if (row) row.answeredWith = event.optionId ?? event.outcome;
+        break;
+      }
+
+      case "elicitation_request": {
+        const row: Extract<Row, { kind: "elicitation" }> = {
+          kind: "elicitation",
+          seq: event.seq,
+          requestId: event.requestId,
+          message: event.message,
+          title: event.title,
+          fields: event.fields,
+          answer: null,
+        };
+        elicitationRows.set(event.requestId, row);
+        rows.push(row);
+        break;
+      }
+
+      case "elicitation_resolved": {
+        const row = elicitationRows.get(event.requestId);
+        if (row) row.answer = { action: event.action, content: event.content };
         break;
       }
 

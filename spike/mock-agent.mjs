@@ -98,6 +98,84 @@ const app = agent({ name: "mock-agent" })
       return { stopReason: "end_turn" };
     }
 
+    // A structured question. Kept behind its own keyword so the main turn's
+    // event count stays stable for the tests that assert on it.
+    if (params.prompt?.[0]?.text === "elicit") {
+      const answer = await client.request("elicitation/create", {
+        mode: "form",
+        sessionId: params.sessionId,
+        message: "Which release should I cut?",
+        requestedSchema: {
+          type: "object",
+          title: "Release options",
+          properties: {
+            // Every field kind the client claims to render, including both
+            // enum dialects: titled (oneOf/anyOf) and untitled (enum).
+            channel: {
+              type: "string",
+              title: "Channel",
+              oneOf: [
+                { const: "stable", title: "Stable" },
+                { const: "beta", title: "Beta", description: "Ships to testers" },
+              ],
+            },
+            notes: { type: "string", title: "Release notes", maxLength: 200 },
+            bump: { type: "integer", title: "Version bump", minimum: 0, maximum: 3 },
+            sign: { type: "boolean", title: "Sign the tag", default: true },
+            targets: {
+              type: "array",
+              title: "Targets",
+              items: { type: "string", enum: ["linux", "macos", "windows"] },
+            },
+            // Not a type we render, and not required — must be dropped rather
+            // than failing the whole form.
+            weird: { type: "_vendor.thing", title: "Vendor extension" },
+          },
+          required: ["channel"],
+        },
+      });
+      await notify({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: `[elicitation: ${JSON.stringify(answer)}]` },
+      });
+      return { stopReason: "end_turn" };
+    }
+
+    // A mode we never advertised. The client must decline it, not hang.
+    if (params.prompt?.[0]?.text === "elicit-url") {
+      const answer = await client.request("elicitation/create", {
+        mode: "url",
+        sessionId: params.sessionId,
+        elicitationId: "elicit-url-1",
+        url: "https://example.com/authorise",
+        message: "Authorise in your browser",
+      });
+      await notify({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: `[elicitation: ${JSON.stringify(answer)}]` },
+      });
+      return { stopReason: "end_turn" };
+    }
+
+    // A required field we cannot render: the whole form must be declined.
+    if (params.prompt?.[0]?.text === "elicit-unrenderable") {
+      const answer = await client.request("elicitation/create", {
+        mode: "form",
+        sessionId: params.sessionId,
+        message: "Pick a colour",
+        requestedSchema: {
+          type: "object",
+          properties: { colour: { type: "_vendor.colour", title: "Colour" } },
+          required: ["colour"],
+        },
+      });
+      await notify({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: `[elicitation: ${JSON.stringify(answer)}]` },
+      });
+      return { stopReason: "end_turn" };
+    }
+
     // Session-state updates: these must NOT become transcript rows.
     await notify({
       sessionUpdate: "available_commands_update",

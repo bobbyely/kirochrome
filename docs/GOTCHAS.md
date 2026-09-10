@@ -31,6 +31,10 @@ bug from the next person, who has no reason to know.
   half: advertised by `available_commands_update` and run as ordinary prompt
   text. Kiro exposes reasoning effort only that way, so a missing picker does
   not mean a missing feature.
+- **`elicitation/create` is a form, not a multiple choice**, and it has a
+  second mode that sends the user to a URL. Advertise the modes you actually
+  render — we claim `form` alone and decline the rest — and remember that
+  `decline` is a legitimate answer, so declining is never a reason to throw.
 - **`session/load` returns `modes` and `configOptions` too**, exactly as
   `session/new` does. Discarding its response leaves a resumed conversation
   with no pickers at all.
@@ -47,6 +51,11 @@ Both of these were real races, found the hard way.
   `append` notifies subscribers synchronously, so an answer arriving
   synchronously would find no pending entry and be dropped, blocking the agent
   forever. This is exactly how the permission race was found.
+- **Every map of "requests waiting on a human" must be drained on *both* ways
+  out** — a crashed agent and a deliberate `close()`. Elicitations are the
+  second such map after permissions, which is why `releasePending()` exists
+  rather than two more loops copied into each path. A promise nobody will
+  resolve turns a close into a hang.
 
 ## Processes
 

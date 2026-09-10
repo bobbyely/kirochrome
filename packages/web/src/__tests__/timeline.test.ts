@@ -68,6 +68,25 @@ describe("buildRows", () => {
     ]);
     assert.deepEqual(rows.map((r) => r.kind), ["agent"]);
   });
+
+  it("folds an elicitation and its answer into one row", () => {
+    const fields = [{ key: "channel", label: "Channel", required: true, type: "text" as const }];
+    const rows = buildRows([
+      ev({ type: "elicitation_request", requestId: "e1", message: "Which?", fields } as never, 1),
+      ev({ type: "elicitation_resolved", requestId: "e1", action: "accept", content: { channel: "beta" } } as never, 2),
+    ]);
+    assert.equal(rows.length, 1, "the answer must not add a second row");
+    const row = rows[0]!;
+    assert.ok(row.kind === "elicitation");
+    assert.deepEqual(row.answer, { action: "accept", content: { channel: "beta" } });
+  });
+
+  it("leaves an unanswered elicitation open, which is what shows the form", () => {
+    const rows = buildRows([
+      ev({ type: "elicitation_request", requestId: "e1", message: "Which?", fields: [] } as never, 1),
+    ]);
+    assert.equal(rows[0]!.kind === "elicitation" && rows[0]!.answer, null);
+  });
 });
 
 describe("toolContent", () => {

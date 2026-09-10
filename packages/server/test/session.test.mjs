@@ -167,6 +167,115 @@ describe("concurrent resume", () => {
   });
 });
 
+describe("elicitation", () => {
+  it("asks the form, holds the agent open, and returns coerced content", async () => {
+    const session = await sessions.open(provider, "/tmp");
+
+    let asked = null;
+    const off = session.subscribe((events) => {
+      for (const e of events) {
+        if (e.type !== "elicitation_request") continue;
+        asked = e;
+        // The browser sends strings; the schema asked for a number, a boolean
+        // and an array, so the server must coerce before the agent sees it.
+        session.resolveElicitation(e.requestId, "accept", {
+          channel: "beta",
+          notes: "nightly",
+          bump: "2",
+          sign: false,
+          targets: ["linux", "windows", "solaris"],
+          uninvited: "should be dropped",
+        });
+      }
+    });
+
+    await session.prompt("elicit");
+    off();
+
+    assert.ok(asked, "the agent's question must reach the log");
+    assert.equal(asked.message, "Which release should I cut?");
+    assert.equal(asked.title, "Release options");
+
+    const byKey = Object.fromEntries(asked.fields.map((f) => [f.key, f]));
+    assert.deepEqual(Object.keys(byKey).sort(), ["bump", "channel", "notes", "sign", "targets"]);
+    assert.equal(byKey.weird, undefined, "an unrenderable optional field is dropped");
+    assert.equal(byKey.channel.type, "select");
+    assert.equal(byKey.channel.required, true);
+    assert.deepEqual(byKey.channel.choices.map((c) => c.value), ["stable", "beta"]);
+    assert.equal(byKey.channel.choices[1].label, "Beta", "titled enums keep their titles");
+    assert.equal(byKey.notes.type, "text");
+    assert.equal(byKey.notes.required, false);
+    assert.equal(byKey.bump.type, "number");
+    assert.equal(byKey.bump.integer, true);
+    assert.equal(byKey.sign.type, "boolean");
+    assert.equal(byKey.sign.default, true);
+    assert.deepEqual(byKey.targets.choices.map((c) => c.value), ["linux", "macos", "windows"]);
+
+    const resolved = session.eventsSince(0).find((e) => e.type === "elicitation_resolved");
+    assert.equal(resolved.action, "accept");
+    assert.deepEqual(
+      resolved.content,
+      { channel: "beta", notes: "nightly", bump: 2, sign: false, targets: ["linux", "windows"] },
+      "numbers parsed, unknown keys and values outside the schema dropped",
+    );
+
+    // The agent received exactly what we recorded, so the log is not a
+    // flattering version of what happened.
+    const echo = session.eventsSince(0).filter((e) => e.type === "agent_text").map((e) => e.text).join("");
+    assert.ok(echo.includes('"action":"accept"'), `agent saw: ${echo}`);
+    assert.ok(echo.includes('"bump":2'), `agent saw: ${echo}`);
+    session.close();
+  });
+
+  it("declines a mode it never advertised, instead of hanging", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    await session.prompt("elicit-url");
+
+    const log = session.eventsSince(0);
+    assert.equal(log.at(-1).type, "turn_end", "the turn must still finish");
+    assert.ok(
+      log.some((e) => e.type === "error" && e.error.detail?.mode === "url"),
+      "the refusal is recorded, not silent",
+    );
+    const echo = log.filter((e) => e.type === "agent_text").map((e) => e.text).join("");
+    assert.ok(echo.includes('"action":"decline"'), `agent saw: ${echo}`);
+    session.close();
+  });
+
+  it("declines a form whose required field it cannot render", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    await session.prompt("elicit-unrenderable");
+
+    const log = session.eventsSince(0);
+    assert.ok(
+      log.some((e) => e.type === "error" && e.error.detail?.key === "colour"),
+      "the field we could not render is named",
+    );
+    assert.ok(!log.some((e) => e.type === "elicitation_request"), "no unanswerable form is shown");
+    const echo = log.filter((e) => e.type === "agent_text").map((e) => e.text).join("");
+    assert.ok(echo.includes('"action":"decline"'), `agent saw: ${echo}`);
+    session.close();
+  });
+
+  it("cancels anything still waiting when the session closes", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    let seen = false;
+    const off = session.subscribe((events) => {
+      // Deliberately never answer: closing must release the agent instead.
+      for (const e of events) if (e.type === "elicitation_request") seen = true;
+    });
+
+    const turn = session.prompt("elicit");
+    await new Promise((r) => setTimeout(r, 300));
+    assert.ok(seen, "the question was asked");
+    assert.equal(session.summary().awaitingInput, true, "the session reports it is blocked");
+
+    session.close();
+    await turn; // must settle, not hang
+    off();
+  });
+});
+
 describe("provider defaults", () => {
   it("re-apply to a new session, and survive a withdrawn option", async () => {
     const first = await sessions.open(provider, "/tmp");
