@@ -51,11 +51,14 @@ export class SessionManager {
     // A dead agent is not a live session: drop it so prompting reports
     // SESSION_NOT_LIVE with a way forward, rather than a confusing
     // "the agent is not connected" from a session the UI still thinks is fine.
-    session.onExit((unexpected) => {
+    session.onExit((reason) => {
       this.live.delete(session.id);
       // Invariant 11: a runtime failure contradicts the provider's last check,
-      // so stop trusting it until it is re-checked.
-      if (unexpected) this.store.markStale(session.provider.id);
+      // so stop trusting it until it is re-checked. But only a failure that is
+      // about the *provider* — one conversation crashing is not evidence the
+      // binary or the login is wrong, and condemning the provider would remove
+      // it from the new-chat list while another session runs on it happily.
+      if (reason.providerAtFault) this.store.markStale(session.provider.id);
       broadcast();
     });
     broadcast();

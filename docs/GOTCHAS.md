@@ -78,6 +78,14 @@ Both of these were real races, found the hard way.
 - **Reap orphaned processes once at startup, never per session** — per-session
   reaping kills processes belonging to sessions that are still alive.
 - **Never log `env`** when logging a spawn.
+- **One session's crash is not a verdict on its provider.** Marking a provider
+  stale removes it from the new-chat list until someone re-runs the check, so it
+  needs evidence about the *provider* — not about one conversation. An agent
+  that completed a turn has already proved the binary, args and login are fine;
+  crashing later says the session died, and the session running beside it on the
+  same provider says so too. Only an agent that exits non-zero having never
+  answered is real evidence. Per-session evidence driving a global verdict is a
+  recurring shape here — ask what happens with two conversations open.
 
 ## Storage
 

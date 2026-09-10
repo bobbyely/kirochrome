@@ -234,37 +234,9 @@ a skipped review.
 
 Wrong, not deferred. Debt below is a decision; this is a defect.
 
-- **One agent exiting marks the whole provider stale.** Symptom: Claude Code is
-  working in an open conversation, but it has vanished from the new-chat list
-  and Setup says "Needs re-check".
-
-  `SessionManager.track` marks the *provider* stale on any unexpected agent
-  exit, and `unexpected` is merely `!this.closing` — set in exactly one place,
-  `close()`. So a crash in one conversation, an adapter exiting on its own, or
-  the Claude Code adapter's nested-session refusal all condemn the provider,
-  while the session running beside it carries on fine. The live session is
-  untouched; what is lost is starting a *new* one, because `NewChat` filters on
-  `lastCheck?.status === "ok"`.
-
-  The other stale path, `staleOnFailure`, is already right: it fires only for
-  the five `PROVIDER_FAULT_CODES`, which do say the provider itself is wrong.
-  It is the exit handler that over-reaches.
-
-  This is the **per-session versus global** shape listed in the review section
-  above, mirrored: per-session evidence driving a global verdict. An agent that
-  ran an hour and then crashed says nothing about whether the binary or the
-  config is right, and it is contradicted by the session still running next to
-  it.
-
-  *Fix:* condemn the provider only when the exit is plausibly its fault — died
-  before the handshake completed, or exited non-zero having never completed a
-  turn. Otherwise leave it as a dead session with a Resume button, which the UI
-  already renders. Ignoring the crash entirely is the wrong other extreme: it
-  is a real signal, just not proof.
-
-  *Test:* `spike/dying-agent.mjs` exists for this. Two sessions on one provider,
-  kill one, assert the provider is still `ok` and the survivor still prompts.
-  Add the gotcha with the fix.
+None open. The last one — a single agent exit condemning its whole
+provider — is fixed and now lives as a trap in
+[GOTCHAS.md](GOTCHAS.md#processes), which is where a fixed bug belongs.
 
 #### Recorded debt
 
@@ -323,6 +295,11 @@ agent-supplied argument options landed after that.
 
 CI landed: `npm run typecheck` and `npm test` run on every push and pull
 request, and changes reach `main` through a PR that merges on green.
+
+**The stale-provider bug is fixed.** A provider is condemned only by an agent
+that exits non-zero having never completed a turn; a crash after a successful
+turn leaves a dead session and an untouched provider. Two sessions on one
+provider, one killed, is now a test.
 
 **Compaction landed, and it too was mis-scoped here.** This file said the
 protocol "already reports" compaction status and we merely failed to surface it.
