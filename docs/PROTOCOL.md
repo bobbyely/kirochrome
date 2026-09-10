@@ -107,6 +107,24 @@ does not mean a missing feature. Kiro also persists the choice in
 `~/.kiro/settings/cli.json`, where `chat.modelDefaults` sets a per-model default
 independently of any client.
 
+### Steering and ACP v2
+
+**v1 has no way to inject a message into a running turn.** The only mid-turn
+traffic is `session/request_permission` responses and `session/cancel`; a turn
+runs until a `stopReason`. Anything called "steering" on v1 is really
+cancel-then-re-prompt, and `session/cancel` must produce the `cancelled` stop
+reason, with the client marking unfinished tool calls `cancelled` too.
+
+[ACP v2](https://agentclientprotocol.com/announcements/acp-v2-draft) changes
+this at the root: `session/update` may flow at any point in a session, a prompt
+response becomes an acknowledgement rather than the end of the turn, and agents
+signal idle. That is exactly what queueing and steering need.
+
+**It is Draft.** The spec's own advice is to gate v2 behind version negotiation
+and not ship on it before it stabilises, since v1-only peers will be common for
+a long time. We negotiate v1 strictly and fail the `version` rung on anything
+else — a decision to revisit when v2 settles, not an oversight.
+
 ### Agent extensions
 
 `_kiro.dev/commands/options` is a Kiro extension supplying argument suggestions

@@ -5,6 +5,7 @@ one click away.
 
 | Document | What it is for |
 |---|---|
+| [AGENTS.local.md](AGENTS.local.md) | **Your** preferences, layered over this file |
 | [docs/DESIGN.md](docs/DESIGN.md) | Why the architecture is the way it is |
 | [docs/PLAN.md](docs/PLAN.md) | What to build next, and recorded debt |
 | [docs/PROTOCOL.md](docs/PROTOCOL.md) | What we implement of ACP, and how it actually behaves |
@@ -12,6 +13,11 @@ one click away.
 | [docs/GOTCHAS.md](docs/GOTCHAS.md) | Traps that have already cost someone a day |
 | [docs/REVIEWS.md](docs/REVIEWS.md) | The review log — read the range, not the date |
 | [docs/PRIOR-ART.md](docs/PRIOR-ART.md) | Kirodex: what to borrow, what not to port |
+
+**[AGENTS.local.md](AGENTS.local.md) wins over this file** where the two
+disagree — it is the personal layer, and it ships blank. The exception is the
+invariants below: those are correctness and security properties rather than
+preferences, so changing one means editing this file, deliberately and visibly.
 
 ## What this is
 
@@ -200,3 +206,42 @@ effort". Not Conventional Commits; no `feat:` prefixes.
   and every protocol note in [docs/PROTOCOL.md](docs/PROTOCOL.md) was found by
   reading the spec after the fact.
 - Verify claims about behaviour by running something. "Should work" is not done.
+
+## Communicating
+
+About the agent's own output, not the product's. Written to hold for whatever
+model is driving.
+
+Keep responses focused and brief. Most of the response goes on the main answer;
+caveats and disclaimers stay short. When asked to explain something, give a
+high-level summary unless depth was asked for.
+
+- **Lead with the outcome.** The first sentence after finishing answers "what
+  happened" or "what did you find" — the thing you would say if asked for the
+  TLDR. Reasoning and detail come after, for whoever wants them.
+- **Readable beats short.** If the reader has to reread it or ask what you
+  meant, brevity saved nothing. Shorten by dropping what does not change what
+  they do next, not by compressing into fragments, arrow chains (`A → B →
+  fails`) or unexpanded jargon.
+- **Match the shape to the question.** A direct question gets a direct answer
+  in prose. Tables are for short enumerable facts; if the cells hold
+  explanations, it wanted to be a paragraph.
+- **Write for a teammate catching up, not a log file.** They did not watch the
+  work happen and do not know the names you coined along the way. Say in a
+  sentence what you are about to do before the first tool call, then update
+  only when you find something load-bearing or change direction.
+- **Correct only what changes the reader's decision.** Fix the slip and carry
+  on; do not narrate it, tally it, or apologise for it.
+- **No preamble, no wrapper.** Do not restate the question, announce what you
+  are about to say, or close with a paragraph that summarises what the reader
+  just read. Start at the answer and stop when it is answered.
+- **A file's length is a separate habit.** Documents, reports and summaries
+  written to disk drift long independently of chat replies. Cover the substance
+  and stop — no filler sections, no restated summaries, no boilerplate.
+
+**Model-specific tuning does not belong here.** Instructions that counter one
+model's habits — "double-check your work", "delegate more", "delegate less" —
+invert from one generation to the next, so they belong in the per-tool file
+(`CLAUDE.md` and its equivalents) where they can be retired with the model that
+needed them. What stays in this section is the shape of good writing, which
+does not turn over.

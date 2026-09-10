@@ -150,6 +150,55 @@ Kiro has `/compact` and ACP has `compaction_update`. Today the context meter
 turns amber and the user is left to deal with it. At minimum, surface the
 compaction status the protocol already reports.
 
+#### 7. Interrupt and send
+
+Today a message typed during a turn queues and goes when the turn ends. The
+other useful thing to do with it is send it *now*.
+
+**ACP v1 cannot inject into a running turn.** There is no method for it: the
+only mid-turn traffic is permission responses and `session/cancel`, and a turn
+ends on a `stopReason`. So this is `session/cancel` → await the `cancelled`
+stopReason → `session/prompt` with the new text. The agent keeps everything
+already streamed in its context, but in-flight tool calls are abandoned and the
+spec requires they be marked `cancelled`.
+
+Call it **Interrupt and send**, not Steer. Steering implies the agent absorbs
+the message mid-flight, which is not what happens; the first person to use it
+during a long tool call and watch the work vanish should not be surprised.
+
+The shape: a per-queued-message flag, a client message, the cancel-then-prompt
+sequence in `Session`, and **an event recording the interruption** so the
+transcript shows why a turn ended early — invariant 3, this cannot be UI state.
+The queue, turn ownership and the message editing are all already there.
+
+Real steering arrives with **ACP v2**, which decouples the prompt response from
+the work lifecycle precisely so queueing and steering are expressible. It is
+Draft; see [PROTOCOL.md](PROTOCOL.md#steering-and-acp-v2).
+
+#### 8. Instructions of your own, across every agent
+
+Agents already read their own user-level instruction files, and the session's
+`cwd` gives them the project's `AGENTS.md`. What is missing is a KiroChrome
+layer: write your style once and have it hold whether you are on Kiro, Claude
+Code or Gemini.
+
+A file in the data directory, editable from the setup page, prepended to a
+session's context.
+
+*Decide when building it:*
+
+- **Global, per-provider, or both.** Both is the honest answer and the most
+  configuration; start global.
+- **First prompt or every prompt.** First is cheaper and usually enough, but a
+  long conversation drifts away from it.
+- **It must be visible in the transcript.** Injecting text into a prompt that
+  the user cannot see is how you get a session nobody can debug, and it would
+  be state the log does not hold. It goes in as an event.
+
+Do not confuse this with [AGENTS.local.md](../AGENTS.local.md), which steers
+agents working *on this repo*. This one steers agents the user runs *through*
+KiroChrome.
+
 #### Deliberately not doing
 
 - **`nes/*` (next edit suggestions)** and **`document/did*`** — both assume an

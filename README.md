@@ -32,6 +32,9 @@ parser.
 ## Docs
 
 - [AGENTS.md](AGENTS.md) — the rules, for anyone (or anything) writing code here
+- [AGENTS.local.md](AGENTS.local.md) — your own preferences, layered over those
+  rules and blank by default. Put your style, habits and shortcuts in it; it
+  takes precedence over AGENTS.md for everything except the invariants
 - [docs/DESIGN.md](docs/DESIGN.md) — architecture and the reasoning behind it
 - [docs/PLAN.md](docs/PLAN.md) — what is next, and recorded debt
 - [docs/PROTOCOL.md](docs/PROTOCOL.md) — what we implement of ACP, and how it behaves
