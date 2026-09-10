@@ -30,12 +30,15 @@ function defaultProviders(): ProviderConfig[] {
     {
       id: "claude-code",
       name: "Claude Code",
-      command: "npx",
-      args: ["-y", "@agentclientprotocol/claude-agent-acp"],
+      // The installed binary, not `npx -y ...`. See the npx gotcha: the wrapper
+      // re-resolves the package on every spawn and can spend the whole
+      // handshake budget before the agent starts.
+      command: "claude-agent-acp",
+      args: [],
       install: {
-        darwin: "npm install -g @anthropic-ai/claude-code",
-        linux: "npm install -g @anthropic-ai/claude-code",
-        win32: "npm install -g @anthropic-ai/claude-code",
+        darwin: "npm install -g @agentclientprotocol/claude-agent-acp",
+        linux: "npm install -g @agentclientprotocol/claude-agent-acp",
+        win32: "npm install -g @agentclientprotocol/claude-agent-acp",
       },
       docsUrl: "https://github.com/anthropics/claude-code",
     },
@@ -56,12 +59,12 @@ function defaultProviders(): ProviderConfig[] {
     {
       id: "codex",
       name: "Codex",
-      command: "npx",
-      args: ["-y", "@zed-industries/codex-acp"],
+      command: "codex-acp",
+      args: [],
       install: {
-        darwin: "npm install -g @openai/codex",
-        linux: "npm install -g @openai/codex",
-        win32: "npm install -g @openai/codex",
+        darwin: "npm install -g @zed-industries/codex-acp",
+        linux: "npm install -g @zed-industries/codex-acp",
+        win32: "npm install -g @zed-industries/codex-acp",
       },
       docsUrl: "https://github.com/zed-industries/codex-acp",
     },

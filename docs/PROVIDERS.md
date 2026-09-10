@@ -42,13 +42,32 @@ own machine.
 | Provider | Command | Verified? |
 |---|---|---|
 | Mock agent | `node spike/mock-agent.mjs` | **Yes** — all seven rungs, every release. It is the test fixture. |
-| Claude Code | `npx -y @agentclientprotocol/claude-agent-acp` | **Yes** — full ladder, ACP v1, `loadSession`, an `authMethods` entry, streaming and tool calls. |
+| Claude Code | `claude-agent-acp` | **Yes** — full ladder, ACP v1, `loadSession`, image and embedded-context prompts, and Claude Code's `sessionCapabilities` (`list`, `fork`, `resume`, `close`). |
 | Kiro CLI | `kiro-cli acp` | **No** — Kiro is only on the work machine. Its dialect is the one open protocol question. |
 | Gemini CLI | `gemini --acp` | **Partly** — the flag is confirmed to exist (`--experimental-acp` is deprecated in favour of it). No handshake has been run. |
-| Codex | `npx -y @zed-industries/codex-acp` | **No** — the adapter package exists and is current; nothing beyond that has been checked. |
+| Codex | `codex-acp` | **No** — the adapter package exists and is current; nothing beyond that has been checked. |
 
 Correct a row the moment you run one. A "no" that has quietly become a "yes"
 is the same problem as a wrong "yes".
+
+### Install the agent; do not wrap it in `npx`
+
+Seeds name binaries on purpose. `npx -y <package>` re-resolves the package
+against the registry on **every** spawn — `-y` suppresses the prompt, it does
+not use the cache — and that measured 81s to `initialize` on a dev machine
+against 0.5s for the same adapter's binary. The 60s handshake timeout fired
+every time, blaming the handshake for what was really package resolution.
+
+So install the adapter once:
+
+```bash
+npm install -g @agentclientprotocol/claude-agent-acp   # Claude Code
+npm install -g @zed-industries/codex-acp               # Codex
+```
+
+If you have an older `config.json`, it keeps whatever it was seeded with —
+seeds only apply to a file that does not exist yet. Edit the entry by hand, or
+use the path field on the setup page.
 
 ### Known caveat
 

@@ -129,13 +129,20 @@ function ThemePicker() {
 }
 
 /**
- * What to do when a binary is not found: where it commonly lives, how to
- * install it, and a field to point at it directly.
+ * Codes where the fix is to change the command: either the binary was not
+ * found, or it was found and never became an ACP server in time — which an
+ * `npx` wrapper causes on its own, by re-resolving the package on every spawn.
+ * Both are answered by installing the agent and pointing at its binary.
+ */
+const COMMAND_FIXABLE = new Set(["AGENT_NOT_FOUND", "AGENT_SPAWN_FAILED", "AGENT_HANDSHAKE_TIMEOUT"]);
+
+/**
+ * How to install the agent, and a field to point at it directly.
  *
  * GUI-launched processes often do not inherit a shell PATH, so an absolute
  * path is frequently the actual fix rather than installing anything.
  */
-function NotFoundHelp({
+function CommandHelp({
   provider,
   platform,
   onReload,
@@ -266,8 +273,8 @@ function ProviderCard({
             <span>{check.error.message}</span>
           </div>
           {check.error.remediation && <p className="remediation">{check.error.remediation}</p>}
-          {check.error.code === "AGENT_NOT_FOUND" && (
-            <NotFoundHelp provider={provider} platform={platform} onReload={onReload} />
+          {COMMAND_FIXABLE.has(check.error.code) && (
+            <CommandHelp provider={provider} platform={platform} onReload={onReload} />
           )}
           <Details label="Error detail" json={check.error.detail} />
           {check.error.cause && <Details label="Cause" text={check.error.cause} />}
