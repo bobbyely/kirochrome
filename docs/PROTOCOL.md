@@ -137,6 +137,37 @@ required property whose type we cannot render makes the whole form
 unsupported — we decline rather than return content that does not satisfy the
 schema the agent asked for.
 
+### Compaction has to be asked for, and its updates are patches
+
+Two things the roadmap's "surface the status the protocol already reports" got
+wrong.
+
+**It reports nothing unless you ask.** Agents MUST NOT send `compaction_update`
+or `compaction_summary_chunk` unless the client advertised
+`clientCapabilities.session.compaction`. We were not advertising it, so those
+updates were never arriving at all — there was nothing to surface. We now send
+`session: { compaction: {} }`, which the schema describes as advertising the
+complete compaction contract, meaning both update types.
+
+**Updates are upserts with patch semantics.** A compaction is addressed by
+`compactionId`: the first update fixes its position in the timeline and later
+ones patch that same entity in place. For `summary` and `error`, **omitting a
+field leaves the stored value unchanged**, `null` clears it, and `summary: []`
+also clears it. So the terminal `completed` update usually carries no summary at
+all, and treating an omission as "clear" wipes the summary exactly when the
+compaction finishes. Summary text also arrives as `compaction_summary_chunk`
+appends between the first update and the terminal one.
+
+Because the first update fixes a timeline position, compaction is a transcript
+event rather than session state — it renders as a seam at the point history was
+replaced, not as a header indicator.
+
+**It is marked UNSTABLE** in the schema, unlike the rest of what we implement.
+Accepted deliberately: the blast radius is one row, and if the capability is
+withdrawn agents simply stop sending and the row stops appearing. That is a
+different bet from building on [ACP v2](#steering-and-acp-v2), which changes the
+turn lifecycle underneath everything.
+
 ### Steering and ACP v2
 
 **v1 has no way to inject a message into a running turn.** The only mid-turn
@@ -176,7 +207,7 @@ fails — see invariant 5 in [AGENTS.md](../AGENTS.md).
 ### Capabilities we are not using yet
 
 Advertised by agents, unimplemented by us, and roadmapped in [PLAN.md](PLAN.md):
-`session/list`, `session/fork`, `compaction_update`.
+`session/list`, `session/fork`.
 
 Deliberately not implementing: `nes/*` (next edit suggestions) and
 `document/did*`. Both assume an editor with a cursor and a focused buffer.

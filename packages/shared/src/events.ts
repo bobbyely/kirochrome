@@ -96,6 +96,10 @@ export interface SessionSummary {
  * Rendering every update as a transcript row buries the conversation under
  * `usage_update` noise. Both kinds are still appended to the log — the log
  * stays the source of truth — but only transcript updates become rows.
+ *
+ * Compaction is deliberately *not* here: ACP says the first
+ * `compaction_update` fixes the compaction's position in the timeline, so it
+ * belongs in the transcript at the point the history was replaced.
  */
 const STATE_UPDATES = new Set([
   "usage_update",
@@ -103,7 +107,6 @@ const STATE_UPDATES = new Set([
   "available_commands_update",
   "current_mode_update",
   "config_option_update",
-  "compaction_update",
 ]);
 
 export type UpdateCategory = "transcript" | "state";

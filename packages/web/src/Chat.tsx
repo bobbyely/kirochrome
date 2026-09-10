@@ -494,6 +494,8 @@ function Message({
       return <ElicitationCard row={row} onAnswer={onElicitation} />;
     case "note":
       return <div className="msg msg-note">{row.label}</div>;
+    case "compaction":
+      return <CompactionRow row={row} />;
     case "work":
       return <WorkGroup row={row} onPermission={onPermission} onElicitation={onElicitation} />;
     case "divider":
@@ -703,6 +705,40 @@ function PermissionCard({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+const COMPACTION_LABEL: Record<string, string> = {
+  in_progress: "Compacting context…",
+  completed: "Context compacted",
+  failed: "Compaction failed",
+  cancelled: "Compaction cancelled",
+};
+
+/**
+ * Where the agent replaced history with a summary.
+ *
+ * Shown in the transcript at the point it happened, because that is where the
+ * conversation above it stopped being what the model can see. The summary is
+ * the agent's own, so it is worth being able to read.
+ */
+function CompactionRow({ row }: { row: Extract<Row, { kind: "compaction" }> }) {
+  const label = COMPACTION_LABEL[row.status] ?? `Compaction: ${row.status}`;
+  const detail = row.error ?? row.summary;
+
+  return (
+    <div className={`compaction compaction-${row.status}`}>
+      <span className="compaction-rule" />
+      {detail ? (
+        <details className="compaction-body">
+          <summary>{label}</summary>
+          {row.error ? <p className="remediation">{row.error}</p> : <MarkdownBody>{row.summary}</MarkdownBody>}
+        </details>
+      ) : (
+        <span className="compaction-label">{label}</span>
+      )}
+      <span className="compaction-rule" />
     </div>
   );
 }
