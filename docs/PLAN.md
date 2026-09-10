@@ -71,78 +71,38 @@ looked missing. Kiro also persists the choice in `~/.kiro/settings/cli.json`, an
 
 ### What is left
 
-0. **A side drawer for file and code changes.** A pull-out panel listing every
+1. **A side drawer for file and code changes.** A pull-out panel listing every
    file the agent has touched in this conversation, with its diff — rather than
    hunting through the transcript for the tool call that changed something.
 
    Most of the data is already there: `ToolCallContent` diffs carry `path`,
-   `oldText` and `newText`, and `timeline.ts` already extracts them. The work is
-   aggregating them per file across the whole log (last write wins per path,
-   with a running +/− count), and a panel that slides over the transcript rather
-   than squeezing it. Kirodex does this as `DiffPanel` and
-   `ChangedFilesSummary`; the pieces to look at are noted in AGENTS.md.
+   `oldText` and `newText`, and `timeline.ts` extracts them. The work is
+   aggregating per file across the whole log (last write wins per path, with a
+   running +/− count) and the panel itself. Kirodex does this as `DiffPanel` and
+   `ChangedFilesSummary`.
 
-   Two things to decide when building it: whether it shows the agent's reported
-   diffs only, or reads the working tree (the former needs no filesystem access
-   and stays honest about what the agent claims it did), and whether it survives
-   a restart — it will, since the diffs live in the event log.
+   Decide when building it: reported diffs only, or read the working tree. The
+   former needs no filesystem access and stays honest about what the agent
+   claims it did. It survives a restart either way, since the diffs are in the
+   event log.
 
-1. **A proper design pass.** The interface has been built feature by feature,
-   each styled as it landed, and it shows: spacing, type scale and colour use
-   are consistent only by accident. Worth treating as one job rather than more
-   incremental patching.
+2. **Verify the design pass on a real screen.** The terminal-noir theme, the K
+   spinner and the theme switch were all built without a browser to look at.
+   Contrast of the muted greys on near-black, and whether the accent-on-black
+   is comfortable for hours, are judgements that need eyes.
 
-   Specifics already visible: no type scale (font sizes range across 10, 11,
-   11.5, 12, 12.5, 13, 13.5, 14, 15px, mostly ad hoc); spacing values chosen per
-   component rather than from a scale; three different muted greys doing similar
-   work; the header crowding once Export, the context meter and the status pill
-   are all present; and `styles.css` is now one long append-only file, which is
-   the reason the drift was easy.
+3. **True virtualisation**, if the windowed transcript proves insufficient.
 
-   Do the tokens first — a type scale, a spacing scale, and a considered use of
-   the existing colour tokens — then re-fit the components to them. Splitting
-   `styles.css` per component would make the next change safer, though CSS
-   custom properties mean it does not have to happen first.
-
-   **Direction: neo/cyberpunk modern.** Dark-first, high contrast, deliberately
-   technical. What that should mean here:
-
-   - **Restraint over neon.** One or two saturated accents (a cyan and a
-     magenta, say) against near-black surfaces, used for state and emphasis
-     only. Everything glowing means nothing stands out, and this is a tool
-     people read for hours.
-   - **Sharper geometry.** Tighter corner radii than the current 7–12px,
-     hairline borders, and edges that read as panels rather than cards.
-   - **Monospace as a design element**, not just for code: labels, counts,
-     timestamps and status text. It already suits an agent console.
-   - **Light emitted, not applied.** Glow belongs on things that are genuinely
-     active — a running turn, a blocked permission prompt, a focused input —
-     which makes it informative rather than decorative.
-   - **Texture sparingly.** A scanline or grid wash on empty states and chrome
-     at most; never behind body text or code.
-
-   Three constraints the theme must not break:
-
-   1. **Code and diffs stay legible.** Syntax colours and the diff add/remove
-      backgrounds must keep their contrast against the new surfaces; they are
-      the reason the app exists.
-   2. **Contrast is checked, not assumed.** Saturated-on-black is where
-      accessible contrast usually fails, particularly for muted text.
-   3. **Decide about light mode.** Cyberpunk is dark by nature and we shipped a
-      three-way theme control. Either commit to dark-first with a plain,
-      legible light theme that does not pretend to be the same design, or drop
-      light and simplify the picker. Half-hearted is worse than either.
-
-2. **An animated working indicator** to replace the plain "Working…" text.
-   Should convey that the agent is alive, and ideally what it is doing — the
-   grouped work row already knows whether a tool is running, so the indicator
-   can say "reading files" rather than a generic spinner. Must honour
-   `prefers-reduced-motion`, as the existing spinner and pulse do. A good
-   candidate to design alongside the cyberpunk pass rather than before it.
-
-3. True virtualisation, if the windowed transcript proves insufficient.
-4. Whatever the work machine turns up once Kiro is actually driving it —
+4. **Whatever the work machine turns up once Kiro is actually driving it** —
    including the one protocol question still open since phase 0, below.
+
+### Done since the roadmap was written
+
+The design pass landed: `styles.css` rebuilt around a type scale, a spacing
+scale and one colour set, in the terminal-noir direction (near-black, one aqua
+accent, monospace chrome, square corners). The animated working indicator
+landed as the blocky K. Slash commands, terminal-style completion and
+agent-supplied argument options landed after that.
 
 ## Phase 0 — Handshake spike
 
