@@ -115,7 +115,42 @@ Worth deciding early: whether the tree also shows files ignored by git. Showing
 `node_modules` makes it useless; hiding it by reading `.gitignore` is more work
 than it sounds, and hiding files the agent is actively editing would be worse.
 
-#### 2. `session/fork` — branch a conversation
+#### 2. Switch provider without leaving the conversation
+
+Put **Provider** first in the composer's config row, before the model and the
+rest of the options advertised by that agent. It lists providers whose setup
+check passed, using their configured names (for example Anthropic, OpenAI and
+Kiro). Choosing one keeps the same window, URL, sidebar entry and transcript.
+
+This is a KiroChrome handoff, not an ACP session transfer: one provider cannot
+load another provider's session id. Wait for the current turn to finish, start
+a fresh ACP session for the target provider in the same working directory, and
+give it the conversation so far as context. The working tree already carries
+the file changes; the handoff context carries what was said and the useful
+outcomes of tool calls, without protocol bookkeeping, usage updates or raw
+command noise.
+
+The event log remains the one conversation. Append a `provider_switched` event
+that records the old and new provider and the last sequence included in the
+handoff, and render it as a divider such as "Continued with OpenAI · Codex".
+That makes the context boundary durable and visible rather than hiding an
+injected prompt in browser state. Once the new agent is ready, its advertised
+models, modes, effort and other `configOptions` replace the old controls in
+place. Switching again repeats the same process with another fresh agent
+session and the complete transcript through the new boundary.
+
+Do not tear down the current agent until the replacement has completed its
+handshake and `session/new`; a failed switch must leave the conversation usable.
+Only checked providers are offered. A switch waits while a turn, permission,
+elicitation or queued message is outstanding, so ownership never moves while
+work is in flight.
+
+Context size needs an honest first version. Serialize user and agent prose plus
+concise tool outcomes. If it does not fit the target agent, require compaction
+first or send a clearly marked recent tail; KiroChrome has no model of its own
+with which to invent a hidden summary.
+
+#### 3. `session/fork` — branch a conversation
 
 "Try a different approach from here" without losing the original. The event log
 makes the branch point natural to show, and neither CLI exposes this well.
@@ -127,13 +162,13 @@ building `session/list`, and written up in
 [PROTOCOL.md](PROTOCOL.md#sessionlist-is-real-v1-and-planmd-was-nearly-right-about-it).
 So this one needs a way to degrade when it disappears, which listing did not.
 
-#### 3. `@` file mentions in the composer
+#### 4. `@` file mentions in the composer
 
 Type `@` to complete against the working directory and attach file contents as
 `resource_link` blocks. The completion machinery built for slash commands
 generalises to this, and `fs` is now implemented.
 
-#### 4. Interrupt and send
+#### 5. Interrupt and send
 
 Today a message typed during a turn queues and goes when the turn ends. The
 other useful thing to do with it is send it *now*.
@@ -158,7 +193,7 @@ Real steering arrives with **ACP v2**, which decouples the prompt response from
 the work lifecycle precisely so queueing and steering are expressible. It is
 Draft; see [PROTOCOL.md](PROTOCOL.md#steering-and-acp-v2).
 
-#### 5. Instructions of your own, across every agent
+#### 6. Instructions of your own, across every agent
 
 Agents already read their own user-level instruction files, and the session's
 `cwd` gives them the project's `AGENTS.md`. What is missing is a KiroChrome
