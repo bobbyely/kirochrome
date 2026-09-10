@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isProviderFault, latestUsage } from "@kirochrome/shared";
-import type { ConfigOption, SessionUsage } from "@kirochrome/shared";
+import type {
+  ConfigOption,
+  ElicitationAction,
+  ElicitationField,
+  ElicitationValue,
+  SessionUsage,
+} from "@kirochrome/shared";
 import { KSpinner } from "./KSpinner.js";
 import { MarkdownBody } from "./Markdown.js";
 import { commonPrefix, complete } from "./commands.js";
@@ -36,6 +42,7 @@ export function Chat({
     resumeSession,
     setConfigOption,
     answerPermission,
+    answerElicitation,
     setAutoApprove,
     unqueue,
     commandOptions,
@@ -202,7 +209,12 @@ export function Chat({
             </button>
           )}
           {rows.map((row) => (
-            <Message key={row.seq} row={row} onPermission={answerPermission} />
+            <Message
+              key={row.seq}
+              row={row}
+              onPermission={answerPermission}
+              onElicitation={answerElicitation}
+            />
           ))}
           {busy && (
             <div className="thinking">
@@ -446,9 +458,11 @@ function QueuedItem({
 function Message({
   row,
   onPermission,
+  onElicitation,
 }: {
   row: Row;
   onPermission: (requestId: string, optionId: string | null) => void;
+  onElicitation: AnswerElicitation;
 }) {
   switch (row.kind) {
     case "user":
@@ -476,10 +490,12 @@ function Message({
       return <ToolCard row={row} />;
     case "permission":
       return <PermissionCard row={row} onAnswer={onPermission} />;
+    case "elicitation":
+      return <ElicitationCard row={row} onAnswer={onElicitation} />;
     case "note":
       return <div className="msg msg-note">{row.label}</div>;
     case "work":
-      return <WorkGroup row={row} onPermission={onPermission} />;
+      return <WorkGroup row={row} onPermission={onPermission} onElicitation={onElicitation} />;
     case "divider":
       return <hr className="turn-divider" />;
     case "error":
@@ -502,9 +518,11 @@ function Message({
 function WorkGroup({
   row,
   onPermission,
+  onElicitation,
 }: {
   row: Extract<Row, { kind: "work" }>;
   onPermission: (requestId: string, optionId: string | null) => void;
+  onElicitation: AnswerElicitation;
 }) {
   const [open, setOpen] = useState(row.active);
   const touched = useRef(false);
@@ -533,7 +551,12 @@ function WorkGroup({
       </summary>
       <div className="work-children">
         {row.children.map((child) => (
-          <Message key={child.seq} row={child} onPermission={onPermission} />
+          <Message
+            key={child.seq}
+            row={child}
+            onPermission={onPermission}
+            onElicitation={onElicitation}
+          />
         ))}
       </div>
     </details>
@@ -682,6 +705,169 @@ function PermissionCard({
       )}
     </div>
   );
+}
+
+type AnswerElicitation = (
+  requestId: string,
+  action: ElicitationAction,
+  content?: Record<string, ElicitationValue>,
+) => void;
+
+/** ACP string formats map onto input types the browser already validates. */
+const FORMAT_INPUT: Record<string, string> = {
+  email: "email",
+  uri: "url",
+  date: "date",
+  "date-time": "datetime-local",
+};
+
+/**
+ * A structured question from the agent, rendered as a form.
+ *
+ * Uncontrolled on purpose: the values live in the DOM until submit, so typing
+ * an answer does not re-render the transcript, and `required`, `pattern` and
+ * `min`/`max` are enforced by the browser rather than by hand. The server
+ * re-checks everything anyway — the browser is not authoritative.
+ */
+function ElicitationCard({
+  row,
+  onAnswer,
+}: {
+  row: Extract<Row, { kind: "elicitation" }>;
+  onAnswer: AnswerElicitation;
+}) {
+  if (row.answer) {
+    const { action, content } = row.answer;
+    return (
+      <div className="elicitation answered">
+        <div className="elicitation-head">{row.title ?? row.message}</div>
+        <span className="muted">
+          {action === "accept"
+            ? Object.entries(content ?? {})
+                .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+                .join(" · ") || "Answered"
+            : action === "decline"
+              ? "Declined"
+              : "Cancelled"}
+        </span>
+      </div>
+    );
+  }
+
+  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const content: Record<string, ElicitationValue> = {};
+
+    for (const field of row.fields) {
+      if (field.type === "multiselect") {
+        content[field.key] = data.getAll(field.key).map(String);
+        continue;
+      }
+      if (field.type === "boolean") {
+        // An unchecked box sends nothing, and "false" is the answer, not silence.
+        content[field.key] = data.get(field.key) !== null;
+        continue;
+      }
+      const raw = data.get(field.key);
+      if (typeof raw !== "string" || raw === "") continue;
+      if (field.type === "number") {
+        const parsed = Number(raw);
+        if (Number.isFinite(parsed)) content[field.key] = parsed;
+        continue;
+      }
+      content[field.key] = raw;
+    }
+    onAnswer(row.requestId, "accept", content);
+  };
+
+  return (
+    <form className="elicitation" onSubmit={submit}>
+      <div className="elicitation-head">{row.title ?? "The agent has a question"}</div>
+      <p className="elicitation-message">{row.message}</p>
+
+      {row.fields.map((field) => (
+        <label key={field.key} className="elicitation-field">
+          <span className="elicitation-label">
+            {field.label}
+            {field.required && <span className="required">*</span>}
+          </span>
+          {field.description && <span className="muted">{field.description}</span>}
+          <ElicitationInput field={field} />
+        </label>
+      ))}
+
+      <div className="elicitation-actions">
+        <button type="submit" className="primary">Send</button>
+        <button type="button" onClick={() => onAnswer(row.requestId, "decline")}>
+          Decline
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ElicitationInput({ field }: { field: ElicitationField }) {
+  switch (field.type) {
+    case "boolean":
+      return <input type="checkbox" name={field.key} defaultChecked={field.default ?? false} />;
+
+    case "number":
+      return (
+        <input
+          type="number"
+          name={field.key}
+          required={field.required}
+          step={field.integer ? 1 : "any"}
+          min={field.minimum}
+          max={field.maximum}
+          defaultValue={field.default}
+        />
+      );
+
+    case "select":
+      return (
+        <select name={field.key} required={field.required} defaultValue={field.default ?? ""}>
+          {/* An optional question needs a way to answer nothing. */}
+          {!field.required && <option value="">—</option>}
+          {field.choices.map((choice) => (
+            <option key={choice.value} value={choice.value} title={choice.description}>
+              {choice.label}
+            </option>
+          ))}
+        </select>
+      );
+
+    case "multiselect":
+      return (
+        <span className="elicitation-choices">
+          {field.choices.map((choice) => (
+            <label key={choice.value} className="elicitation-choice">
+              <input
+                type="checkbox"
+                name={field.key}
+                value={choice.value}
+                defaultChecked={field.default?.includes(choice.value) ?? false}
+              />
+              {choice.label}
+            </label>
+          ))}
+        </span>
+      );
+
+    case "text":
+      return (
+        <input
+          type={FORMAT_INPUT[field.format ?? ""] ?? "text"}
+          name={field.key}
+          required={field.required}
+          minLength={field.minLength}
+          maxLength={field.maxLength}
+          pattern={field.pattern}
+          defaultValue={field.default}
+        />
+      );
+  }
 }
 
 /**

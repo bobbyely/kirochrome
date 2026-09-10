@@ -25,6 +25,20 @@ export type KcEvent = KcEventBase &
     /** The agent is asking to do something; the UI must answer. */
     | { type: "permission_request"; requestId: string; title: string; options: PermissionOption[] }
     | { type: "permission_resolved"; requestId: string; optionId: string | null; outcome: string }
+    /** The agent is asking a structured question; the UI renders a form. */
+    | {
+        type: "elicitation_request";
+        requestId: string;
+        message: string;
+        title?: string;
+        fields: ElicitationField[];
+      }
+    | {
+        type: "elicitation_resolved";
+        requestId: string;
+        action: ElicitationAction;
+        content?: Record<string, ElicitationValue>;
+      }
     | { type: "turn_start" }
     /** Marks where an agent was re-attached to a restored conversation. */
     | { type: "resumed" }
@@ -152,6 +166,56 @@ export interface CommandOption {
   /** True when this is the value currently in effect. */
   current?: boolean;
 }
+
+/**
+ * A structured question from the agent, via `elicitation/create`.
+ *
+ * ACP describes the form as a JSON Schema of primitive properties. The server
+ * flattens that into these fields so the browser renders a list of inputs
+ * rather than interpreting JSON Schema — see `server/src/elicitation.ts`.
+ */
+export type ElicitationValue = string | number | boolean | string[];
+
+/** ACP's three outcomes: answered, refused, or dismissed without deciding. */
+export type ElicitationAction = "accept" | "decline" | "cancel";
+
+export interface ElicitationChoice {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+interface ElicitationFieldBase {
+  /** The schema property name. Answers are keyed by it. */
+  key: string;
+  label: string;
+  description?: string;
+  required: boolean;
+}
+
+export type ElicitationField = ElicitationFieldBase &
+  (
+    | {
+        type: "text";
+        default?: string;
+        /** ACP's StringFormat: email, uri, date, date-time. Maps to an input type. */
+        format?: string;
+        minLength?: number;
+        maxLength?: number;
+        pattern?: string;
+      }
+    /** `integer` is a constraint on one numeric field, not a separate kind of input. */
+    | { type: "number"; integer: boolean; default?: number; minimum?: number; maximum?: number }
+    | { type: "boolean"; default?: boolean }
+    | { type: "select"; choices: ElicitationChoice[]; default?: string }
+    | {
+        type: "multiselect";
+        choices: ElicitationChoice[];
+        default?: string[];
+        minItems?: number;
+        maxItems?: number;
+      }
+  );
 
 export interface PermissionOption {
   optionId: string;

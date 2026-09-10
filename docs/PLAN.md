@@ -50,7 +50,8 @@ per-platform install hints and a field to correct a binary path. Providers go
 **Chat:** streaming responses with markdown and syntax highlighting; tool calls
 folded into collapsible cards showing real diffs; runs of tool calls grouped
 into one row; permission prompts that block the agent until answered;
-context-window meter; image paste; messages queued while a turn runs.
+structured questions rendered as forms; context-window meter; image paste;
+messages queued while a turn runs.
 
 **Conversations:** persisted and resumable via `session/load`; renameable,
 archivable, exportable to Markdown; full-text search across all of them; a
@@ -132,26 +133,19 @@ we have history we do not.
 "Try a different approach from here" without losing the original. The event log
 makes the branch point natural to show, and neither CLI exposes this well.
 
-#### 4. `elicitation/create` — structured questions
-
-The agent asks a real multiple-choice question and the user clicks an answer,
-instead of asking in prose and hoping the reply is parseable. The
-permission-prompt machinery already does exactly this shape of round trip, so
-it is mostly reuse. Kirodex does it as `QuestionCards`.
-
-#### 5. `@` file mentions in the composer
+#### 4. `@` file mentions in the composer
 
 Type `@` to complete against the working directory and attach file contents as
 `resource_link` blocks. The completion machinery built for slash commands
 generalises to this, and `fs` is now implemented.
 
-#### 6. Compaction
+#### 5. Compaction
 
 Kiro has `/compact` and ACP has `compaction_update`. Today the context meter
 turns amber and the user is left to deal with it. At minimum, surface the
 compaction status the protocol already reports.
 
-#### 7. Interrupt and send
+#### 6. Interrupt and send
 
 Today a message typed during a turn queues and goes when the turn ends. The
 other useful thing to do with it is send it *now*.
@@ -176,7 +170,7 @@ Real steering arrives with **ACP v2**, which decouples the prompt response from
 the work lifecycle precisely so queueing and steering are expressible. It is
 Draft; see [PROTOCOL.md](PROTOCOL.md#steering-and-acp-v2).
 
-#### 8. Instructions of your own, across every agent
+#### 7. Instructions of your own, across every agent
 
 Agents already read their own user-level instruction files, and the session's
 `cwd` gives them the project's `AGENTS.md`. What is missing is a KiroChrome
@@ -296,6 +290,15 @@ scale and one colour set, in the terminal-noir direction (near-black, one aqua
 accent, monospace chrome, square corners). The animated working indicator
 landed as the blocky K. Slash commands, terminal-style completion and
 agent-supplied argument options landed after that.
+
+CI landed: `npm run typecheck` and `npm test` run on every push and pull
+request, and changes reach `main` through a PR that merges on green.
+
+**`elicitation/create` landed, and it is not what this file said it was.** The
+roadmap described a multiple-choice question; ACP actually specifies a *form* —
+a JSON Schema of primitive properties — plus a separate URL mode. We render the
+form, advertise `form` alone, and decline anything else. See
+[PROTOCOL.md](PROTOCOL.md#elicitation-is-a-form-not-a-multiple-choice).
 
 ## Phase 0 — Handshake spike
 

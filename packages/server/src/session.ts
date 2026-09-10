@@ -9,6 +9,8 @@ import {
   type Attachment,
   type CommandOption,
   type ConfigOption,
+  type ElicitationAction,
+  type ElicitationValue,
   type ProviderConfig,
   type SlashCommand,
   type SessionRecord,
@@ -16,6 +18,7 @@ import {
 } from "@kirochrome/shared";
 import { resolveProvider, spawnAgent, type AgentProcess } from "./agentProcess.js";
 import { normaliseConfigOptions } from "./configOptions.js";
+import { coerceContent, toFields } from "./elicitation.js";
 import { readTextFile, writeTextFile } from "./fs.js";
 import type { Store } from "./store.js";
 import { TerminalRegistry } from "./terminals.js";
@@ -37,6 +40,9 @@ const TEXT_FLUSH_MS = 250;
 const HANDSHAKE_TIMEOUT_MS = 60_000;
 
 type Subscriber = (events: KcEvent[]) => void;
+
+/** What the UI sends back for an elicitation, before the schema is applied to it. */
+type ElicitationAnswer = { action: ElicitationAction; content?: Record<string, unknown> };
 
 /**
  * One conversation: an agent subprocess, an ACP connection, and an append-only
@@ -83,6 +89,8 @@ export class Session {
   private replaying = false;
   /** Permission requests waiting on the UI, keyed by request id. */
   private readonly pendingPermissions = new Map<string, (optionId: string | null) => void>();
+  /** Elicitations waiting on the UI. Same shape of round trip, different answer. */
+  private readonly pendingElicitations = new Map<string, (answer: ElicitationAnswer) => void>();
   private autoApprove = false;
   private readonly terminals = new TerminalRegistry();
 
@@ -181,8 +189,7 @@ export class Session {
       this.busy = false;
       this.exited = true;
       // Release anything blocked on a human; nothing is listening any more.
-      for (const resolve of this.pendingPermissions.values()) resolve(null);
-      this.pendingPermissions.clear();
+      this.releasePending();
       this.notifyState();
       // A crash says something about the provider; a shutdown we asked for does not.
       const unexpected = !this.closing;
@@ -192,6 +199,8 @@ export class Session {
     const app = client({ name: "kirochrome" })
       .onNotification("session/update", ({ params }) => this.onUpdate(params.update))
       .onRequest("session/request_permission", ({ params }) => this.requestPermission(params))
+      // Form mode only — that is exactly what we advertise below.
+      .onRequest("elicitation/create", ({ params }) => this.createElicitation(params))
       // We advertise these, so agents may call them.
       .onRequest("fs/read_text_file", ({ params }) => readTextFile(params))
       .onRequest("fs/write_text_file", ({ params }) => writeTextFile(params))
@@ -214,7 +223,14 @@ export class Session {
     const init = await withTimeout(
       this.connection.agent.request("initialize", {
         protocolVersion: PROTOCOL_VERSION,
-        clientCapabilities: { fs: { readTextFile: true, writeTextFile: true }, terminal: true },
+        clientCapabilities: {
+          fs: { readTextFile: true, writeTextFile: true },
+          terminal: true,
+          // `form` only. URL-mode elicitation would send the user out to a
+          // browser page we have no part in, and advertising a mode we do not
+          // render is how agents end up calling a method that fails.
+          elicitation: { form: {} },
+        },
         clientInfo: { name: "kirochrome", version: "0.0.0" },
       }),
       HANDSHAKE_TIMEOUT_MS,
@@ -614,6 +630,89 @@ export class Session {
   }
 
   /**
+   * Asks the user a structured question on the agent's behalf.
+   *
+   * The same round trip as a permission prompt — the ACP request is held open
+   * until a human answers, and the question is an ordinary log event, so it
+   * survives a refresh mid-answer. What differs is the answer: a form's worth
+   * of values rather than one option id.
+   */
+  private async createElicitation(params: {
+    mode?: string;
+    message?: string;
+    requestedSchema?: unknown;
+  }): Promise<{ action: ElicitationAction; content?: Record<string, ElicitationValue> }> {
+    // We advertise form mode alone, so anything else is the agent ignoring our
+    // capabilities. Decline plainly rather than rendering something we cannot
+    // honour — `decline` is a real ACP outcome and the agent can carry on.
+    if (params.mode !== "form") {
+      this.emitError(
+        kcError("RPC_ERROR", `'${this.provider.name}' asked for an elicitation we cannot show.`, {
+          remediation:
+            "KiroChrome answers form-mode elicitations only, and advertises exactly that. " +
+            "The agent asked for a different mode, so the question was declined.",
+          detail: { mode: params.mode ?? null },
+        }),
+      );
+      return { action: "decline" };
+    }
+
+    const form = toFields(params.requestedSchema);
+    if ("unsupported" in form) {
+      this.emitError(
+        kcError("RPC_ERROR", `'${this.provider.name}' asked for a field type we cannot render.`, {
+          remediation:
+            "The agent required an answer we have no input for, so the question was declined " +
+            "rather than answered with something that does not fit its schema.",
+          detail: form.unsupported,
+        }),
+      );
+      return { action: "decline" };
+    }
+
+    const requestId = randomUUID();
+    this.flushText();
+
+    // Register the resolver BEFORE announcing the request, for the same reason
+    // as permissions: `append` notifies subscribers synchronously, so a
+    // synchronous answer would find no pending entry and be dropped.
+    const answered = new Promise<ElicitationAnswer>((resolve) => {
+      this.pendingElicitations.set(requestId, resolve);
+    });
+
+    const schema = params.requestedSchema as { title?: unknown } | undefined;
+    this.append({
+      type: "elicitation_request",
+      requestId,
+      message: params.message ?? "The agent needs some information.",
+      title: typeof schema?.title === "string" ? schema.title : undefined,
+      fields: form.fields,
+    });
+    this.notifyState();
+
+    const answer = await answered;
+    this.pendingElicitations.delete(requestId);
+    this.notifyState();
+
+    if (answer.action !== "accept") {
+      this.append({ type: "elicitation_resolved", requestId, action: answer.action });
+      return { action: answer.action };
+    }
+    const content = coerceContent(form.fields, answer.content);
+    this.append({ type: "elicitation_resolved", requestId, action: "accept", content });
+    return { action: "accept", content };
+  }
+
+  /** Answers an outstanding elicitation. */
+  resolveElicitation(
+    requestId: string,
+    action: ElicitationAction,
+    content?: Record<string, unknown>,
+  ): void {
+    this.pendingElicitations.get(requestId)?.({ action, content });
+  }
+
+  /**
    * Argument suggestions for a partially typed command.
    *
    * Uses Kiro's `_kiro.dev/commands/options` extension where the agent
@@ -735,6 +834,20 @@ export class Session {
     for (const fn of this.stateListeners) fn();
   }
 
+  /**
+   * Frees every request blocked on a human answer.
+   *
+   * Both maps must be drained together on either route out — a crashed agent
+   * and a deliberate shutdown. An awaited promise nobody will ever resolve is
+   * how a "close" turns into a hang.
+   */
+  private releasePending(): void {
+    for (const resolve of this.pendingPermissions.values()) resolve(null);
+    this.pendingPermissions.clear();
+    for (const resolve of this.pendingElicitations.values()) resolve({ action: "cancel" });
+    this.pendingElicitations.clear();
+  }
+
   subscribe(fn: Subscriber): () => void {
     this.subscribers.add(fn);
     return () => this.subscribers.delete(fn);
@@ -752,7 +865,7 @@ export class Session {
       live: !this.exited,
       configOptions: this.configOptions,
       autoApprove: this.autoApprove,
-      awaitingInput: this.pendingPermissions.size > 0,
+      awaitingInput: this.pendingPermissions.size > 0 || this.pendingElicitations.size > 0,
       queued: this.queue.map((q) => q.text),
       archived: false,
       supportsImages: this.supportsImages,
@@ -763,8 +876,7 @@ export class Session {
   close(): void {
     this.closing = true;
     // Release anything blocked on a human; the agent is going away regardless.
-    for (const resolve of this.pendingPermissions.values()) resolve(null);
-    this.pendingPermissions.clear();
+    this.releasePending();
     this.terminals.releaseAll();
     this.flushText();
     this.connection?.close();

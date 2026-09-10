@@ -21,7 +21,8 @@ We advertise, in `initialize`:
 ```jsonc
 {
   "fs": { "readTextFile": true, "writeTextFile": true },
-  "terminal": true
+  "terminal": true,
+  "elicitation": { "form": {} }   // form mode only — see below
 }
 ```
 
@@ -33,6 +34,7 @@ they check the capability, call the method, and get "method not found".
 |---|---|
 | `session/update` (notification) | `session.ts` — folded into the event log |
 | `session/request_permission` | `session.ts` — held open until a human answers |
+| `elicitation/create` | `session.ts` + `elicitation.ts` — held open like a permission |
 | `fs/read_text_file`, `fs/write_text_file` | `fs.ts` |
 | `terminal/create`, `output`, `wait_for_exit`, `kill`, `release` | `terminals.ts` |
 
@@ -107,6 +109,34 @@ does not mean a missing feature. Kiro also persists the choice in
 `~/.kiro/settings/cli.json`, where `chat.modelDefaults` sets a per-model default
 independently of any client.
 
+### Elicitation is a form, not a multiple choice
+
+The roadmap assumed `elicitation/create` was "the agent asks a multiple-choice
+question and the user clicks an answer". It is more than that. The request
+carries a **mode**:
+
+- **`form`** — a `requestedSchema`, which is a JSON Schema of *primitive*
+  properties: string, number, integer, boolean, and an array of enum values for
+  multi-select. Strings carry choices in one of two dialects, `enum` (plain
+  values) or `oneOf` (titled `{const, title, description}` options); multi-select
+  spells the same two `enum` and `anyOf`. So a multiple choice is one shape a
+  form can take, not the whole feature.
+- **`url`** — send the user to a URL and wait. A different interaction
+  altogether, mostly for auth.
+
+The reply is `{action: "accept" | "decline" | "cancel"}`, with `content` keyed
+by property name on accept. Declining is a first-class answer, not an error.
+
+**We advertise `form` only, and answer `decline` to anything else.** Invariant
+12 cuts both ways: advertising a mode obliges us to render it, and URL mode
+sends the user out to a page a chat UI has no part in.
+
+The schema is flattened into typed fields **on the server**
+(`elicitation.ts`), so nothing in the browser interprets JSON Schema. A
+required property whose type we cannot render makes the whole form
+unsupported — we decline rather than return content that does not satisfy the
+schema the agent asked for.
+
 ### Steering and ACP v2
 
 **v1 has no way to inject a message into a running turn.** The only mid-turn
@@ -146,7 +176,7 @@ fails — see invariant 5 in [AGENTS.md](../AGENTS.md).
 ### Capabilities we are not using yet
 
 Advertised by agents, unimplemented by us, and roadmapped in [PLAN.md](PLAN.md):
-`session/list`, `session/fork`, `elicitation/create`, `compaction_update`.
+`session/list`, `session/fork`, `compaction_update`.
 
 Deliberately not implementing: `nes/*` (next edit suggestions) and
 `document/did*`. Both assume an editor with a cursor and a focused buffer.

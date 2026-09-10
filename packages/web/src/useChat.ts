@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   ClientMessage,
   CommandOption,
+  ElicitationAction,
+  ElicitationValue,
   KcError,
   KcEvent,
   SearchHit,
@@ -197,6 +199,15 @@ export function useChat() {
     [send],
   );
 
+  const answerElicitation = useCallback(
+    (requestId: string, action: ElicitationAction, content?: Record<string, ElicitationValue>) => {
+      if (sessionId.current) {
+        send({ type: "elicitation_response", sessionId: sessionId.current, requestId, action, content });
+      }
+    },
+    [send],
+  );
+
   const setAutoApprove = useCallback(
     (enabled: boolean) => {
       if (sessionId.current) send({ type: "set_auto_approve", sessionId: sessionId.current, enabled });
@@ -258,6 +269,7 @@ export function useChat() {
     moveQueued,
     setConfigOption,
     answerPermission,
+    answerElicitation,
     setAutoApprove,
     prompt,
     cancel,

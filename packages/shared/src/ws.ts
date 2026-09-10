@@ -1,5 +1,12 @@
 import type { KcError } from "./errors.js";
-import type { CommandOption, KcEvent, SearchHit, SessionSummary } from "./events.js";
+import type {
+  CommandOption,
+  ElicitationAction,
+  ElicitationValue,
+  KcEvent,
+  SearchHit,
+  SessionSummary,
+} from "./events.js";
 
 /** Browser → server. */
 export type ClientMessage =
@@ -17,6 +24,14 @@ export type ClientMessage =
   | { type: "list_workspaces" }
   | { type: "set_config_option"; sessionId: string; configId: string; value: string | boolean }
   | { type: "permission_response"; sessionId: string; requestId: string; optionId: string | null }
+  | {
+      type: "elicitation_response";
+      sessionId: string;
+      requestId: string;
+      action: ElicitationAction;
+      /** Present only on `accept`; keyed by the field `key`s we sent. */
+      content?: Record<string, ElicitationValue>;
+    }
   | { type: "set_auto_approve"; sessionId: string; enabled: boolean }
   | { type: "rename_session"; sessionId: string; title: string }
   | { type: "unqueue"; sessionId: string; index: number }

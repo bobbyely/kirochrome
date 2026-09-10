@@ -597,6 +597,45 @@ kbd {
 .permission-title { font-size: var(--fs-md); }
 .permission-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 
+/* ---------- elicitation ---------- */
+/* A question, not a warning: the accent border, where permissions use warn. */
+.elicitation {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--accent);
+  background: var(--raised);
+}
+.elicitation.answered { opacity: 0.6; border-color: var(--border); flex-direction: row; align-items: center; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; }
+.elicitation-head { font-size: var(--fs-md); }
+.elicitation-message { margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.elicitation-field { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); }
+.elicitation-label { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.elicitation-label .required { color: var(--warn); margin-left: 2px; }
+.elicitation-field input[type="text"],
+.elicitation-field input[type="email"],
+.elicitation-field input[type="url"],
+.elicitation-field input[type="date"],
+.elicitation-field input[type="datetime-local"],
+.elicitation-field input[type="number"],
+.elicitation-field select {
+  font: inherit;
+  font-size: var(--fs-sm);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.elicitation-field input:focus, .elicitation-field select:focus { outline: none; border-color: var(--accent); box-shadow: var(--glow); }
+.elicitation-field input[type="checkbox"] { align-self: start; }
+.elicitation-choices { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.elicitation-choice { display: flex; align-items: center; gap: var(--sp-1); }
+.elicitation-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-1); }
+
 /* ---------- diffs ---------- */
 .diff { border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; background: var(--surface); }
 .diff-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-1) var(--sp-2); border-bottom: 1px solid var(--border); font-size: var(--fs-sm); }

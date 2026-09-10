@@ -188,6 +188,13 @@ async function dispatch(
       return;
     }
 
+    case "elicitation_response": {
+      sessions
+        .requireLive(msg.sessionId)
+        .resolveElicitation(msg.requestId, msg.action, msg.content);
+      return;
+    }
+
     case "set_auto_approve": {
       const session = sessions.requireLive(msg.sessionId);
       session.setAutoApprove(msg.enabled);

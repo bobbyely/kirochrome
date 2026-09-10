@@ -100,6 +100,7 @@ Breaking one of these is a design regression, not a style nit.
 | `check.ts` | The seven-rung provider check ladder |
 | `config.ts` | Provider registry in `config.json` |
 | `configOptions.ts` | Merges `configOptions` with the legacy `models`/`modes` |
+| `elicitation.ts` | Flattens an elicitation's JSON Schema into typed fields |
 | `store.ts` | `node:sqlite`: events, sessions, checks, FTS5 search |
 | `terminals.ts` | `TerminalRegistry` — caps, truncation, group kill |
 | `processLedger.ts` | PID ledger and startup reaping |
