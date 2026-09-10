@@ -123,7 +123,7 @@ All of these were real races, found the hard way.
   cleanup. `cd` to the main checkout and merge from there.
 - **A branch deleted on the remote still shows in `git branch -r`.** The
   remote-tracking ref is a local cache; `gh pr merge --delete-branch` cannot
-  touch it. `git fetch --prune` clears it, and `wt done` runs that for you.
+  touch it. `git fetch --prune` clears it, and `wt prune` runs that for you.
 - **Worktrees belong outside the repo directory.** Nested under it, the npm
   workspace glob, `tsc -b` and vite's watcher all find a second copy of the
   tree and behave in ways that take a while to attribute.

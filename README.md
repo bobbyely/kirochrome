@@ -78,14 +78,16 @@ Each change gets its own git worktree, beside the repo rather than inside it:
 
 ```bash
 npm run wt -- new <topic>     # branch + ../kirochrome-worktrees/<topic> + install
-npm run wt -- list            # every worktree, with its PR state
-npm run wt -- done <topic>    # once the PR is merged: removes worktree and branch
-npm run wt -- prune           # sweep every merged one (--yes to actually remove)
+git worktree list             # what is in flight
+npm run wt -- prune           # remove everything merged (--yes to go ahead)
 ```
 
-`done` and `prune` ask GitHub whether the PR was merged, because rebase-merging
-means `git branch --merged` never says so. Both refuse to remove a worktree
-holding uncommitted or unpushed work.
+`prune` asks GitHub whether each PR was merged, because rebase-merging means
+`git branch --merged` never says so. It refuses on uncommitted or unpushed work,
+and prints what it would remove unless you pass `--yes`.
+
+Everything in between is ordinary git and `gh`; see the pull request section of
+[AGENTS.md](AGENTS.md) for the sequence.
 
 Only run one dev server at a time — worktrees share ports 4711 and 5173, and a
 single database.
