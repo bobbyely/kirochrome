@@ -203,3 +203,21 @@ All of these were real races, found the hard way.
 - **Two dev servers cannot run at once.** They share ports 4711 and 5173 *and*
   one sqlite database, so the second one to start fails on the port if you are
   lucky and interleaves conversations in one database if you are not.
+- **Driving KiroChrome from inside KiroChrome: `git pull` kills the agent doing
+  the work.** If the agent you are talking to was spawned by `npm run dev` in
+  this checkout, any git operation that rewrites `packages/*/src/*.ts` — pull,
+  rebase, checkout, `wt prune` — makes `tsc -b -w` rebuild `dist`, which makes
+  `node --watch` restart the server, which kills its agent process group on the
+  way out. The agent dies with SIGKILL (exit 137) mid-command, and because the
+  server owns the turn the browser just sees the conversation detach.
+  Everything is recoverable — the log is on disk and **Resume conversation**
+  re-attaches — but a command that was halfway through a push or a rebase is
+  not, so you re-run it and reason about a repo in an unknown state.
+
+  This is not a bug: it is invariant 4 working, plus "a server restart detaches
+  running agents" from the README, meeting the case nobody planned for. Fixes,
+  cheapest first: run the app you are chatting through with `npm start` rather
+  than `npm run dev` so nothing watches; or serve it from a worktree you never
+  touch; or leave the main checkout's syncing to a moment when you are not
+  mid-conversation. Operations that only move refs — `git fetch`, `git push`,
+  `gh pr merge` — are safe, because they do not write to the working tree.
