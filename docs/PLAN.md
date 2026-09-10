@@ -6,8 +6,9 @@ actually use; no phase is pure scaffolding.
 ## Development agent
 
 Kiro is on the work machine, so we develop against **Claude Code via the ACP
-adapter** (`npx @zed-industries/claude-code-acp`), which is already installed on
-the dev box. Because both speak ACP, "make it work with Kiro" is a config entry,
+adapter** (`npx -y @agentclientprotocol/claude-agent-acp`), which is what the
+seeded provider in `config.ts` spawns and the one verified through all seven
+rungs — see [PROVIDERS.md](PROVIDERS.md#what-has-actually-been-run). Because both speak ACP, "make it work with Kiro" is a config entry,
 not a port. We develop against a real agent the whole way.
 
 Phase 0 verifies that assumption before anything is built on it.
@@ -253,9 +254,6 @@ than a surprise. Each entry says what would go wrong if it is left.
   currently fails somewhere downstream with a confusing error instead of a
   typed one at the door. The convention in AGENTS.md now names these two
   specifically rather than claiming a discipline the code does not have.
-- **No CI.** The test suite is good and nothing runs it automatically. This is
-  the cheapest gap to close and the one most likely to bite when several people
-  or agents are committing.
 - **No formatter or linter.** Half the conventions section is mechanically
   enforceable and currently is not.
 - **`spike/` is misnamed and load-bearing.** Its README says "throwaway", but
@@ -263,8 +261,10 @@ than a surprise. Each entry says what would go wrong if it is left.
   drives, and `handshake.mjs` is the documented way to onboard an agent. It
   also sits outside the workspace with its own pin of
   `@agentclientprotocol/sdk`, so the SDK version has two places to bump and can
-  drift between the probe and the server. Renaming it is a rename plus a path
-  in two files.
+  drift between the probe and the server — and CI has to run a second `npm ci`
+  inside it before the server suite can run at all. Renaming it is a rename plus
+  a path in two files; folding it into the workspace would also remove that
+  second install and the drift.
 - **`packages/web/src` is flat** — twenty files, no directories. Fine now,
   awkward once the side pane lands.
 - **Every keystroke re-renders the whole transcript.** `draft` is `useState` in
