@@ -1,20 +1,23 @@
-// Worktree helper: one directory per feature, removed once its PR is merged.
+// Worktree helper: only the two things plain git cannot do tidily.
 //
-// Why a script rather than four documented commands: this repo rebase-merges,
-// which rewrites the commits, so a merged branch is not an ancestor of `main`
-// and `git branch --merged` reports nothing. Cleanup therefore has to ask
-// GitHub whether the PR was merged, and that is enough steps to be skipped —
-// three stale branches had already piled up before this existed.
+// Everything else in this workflow is a documented git command — see the pull
+// request section of AGENTS.md. These two are here because:
+//
+//   new    a fresh worktree needs an install in `spike/` as well as its own,
+//          and without it the server suite fails in a way that reads as a
+//          broken checkout rather than a missing dependency.
+//   prune  we rebase-merge, which rewrites the commits, so a merged branch is
+//          never an ancestor of `main` and `git branch --merged` reports
+//          nothing. Merged-ness has to come from GitHub, across every branch
+//          at once.
 //
 // Usage:
 //   npm run wt -- new <topic>     branch + worktree + install
-//   npm run wt -- list            every worktree with its PR state
-//   npm run wt -- done [topic]    remove a merged worktree and its branch
-//   npm run wt -- prune [--yes]   sweep every merged worktree and branch
+//   npm run wt -- prune [--yes]   remove every merged worktree and branch
 
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 /** Run a command, returning trimmed stdout. Throws with stderr attached. */
 function run(command, args, opts = {}) {
@@ -55,39 +58,32 @@ function worktrees() {
     .split("\n\n")
     .filter(Boolean)
     .map((block) => {
-      const entry = { path: "", branch: null, detached: false };
+      const entry = { path: "", branch: null };
       for (const line of block.split("\n")) {
         if (line.startsWith("worktree ")) entry.path = line.slice(9);
         else if (line.startsWith("branch ")) entry.branch = line.slice(7).replace("refs/heads/", "");
-        else if (line === "detached") entry.detached = true;
       }
       return entry;
     });
 }
 
-const main = worktrees()[0];
-const MAIN = main.path;
-// Sibling of the main checkout, so npm workspace globs, `tsc -b` and vite
+const MAIN = worktrees()[0].path;
+// Sibling of the main checkout, so the npm workspace glob, `tsc -b` and vite
 // never see a nested second copy of the tree.
 const HOME_DIR = join(dirname(MAIN), `${basename(MAIN)}-worktrees`);
-const pathFor = (topic) => join(HOME_DIR, topic);
 
 // --- GitHub ----------------------------------------------------------------
 
-const hasGh = tryRun("gh", ["--version"]) !== null;
-
 /**
- * The PR state for a branch: "MERGED", "OPEN", "CLOSED", or null when there is
- * no PR, no `gh`, or no network. Null is never treated as merged.
+ * The PR for a branch, or null when there is no PR, no `gh`, or no network.
+ * Null is never treated as merged.
  */
-function prState(branch) {
-  if (!hasGh) return null;
+function pullRequest(branch) {
   // From the main checkout, so `gh` can resolve the repo wherever we were run.
   const out = tryRun("gh", ["pr", "view", branch, "--json", "state,number"], { cwd: MAIN });
   if (out === null) return null;
   try {
-    const { state, number } = JSON.parse(out);
-    return { state, number };
+    return JSON.parse(out);
   } catch {
     return null;
   }
@@ -101,8 +97,8 @@ function cmdNew(topic) {
     fail(`"${topic}" is not a topic name. Use lowercase words joined by dashes.`);
   }
 
-  const path = pathFor(topic);
-  if (existsSync(path)) fail(`${path} already exists. Pick another name, or \`wt done ${topic}\`.`);
+  const path = join(HOME_DIR, topic);
+  if (existsSync(path)) fail(`${path} already exists.`);
   if (tryGit(["rev-parse", "--verify", `refs/heads/${topic}`]) !== null) {
     fail(`Branch ${topic} already exists.`);
   }
@@ -131,123 +127,77 @@ function cmdNew(topic) {
   console.log("  and one database. Stop the other before `npm run dev` here.\n");
 }
 
-// --- list ------------------------------------------------------------------
+// --- prune -----------------------------------------------------------------
 
-function cmdList() {
-  const all = worktrees();
-  console.log("");
-  for (const [index, tree] of all.entries()) {
-    const label = tree.branch ?? (tree.detached ? "(detached)" : "(no branch)");
-    const pr = index === 0 || !tree.branch ? null : prState(tree.branch);
-    const state = pr ? `PR #${pr.number} ${pr.state.toLowerCase()}` : hasGh ? "no PR" : "";
-    const tag = index === 0 ? "main checkout" : state;
-    console.log(`  ${label.padEnd(28)} ${tag.padEnd(20)} ${tree.path}`);
-  }
-  console.log("");
-}
-
-// --- done ------------------------------------------------------------------
-
-/** Why this worktree cannot be removed yet, or null if it can. */
-function blockers(tree) {
+/** Why this branch cannot be deleted yet, or null if it can. */
+function blockers(branch, path) {
   const reasons = [];
 
-  const dirty = tryGit(["-C", tree.path, "status", "--porcelain"]);
-  if (dirty === null) reasons.push("could not read its status");
-  else if (dirty !== "") reasons.push("has uncommitted changes");
+  if (path !== undefined) {
+    const dirty = tryGit(["-C", path, "status", "--porcelain"]);
+    if (dirty === null) reasons.push("could not be read");
+    else if (dirty !== "") reasons.push("has uncommitted changes");
+  }
 
-  const pr = prState(tree.branch);
-  if (pr === null) reasons.push(hasGh ? "has no PR (or GitHub is unreachable)" : "state is unknown — `gh` is not installed");
-  else if (pr.state !== "MERGED") reasons.push(`PR #${pr.number} is ${pr.state.toLowerCase()}, not merged`);
+  const pr = pullRequest(branch);
+  if (pr === null) reasons.push("has no PR, or GitHub is unreachable");
+  else if (pr.state !== "MERGED") reasons.push(`PR #${pr.number} is ${pr.state.toLowerCase()}`);
 
-  const remote = `refs/remotes/origin/${tree.branch}`;
-  if (tryGit(["-C", MAIN, "rev-parse", "--verify", remote]) !== null) {
-    const ahead = tryGit(["-C", MAIN, "log", "--oneline", `origin/${tree.branch}..${tree.branch}`]);
-    if (ahead) reasons.push(`has ${ahead.split("\n").length} commit(s) that were never pushed`);
+  // A merged PR does not mean every local commit reached it.
+  if (tryGit(["-C", MAIN, "rev-parse", "--verify", `refs/remotes/origin/${branch}`]) !== null) {
+    const ahead = tryGit(["-C", MAIN, "log", "--oneline", `origin/${branch}..${branch}`]);
+    if (ahead) reasons.push(`has ${ahead.split("\n").length} unpushed commit(s)`);
   }
 
   return reasons.length > 0 ? reasons : null;
 }
 
-function remove(tree, { force }) {
-  git(["-C", MAIN, "worktree", "remove", ...(force ? ["--force"] : []), tree.path]);
-  git(["-C", MAIN, "branch", "-D", tree.branch]);
-  console.log(`  Removed ${tree.branch}`);
-}
-
-function cmdDone(topic, { force }) {
-  const cwd = process.cwd();
-  const all = worktrees();
-
-  const tree = topic
-    ? all.find((t) => t.branch === topic)
-    : all.slice(1).find((t) => resolve(cwd).startsWith(resolve(t.path)));
-
-  if (!tree) {
-    fail(topic ? `No worktree for ${topic}. \`npm run wt -- list\`.` : "Not inside a worktree. Name one: `npm run wt -- done <topic>`.");
-  }
-  if (tree.path === MAIN) fail("That is the main checkout, not a worktree.");
-  if (resolve(cwd).startsWith(resolve(tree.path))) {
-    fail(`You are inside it. Run \`cd ${MAIN}\` first, then \`npm run wt -- done ${tree.branch}\`.`);
-  }
-
-  const reasons = blockers(tree);
-  if (reasons && !force) {
-    fail(`${tree.branch} ${reasons.join(", and ")}.\n  Pass --force to remove it anyway — the work is discarded.`);
-  }
-
-  console.log("");
-  remove(tree, { force });
-  git(["-C", MAIN, "fetch", "--prune"]);
-  console.log("  Pruned stale remote branches.\n");
-}
-
-// --- prune -----------------------------------------------------------------
-
 function cmdPrune({ confirmed }) {
-  const all = worktrees().slice(1);
+  const all = worktrees();
+  const trees = new Map(
+    all
+      .slice(1)
+      .filter((tree) => tree.branch)
+      .map((tree) => [tree.branch, tree.path]),
+  );
+  // Never consider the branch we are standing on, nor the main checkout's —
+  // which is not the same branch when prune is run from inside a worktree.
+  const protectedBranches = new Set([all[0].branch, tryGit(["branch", "--show-current"])]);
+  const branches = git(["-C", MAIN, "branch", "--format=%(refname:short)"], { quiet: true }).split("\n");
+
   const removable = [];
   const kept = [];
-
-  for (const tree of all) {
-    if (!tree.branch) continue;
-    const reasons = blockers(tree);
-    if (reasons) kept.push([tree, reasons]);
-    else removable.push(tree);
-  }
-
-  // Branches whose PR is merged but whose worktree is already gone — the pile
-  // that accumulates from before this script, or from a manual merge.
-  const inTree = new Set(all.map((t) => t.branch));
-  const current = tryGit(["-C", MAIN, "branch", "--show-current"]);
-  const orphans = git(["-C", MAIN, "branch", "--format=%(refname:short)"], { quiet: true })
-    .split("\n")
-    .filter((b) => b && b !== current && !inTree.has(b))
-    .filter((b) => prState(b)?.state === "MERGED");
-
-  if (removable.length === 0 && orphans.length === 0) {
-    console.log("\n  Nothing to prune.\n");
-    for (const [tree, reasons] of kept) console.log(`  keeping ${tree.branch} — ${reasons.join(", and ")}`);
-    if (kept.length > 0) console.log("");
-    return;
+  for (const branch of branches) {
+    if (!branch || protectedBranches.has(branch)) continue;
+    const reasons = blockers(branch, trees.get(branch));
+    if (reasons) kept.push([branch, reasons]);
+    else removable.push(branch);
   }
 
   console.log("");
-  for (const tree of removable) console.log(`  worktree  ${tree.branch}  ${tree.path}`);
-  for (const branch of orphans) console.log(`  branch    ${branch}`);
-  for (const [tree, reasons] of kept) console.log(`  keeping   ${tree.branch} — ${reasons.join(", and ")}`);
+  for (const branch of removable) {
+    const path = trees.get(branch);
+    console.log(`  merged   ${branch}${path === undefined ? "" : `  ${path}`}`);
+  }
+  for (const [branch, reasons] of kept) console.log(`  keeping  ${branch} — ${reasons.join(", and ")}`);
 
+  if (removable.length === 0) {
+    console.log("\n  Nothing to prune.\n");
+    return;
+  }
   if (!confirmed) {
     console.log("\n  Nothing removed. Re-run with --yes to remove the above.\n");
     return;
   }
 
   console.log("");
-  for (const tree of removable) remove(tree, { force: false });
-  for (const branch of orphans) {
+  for (const branch of removable) {
+    const path = trees.get(branch);
+    if (path !== undefined) git(["-C", MAIN, "worktree", "remove", path]);
     git(["-C", MAIN, "branch", "-D", branch]);
     console.log(`  Removed ${branch}`);
   }
+  // `gh pr merge --delete-branch` cannot clear a remote-tracking ref.
   git(["-C", MAIN, "fetch", "--prune"]);
   console.log("  Pruned stale remote branches.\n");
 }
@@ -255,28 +205,16 @@ function cmdPrune({ confirmed }) {
 // --- dispatch --------------------------------------------------------------
 
 const [command, ...rest] = process.argv.slice(2);
-const flags = new Set(rest.filter((a) => a.startsWith("--")));
-const [positional] = rest.filter((a) => !a.startsWith("--"));
+const [positional] = rest.filter((arg) => !arg.startsWith("--"));
 
-switch (command) {
-  case "new":
-    cmdNew(positional);
-    break;
-  case "list":
-    cmdList();
-    break;
-  case "done":
-    cmdDone(positional, { force: flags.has("--force") });
-    break;
-  case "prune":
-    cmdPrune({ confirmed: flags.has("--yes") });
-    break;
-  default:
-    fail(
-      "Usage:\n" +
-        "    npm run wt -- new <topic>     branch + worktree + install\n" +
-        "    npm run wt -- list            every worktree with its PR state\n" +
-        "    npm run wt -- done [topic]    remove a merged worktree and its branch\n" +
-        "    npm run wt -- prune [--yes]   sweep every merged worktree and branch",
-    );
+if (command === "new") cmdNew(positional);
+else if (command === "prune") cmdPrune({ confirmed: rest.includes("--yes") });
+else {
+  fail(
+    "Usage:\n" +
+      "    npm run wt -- new <topic>     branch + worktree + install\n" +
+      "    npm run wt -- prune [--yes]   remove every merged worktree and branch\n\n" +
+      "  Everything else is plain git: `git worktree list`, `git worktree remove`.\n" +
+      "  See the pull request section of AGENTS.md.",
+  );
 }

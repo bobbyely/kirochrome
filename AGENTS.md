@@ -212,42 +212,43 @@ reaching `main`, and fixing `main` after the fact is strictly worse than
 fixing a branch.
 
 **Each change gets a worktree**, so several can be in flight at once without
-stashing, and the main checkout stays on `main` and stays buildable.
-`scripts/wt.mjs` drives the whole cycle:
+stashing, and the main checkout stays on `main` and stays buildable. The cycle
+is plain git either side of two helpers:
 
 ```bash
-npm run wt -- new <topic>              # branch + worktree + npm install
+npm run wt -- new <topic>       # git worktree add + npm install, incl. spike/
 cd ../kirochrome-worktrees/<topic>
 #   ... work, commit ...
 git push -u origin <topic>
 gh pr create
-cd -                                   # back to the main checkout, and stay there
-gh pr merge <n> --rebase               # after the check passes
-npm run wt -- done <topic>             # removes the worktree and the branch
+cd -                            # back to the main checkout, and stay there
+gh pr merge <n> --rebase        # after the check passes
+git pull --ff-only
+npm run wt -- prune             # shows what is merged; --yes to remove it
 ```
+
+`git worktree list` is how you see what is in flight, and `git worktree remove
+<path>` is how you abandon one — neither needs a wrapper. Only two steps do:
+
+- **`new`**, because a worktree needs its own `npm install` *and* one in
+  `spike/`, which holds the mock agent's copy of the ACP SDK. Without the
+  second, the server suite fails in a way that reads as a broken checkout.
+- **`prune`**, because rebase-merging rewrites the commits, so a merged branch
+  is never an ancestor of `main` and `git branch --merged` reports nothing.
+  Merged-ness has to come from `gh pr view`, across every branch at once. It
+  refuses on uncommitted or unpushed work, and never treats an unreachable
+  GitHub as "merged".
 
 **Merge from the main checkout, not from the worktree.** `gh pr merge` wants to
 update your local `main` afterwards, and cannot: `main` is checked out in
 another worktree, so it fails with `'main' is already used by worktree at …` —
 *after* merging on GitHub, leaving a merged PR and a half-finished cleanup.
-Drop `--delete-branch` as well; `wt done` deletes the local branch and prunes
-the remote-tracking ref, which is the part `--delete-branch` cannot do here
-anyway.
-
-`npm run wt -- list` shows every worktree with its PR state. `prune` sweeps
-every merged one at once, and prints what it would remove unless given `--yes`.
-
-**Use the helper rather than raw `git worktree`.** Rebase-merging rewrites the
-commits, so a merged branch is never an ancestor of `main` and `git branch
---merged` reports nothing — cleanup has to ask GitHub whether the PR merged,
-which is exactly the step that gets skipped. `done` asks, and refuses to remove
-a worktree holding uncommitted or unpushed work.
+Drop `--delete-branch` too; `prune` deletes the local branch and prunes the
+remote-tracking ref, which is the part `--delete-branch` cannot do here anyway.
 
 **Worktrees are siblings of the repo**, at `../kirochrome-worktrees/<topic>`,
 not folders inside it: a nested checkout would be picked up by the npm
-workspace glob, by `tsc -b` and by vite's watcher. Each has its own
-`node_modules`, which is the real cost of this and the reason `wt new` installs
-for you — including `spike/`, which installs separately.
+workspace glob, by `tsc -b` and by vite's watcher.
 
 **One dev server at a time.** Worktrees share ports 4711 and 5173 and a single
 database, so stop the one that is running before starting another. Per-worktree
