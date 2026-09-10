@@ -51,6 +51,9 @@ export class Store {
       ) WITHOUT ROWID;
 
       CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
+      -- Adoption looks conversations up by the agent's own session id, to avoid
+      -- two KiroChrome logs appending over one agent session.
+      CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_session_id);
 
       -- Full-text index over what was actually said. Derived from the event
       -- log, so it can be dropped and rebuilt at any time.
@@ -180,6 +183,20 @@ export class Store {
     const row = this.db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
       | Record<string, string | number | null>
       | undefined;
+    return row ? toRecord(row) : null;
+  }
+
+  /**
+   * The conversation already holding an agent session, if there is one.
+   *
+   * Two KiroChrome conversations pointing at one agent session would both
+   * append to it and disagree about its transcript, so adopting checks here
+   * first and reopens the existing one instead.
+   */
+  sessionByAgentSessionId(agentSessionId: string): SessionRecord | null {
+    const row = this.db
+      .prepare(`SELECT * FROM sessions WHERE agent_session_id = ? ORDER BY created_at LIMIT 1`)
+      .get(agentSessionId) as Record<string, string | number | null> | undefined;
     return row ? toRecord(row) : null;
   }
 

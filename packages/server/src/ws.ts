@@ -145,6 +145,20 @@ async function dispatch(
       return;
     }
 
+    case "adopt": {
+      const provider = loadConfig().providers.find((p) => p.id === msg.providerId);
+      if (!provider) {
+        throw kcError("PROVIDER_UNKNOWN", `No provider configured with id '${msg.providerId}'.`);
+      }
+      const session = await sessions.adopt(provider, {
+        agentSessionId: msg.agentSessionId,
+        cwd: msg.cwd,
+        title: msg.title ?? null,
+      });
+      send({ type: "session_opened", session: session.summary() });
+      return;
+    }
+
     case "subscribe": {
       // Read the backlog before watching, so the switch away from any previous
       // conversation happens first and its events cannot land in this batch.

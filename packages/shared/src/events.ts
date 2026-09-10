@@ -42,6 +42,15 @@ export type KcEvent = KcEventBase &
     | { type: "turn_start" }
     /** Marks where an agent was re-attached to a restored conversation. */
     | { type: "resumed" }
+    /**
+     * The seam where a conversation started in the agent's own CLI was adopted.
+     *
+     * Everything above it was replayed by the agent on `session/load` and
+     * captured once; everything below is KiroChrome's own log. It is an event
+     * rather than UI state because the distinction has to survive a refresh and
+     * a restart — invariant 3.
+     */
+    | { type: "adopted"; agentSessionId: string; providerName: string }
     | { type: "turn_end"; stopReason: string }
     | { type: "error"; error: KcError }
     | { type: "agent_exited"; code: number | null; signal: string | null }

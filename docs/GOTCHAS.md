@@ -20,6 +20,18 @@ bug from the next person, who has no reason to know.
   rather than letting one hide the other.
 - **`session/cancel` is a notification, not a request.** Awaiting a reply makes
   Stop hang forever and appear to do nothing.
+- **A `sessionCapabilities` sub-capability is an object, not a boolean.** Absent
+  or `null` means unsupported; `{}` means supported. Testing it for truthiness
+  reads correctly today and breaks on `{ "list": null }`, which the schema
+  explicitly allows. Test for presence — `advertisesSessionList` does.
+- **Listing sessions and loading one are different capabilities.**
+  `sessionCapabilities.list` gates `session/list`, but `session/load` is still
+  gated by the top-level `loadSession`, so an agent can offer a conversation it
+  cannot reopen. Check both before showing the user something clickable.
+- **`session/load`'s replay is only redundant when we already logged it.** An
+  ordinary resume must discard it; a conversation adopted from the agent's own
+  CLI must keep it, or the transcript starts at the moment we attached. Getting
+  this the wrong way round either duplicates a conversation or loses one.
 - **Only advertise a capability you implement.** We claimed
   `fs.readTextFile`/`fs.writeTextFile` for months without handlers; agents check
   the capability and then call, so their file operations failed with a bare

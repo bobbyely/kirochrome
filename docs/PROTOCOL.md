@@ -38,10 +38,10 @@ they check the capability, call the method, and get "method not found".
 | `fs/read_text_file`, `fs/write_text_file` | `fs.ts` |
 | `terminal/create`, `output`, `wait_for_exit`, `kill`, `release` | `terminals.ts` |
 
-We call `initialize`, `authenticate`, `session/new`, `session/load`,
-`session/prompt`, `session/cancel`, `session/set_config_option` (with a
-per-kind fallback), and — once per session, optionally —
-`_kiro.dev/commands/options`.
+We call `initialize`, `authenticate`, `session/new`, `session/list`,
+`session/load`, `session/prompt`, `session/cancel`,
+`session/set_config_option` (with a per-kind fallback), and — once per session,
+optionally — `_kiro.dev/commands/options`.
 
 ## Findings
 
@@ -69,6 +69,77 @@ appending would duplicate the transcript. We suppress the replay; verified at
 
 It also returns `modes` and `configOptions`, exactly as `session/new` does.
 Discarding the response leaves a resumed conversation with no pickers.
+
+### `session/list` is real v1, and PLAN.md was nearly right about it
+
+Checked before building anything, because the roadmap has already been wrong
+twice this way. It holds up, with two corrections.
+
+**The method exists in stable v1.** `session/list` is in the v1 schema
+(`spike/node_modules/@agentclientprotocol/sdk/schema/schema.json`) and its
+`ListSessionsRequest` / `ListSessionsResponse` / `SessionInfo` definitions carry
+no stability warning. That matters because `session/fork` — the next roadmap
+item — *is* marked in the same file:
+
+> **UNSTABLE** — This capability is not part of the spec yet, and may be removed
+> or changed at any point.
+
+So the two are not equivalent bets, even though PLAN.md lists them together.
+`list`, `delete`, `resume`, `close` and `additionalDirectories` are stable;
+`fork` alone is unstable.
+
+**`sessionCapabilities` sits inside `agentCapabilities`**, in the `initialize`
+response — not at the top level. Each sub-capability is an **object**, not a
+boolean: absent or `null` means unsupported, and `{}` means supported. Checking
+it for truthiness would work by accident today and break the moment an agent
+sends `{ "list": null }`, which the schema explicitly allows. Hence
+`advertisesSessionList` in `shared/providers.ts`.
+
+**Loading is still gated separately.** The schema is explicit:
+
+> Note: `session/load` is still handled by the top-level `load_session`
+> capability. This will be unified in future versions of the protocol.
+
+So an agent can advertise `sessionCapabilities.list` and *not* `loadSession` —
+listable conversations that cannot be opened. That is a real state with its own
+error code, `AGENT_CANNOT_ADOPT`, rather than a confusing `SESSION_NOT_LIVE`
+about a conversation "restored from disk".
+
+The request takes optional `cwd` and `cursor`; the response is `sessions` plus
+an optional opaque `nextCursor`. `SessionInfo` requires only `sessionId` and
+`cwd` — `title` and `updatedAt` are nullable, so a listed conversation may have
+no name and no date. The array is marked skip-invalid-items, so one malformed
+entry must not cost the user the rest of the list; `agentSessions.ts` narrows
+each entry and drops only the bad ones.
+
+The intended flow is exactly what we do, per the spec's own summary: list,
+let the user choose, then `session/load` with the chosen `sessionId`.
+
+### An adopted conversation is the one case where the replay is kept
+
+The finding above says we suppress `session/load`'s replay. That is right for a
+conversation we have logged, and wrong for one the agent owns.
+
+For a conversation started in the agent's own CLI, our log is empty — the
+agent's replay is the only transcript in existence as far as KiroChrome is
+concerned. So `Session.adopt` keeps it, and `Session.resume` still discards it.
+Capturing is still append-only (invariant 2): they are INSERTs into a brand new
+conversation. It happens exactly once, because adoption mints a new KiroChrome
+session id and *every* later reopen goes through `resume` — so the transcript
+cannot be duplicated by reopening, and the suite proves it.
+
+Keeping it in the browser instead was the alternative and it breaks invariant 3:
+the history would vanish on refresh.
+
+Two consequences worth knowing:
+
+- **What the user said arrives as `user_message_chunk`**, not as one of our
+  `user_message` events, because it is the agent replaying both sides. Without
+  handling it, half an adopted conversation renders as an unnamed note.
+- **The replay is the agent's record, not ours.** It may be shorter than the
+  real conversation and carries none of the tool output we would have logged.
+  An `adopted` event marks the seam, so the transcript says where the agent's
+  history ends and ours begins rather than implying we watched it happen.
 
 ### `session/cancel` is a notification
 
@@ -207,7 +278,7 @@ fails — see invariant 5 in [AGENTS.md](../AGENTS.md).
 ### Capabilities we are not using yet
 
 Advertised by agents, unimplemented by us, and roadmapped in [PLAN.md](PLAN.md):
-`session/list`, `session/fork`.
+`session/fork` (unstable), `session/delete`, `session/resume`, `session/close`.
 
 Deliberately not implementing: `nes/*` (next edit suggestions) and
 `document/did*`. Both assume an editor with a cursor and a focused buffer.

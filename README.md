@@ -27,6 +27,8 @@ parser.
 - structured questions from the agent answered as a form, not guessed at in prose
 - a setup page that verifies each configured agent before you rely on it
 - every session persisted, resumable and searchable
+- conversations you started in the agent's own CLI listed and continued here,
+  where the agent supports it
 - refresh or crash mid-turn without losing anything
 - hung commands killed cleanly, with no orphaned processes
 
@@ -55,6 +57,12 @@ npm start                 # builds everything, serves http://127.0.0.1:4711
 
 Open <http://127.0.0.1:4711>, press **Check** on a provider, and once it passes,
 **New chat**.
+
+If the agent keeps conversations of its own — Claude Code and Kiro both do — the
+new-chat page offers to **browse** them, so a conversation you started in the
+terminal can be continued in the browser. It says so where it matters: the
+transcript above the seam is whatever the agent replays, and KiroChrome's own
+log starts where you opened it.
 
 ### Development with hot reload
 

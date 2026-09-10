@@ -165,3 +165,29 @@ describe("latestUsage", () => {
     );
   });
 });
+
+describe("an adopted conversation", () => {
+  it("renders the replayed user side as user rows, not as unnamed notes", () => {
+    // An adopted history arrives as ACP updates, so what the user said is a
+    // `user_message_chunk` rather than one of our `user_message` events.
+    const rows = buildRows([
+      ev({ type: "agent_update", update: { sessionUpdate: "user_message_chunk", content: { type: "text", text: "WHAT " } } } as never, 1),
+      ev({ type: "agent_update", update: { sessionUpdate: "user_message_chunk", content: { type: "text", text: "I ASKED" } } } as never, 2),
+      ev({ type: "agent_text", text: "OLD HISTORY" } as never, 3),
+    ]);
+
+    assert.deepEqual(rows.map((r) => r.kind), ["user", "agent"]);
+    assert.equal(rows[0]!.kind === "user" && rows[0]!.text, "WHAT I ASKED");
+  });
+
+  it("shows the seam where the agent's history ends and ours begins", () => {
+    const rows = buildRows([
+      ev({ type: "agent_text", text: "replayed" } as never, 1),
+      ev({ type: "adopted", agentSessionId: "cli-1", providerName: "Mock" } as never, 2),
+      ev({ type: "user_message", text: "carry on" } as never, 3),
+    ]);
+
+    assert.deepEqual(rows.map((r) => r.kind), ["agent", "adopted", "user"]);
+    assert.equal(rows[1]!.kind === "adopted" && rows[1]!.providerName, "Mock");
+  });
+});

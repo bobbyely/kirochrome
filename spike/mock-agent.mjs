@@ -24,8 +24,12 @@ const app = agent({ name: "mock-agent" })
     return {
       protocolVersion: PROTOCOL_VERSION,
       agentCapabilities: {
-        loadSession: true,
+        loadSession: process.env.MOCK_NO_LOAD_SESSION ? false : true,
         promptCapabilities: { image: true, embeddedContext: true },
+        // ACP nests these inside agentCapabilities, and each sub-capability is
+        // an object: `{}` means supported. An agent that keeps no history of
+        // its own omits `list`, which MOCK_NO_SESSION_LIST simulates.
+        sessionCapabilities: process.env.MOCK_NO_SESSION_LIST ? {} : { list: {} },
       },
       agentInfo: { name: "mock-agent", title: "Mock Agent", version: "0.0.0" },
       authMethods: [],
@@ -56,6 +60,27 @@ const app = agent({ name: "mock-agent" })
       },
     ],
   }))
+  // Conversations "started in the CLI", paginated over two pages so the
+  // client's cursor loop is exercised rather than assumed. One entry is
+  // deliberately malformed: ACP says invalid items are skipped, not fatal.
+  .onRequest("session/list", { parse: (p) => p }, async ({ params }) => {
+    if (process.env.MOCK_HANG_SESSION_LIST) await new Promise(() => {});
+    if (params?.cursor === "page-2") {
+      return {
+        sessions: [
+          { sessionId: "cli-3", cwd: "/tmp/three", title: "Third", updatedAt: "2026-01-03T00:00:00Z" },
+        ],
+      };
+    }
+    return {
+      sessions: [
+        { sessionId: "cli-1", cwd: "/tmp/one", title: "First", updatedAt: "2026-01-01T00:00:00Z" },
+        { cwd: "/tmp/nameless" }, // no sessionId: must be skipped
+        { sessionId: "cli-2", cwd: "/tmp/two" }, // title and updatedAt are optional
+      ],
+      nextCursor: "page-2",
+    };
+  })
   // Replays history the way a real agent does, so the client's replay
   // suppression can be tested.
   // The Kiro autocomplete extension, so the client's option path is exercised.
@@ -75,6 +100,12 @@ const app = agent({ name: "mock-agent" })
   .onRequest("session/load", async ({ params, client }) => {
     const notify = (update) =>
       client.notify("session/update", { sessionId: params.sessionId, update });
+    // Real agents replay both sides of the conversation, so the client has to
+    // cope with a user_message_chunk as well as an agent one.
+    await notify({
+      sessionUpdate: "user_message_chunk",
+      content: { type: "text", text: "WHAT I ASKED" },
+    });
     for (const text of ["OLD ", "HISTORY"]) {
       await notify({ sessionUpdate: "agent_message_chunk", content: { type: "text", text } });
     }

@@ -28,6 +28,10 @@ export class SessionManager {
    * conversation. Both then append from the same seq — a UNIQUE violation on
    * (session_id, seq) — and both spawn their own agent. Two tabs, a
    * double-clicked Resume button, or a reconnect are all enough.
+   *
+   * Adoptions share this map under an `adopt:<agentSessionId>` key: they have
+   * no KiroChrome id yet, so they cannot collide with a resume, and two
+   * concurrent adoptions of one agent session must still yield one Session.
    */
   private readonly resuming = new Map<string, Promise<Session>>();
 
@@ -84,6 +88,39 @@ export class SessionManager {
       if (isProviderFault((err as KcError | undefined)?.code)) this.store.markStale(provider.id);
       throw err;
     }
+  }
+
+  /**
+   * Takes over a conversation the agent already has, found via `session/list`.
+   *
+   * Adopting the same agent session twice would give one agent session two
+   * KiroChrome logs, both appending. So an agent session we already hold is
+   * reopened rather than adopted again — and the in-flight map is keyed
+   * separately from `resume`'s, because the two are keyed by different ids and
+   * a concurrent pair must still collapse to one Session.
+   */
+  async adopt(
+    provider: ProviderConfig,
+    listed: { agentSessionId: string; cwd: string; title: string | null },
+  ): Promise<Session> {
+    const existing = this.store.sessionByAgentSessionId(listed.agentSessionId);
+    if (existing) return this.resume(existing.id, provider);
+
+    const key = `adopt:${listed.agentSessionId}`;
+    const inFlight = this.resuming.get(key);
+    if (inFlight) return inFlight;
+
+    const attempt = this.staleOnFailure(provider, () =>
+      Session.adopt(randomUUID(), provider, this.store, listed),
+    )
+      .then((session) => {
+        this.track(session);
+        return session;
+      })
+      .finally(() => this.resuming.delete(key));
+
+    this.resuming.set(key, attempt);
+    return attempt;
   }
 
   /** Re-attaches an agent to a stored conversation so it can be continued. */
