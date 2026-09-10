@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { causeOf, kcError, type ProviderConfig } from "@kirochrome/shared";
+import { causeOf, kcError, type ProviderConfig, type Validated } from "@kirochrome/shared";
 import { configPath, dataDir } from "./paths.js";
 
 /**
@@ -81,6 +81,11 @@ function defaultProviders(): ProviderConfig[] {
 
 export interface AppConfig {
   providers: ProviderConfig[];
+  /**
+   * Entries the file asked for and did not get: one line per dropped provider,
+   * naming the index and what was wrong. Reported rather than obeyed.
+   */
+  problems: string[];
 }
 
 /** Persists an edit to one provider, leaving the rest of the file alone. */
@@ -107,7 +112,9 @@ export function updateProvider(id: string, patch: Partial<ProviderConfig>): AppC
  */
 function writeConfig(config: AppConfig): void {
   const path = configPath();
-  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  // Only the providers: `problems` is this run's reading of the file, not part
+  // of its schema, and writing it back would make it look user-editable.
+  writeFileSync(path, `${JSON.stringify({ providers: config.providers }, null, 2)}\n`, { mode: 0o600 });
   try {
     chmodSync(path, 0o600);
   } catch {
@@ -123,18 +130,102 @@ export function loadConfig(): AppConfig {
   try {
     raw = readFileSync(path, "utf8");
   } catch {
-    const seeded: AppConfig = { providers: defaultProviders() };
+    const seeded: AppConfig = { providers: defaultProviders(), problems: [] };
     writeConfig(seeded);
     return seeded;
   }
 
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(raw) as AppConfig;
-    if (!Array.isArray(parsed.providers)) {
-      throw kcError("CONFIG_INVALID", `${path} has no 'providers' array.`);
-    }
-    return parsed;
+    parsed = JSON.parse(raw);
   } catch (err) {
-    throw kcError("CONFIG_INVALID", `Could not read ${path}.`, { cause: causeOf(err) });
+    throw kcError("CONFIG_INVALID", `${path} is not valid JSON.`, { cause: causeOf(err) });
   }
+
+  const config = validateConfig(parsed, path);
+  // stderr, because it is the channel AGENTS.md points you at first and the one
+  // place a problem is visible without a page open.
+  for (const problem of config.problems) console.warn(`config.json: ${problem}`);
+  return config;
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+/**
+ * Validates a hand-edited config file.
+ *
+ * **A bad entry is dropped, not fatal.** This file is edited by hand and holds
+ * every route back into the app: refusing the whole file over one mistyped
+ * `args` would take away the setup page that is the only way to fix it. So a
+ * broken provider is reported and skipped, and the working ones still load.
+ *
+ * The file is rejected only when nothing survives it — not an object, no
+ * `providers` array, or every entry invalid. Then the typed error names each
+ * problem, which beats an empty provider list that explains nothing.
+ */
+function validateConfig(value: unknown, path: string): AppConfig {
+  if (!isRecord(value)) throw kcError("CONFIG_INVALID", `${path} must contain a JSON object.`);
+  if (!Array.isArray(value.providers)) throw kcError("CONFIG_INVALID", `${path} has no 'providers' array.`);
+
+  const providers: ProviderConfig[] = [];
+  const problems: string[] = [];
+  const seen = new Set<string>();
+
+  value.providers.forEach((entry: unknown, i: number) => {
+    const checked = validateProvider(entry);
+    if (!checked.ok) {
+      problems.push(`ignored providers[${i}] — ${checked.problem}`);
+      return;
+    }
+    // `find(p => p.id === …)` takes the first match everywhere, so a second
+    // entry with the same id is dead weight that looks like it is in use.
+    if (seen.has(checked.value.id)) {
+      problems.push(`ignored providers[${i}] — duplicate id '${checked.value.id}'`);
+      return;
+    }
+    seen.add(checked.value.id);
+    providers.push(checked.value);
+  });
+
+  // An empty array is a legitimately empty registry; entries that all failed
+  // are a broken file, and saying so is the whole point.
+  if (providers.length === 0 && problems.length > 0) {
+    throw kcError("CONFIG_INVALID", `${path} defines no usable provider: ${problems.join("; ")}.`, {
+      detail: { problems },
+    });
+  }
+  return { providers, problems };
+}
+
+const isNonEmptyString = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
+const isStringMap = (v: unknown): boolean =>
+  isRecord(v) && Object.values(v).every((entry) => typeof entry === "string");
+
+function validateProvider(value: unknown): Validated<ProviderConfig> {
+  if (!isRecord(value)) return { ok: false, problem: "must be an object" };
+
+  for (const key of ["id", "name", "command"] as const) {
+    if (!isNonEmptyString(value[key])) return { ok: false, problem: `'${key}' must be a non-empty string` };
+  }
+  // Omitting args is the common hand-written shape, and "no arguments" is what
+  // it obviously means. A wrong *type* is a mistake and is not guessed at.
+  if (value.args !== undefined && !(Array.isArray(value.args) && value.args.every((a) => typeof a === "string"))) {
+    return { ok: false, problem: "'args' must be an array of strings" };
+  }
+  for (const key of ["cwd", "authMethodId", "docsUrl"] as const) {
+    if (value[key] !== undefined && typeof value[key] !== "string") {
+      return { ok: false, problem: `'${key}' must be a string` };
+    }
+  }
+  for (const key of ["env", "install"] as const) {
+    if (value[key] !== undefined && !isStringMap(value[key])) {
+      return { ok: false, problem: `'${key}' must be an object of strings` };
+    }
+  }
+
+  // Every field read anywhere has been checked above, so this narrows rather
+  // than asserts. `args` is the one defaulted field.
+  const provider = { ...value, args: value.args ?? [] } as unknown as ProviderConfig;
+  return { ok: true, value: provider };
 }

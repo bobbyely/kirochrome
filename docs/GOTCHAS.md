@@ -152,6 +152,21 @@ All of these were real races, found the hard way.
   conversation — from `useLayoutEffect`, so the top is never painted — and go
   smooth only once the reader is following live output.
 
+## Untrusted input
+
+- **`typeof x === "number"` is not "a number you can use".** `JSON.parse`
+  happily turns `1e999` into `Infinity`, and both it and `NaN` survive
+  arithmetic, so `{"type":"move_queued","from":1e999}` passes a naive check and
+  reaches an array index. Every numeric field in a validator uses
+  `Number.isFinite`.
+- **Writing the config back erases what loading it dropped.** `loadConfig`
+  skips an invalid provider entry, and `updateProvider` writes the *loaded*
+  config — so editing any provider from the setup page silently removes the
+  broken entry from `config.json`. The file converging on something valid is
+  the intended behaviour, but the user's typo ends up deleted rather than
+  fixed, which is why the drop is warned about on stderr instead of passed over
+  in silence.
+
 ## Working on the repo
 
 - **`git branch --merged main` is useless here.** We rebase-merge, which
