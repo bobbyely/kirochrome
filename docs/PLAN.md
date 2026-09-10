@@ -87,9 +87,35 @@ filesystem access and stay honest about what the agent claims it did; the tree
 shows ground truth but can disagree with the transcript. Either survives a
 restart, since the diffs are in the event log.
 
-**Files.** Browse and read files in the session's working directory. `fs` is
-implemented now, so this is a tree plus the syntax highlighting the tool cards
-already use. Read-only to begin with — editing invites a race with the agent.
+**Files.** A *renderer*, not a text dump: each format shown the way it is meant
+to be read, with a tree to navigate the session's working directory. Read-only
+to begin with — editing invites a race with the agent writing the same file.
+
+| Format | Rendered as | What exists already |
+|---|---|---|
+| Code | Highlighted, with line numbers | `rehype-highlight`, used by tool cards |
+| Markdown | Rendered, with a toggle to source | `MarkdownBody` |
+| JSON / YAML | Pretty-printed and highlighted | highlighting; formatting is new |
+| CSV / TSV | A table | new |
+| Images | Inline | serving is new — see below |
+| PDF | Embedded viewer | new; the browser can do this |
+| Binary / very large | Say so, with size and type | new — never dump bytes |
+
+**The complication: ACP's `fs/read_text_file` is text-only.** Images, PDFs and
+anything binary need a separate route, and that route has a different trust
+boundary from the ACP methods.
+
+The ACP handlers serve *the agent*, a local process that can already read
+anything the user can, so they are deliberately unsandboxed. An HTTP endpoint
+serves *the browser*, and any page the user has open can attempt a request to
+localhost — we check `Origin`, but that is one control, not a boundary. So the
+file endpoint must be confined to the session's working directory, with the
+resolved real path checked to be inside it after symlinks are followed. Sharing
+the unsandboxed ACP path would turn a chat UI into a read-anything endpoint.
+
+Worth deciding early: whether the tree also shows files ignored by git. Showing
+`node_modules` makes it useless; hiding it by reading `.gitignore` is more work
+than it sounds, and hiding files the agent is actively editing would be worse.
 
 #### 2. `session/list` — conversations the agent already has
 
