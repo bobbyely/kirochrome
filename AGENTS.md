@@ -200,6 +200,31 @@ The session-supplied email identifies the user; it does not stamp authorship.
 imperative — "Support the agent's slash commands, which is where Kiro hides
 effort". Not Conventional Commits; no `feat:` prefixes.
 
+### Changes land through a pull request
+
+**Branch, push, open a PR, and merge only once CI is green.** Not because
+anyone is waiting to review it — because the check is what stops bad code
+reaching `main`, and fixing `main` after the fact is strictly worse than
+fixing a branch.
+
+```bash
+git checkout -b <topic>
+git push -u origin <topic>
+gh pr create
+gh pr merge --rebase --delete-branch   # after the check passes
+```
+
+**Rebase, never merge-commit.** The history here is linear and worth keeping
+that way.
+
+**Nobody approves these.** GitHub does not let you approve your own pull
+request, so requiring a review would deadlock a single-contributor repo
+permanently. The gate is the CI check, not a human approval — if `main` is ever
+protected, require the status check and leave reviews unrequired.
+
+The exception is a change CI cannot break and a branch cannot help: a typo in a
+doc, say. Direct is fine there. When in doubt, branch — it costs one command.
+
 ## Working style
 
 - Research → plan → implement. Read the existing code before adding to it.
