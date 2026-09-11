@@ -31,6 +31,8 @@ parser.
   where the agent supports it
 - refresh or crash mid-turn without losing anything
 - hung commands killed cleanly, with no orphaned processes
+- two word games in the corner for while the agent is busy — **Play**,
+  bottom right; a game in progress survives switching conversations
 
 ## Docs
 

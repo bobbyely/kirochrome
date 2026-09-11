@@ -876,3 +876,106 @@ kbd {
 .command-name { color: var(--accent); font-weight: 600; flex-shrink: 0; }
 .command-desc { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .command-hint { margin-left: auto; color: var(--muted); font-size: var(--fs-2xs); font-style: italic; flex-shrink: 0; }
+
+/* ---------- games: a small panel in the corner of every screen ---------- */
+.games {
+  position: fixed;
+  right: var(--sp-4);
+  bottom: 140px;
+  z-index: 3;
+  width: 300px;
+  padding: var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  font-family: var(--mono);
+  outline: none;
+}
+/* The opener sits where the panel will appear, so the panel reads as it unfolding. */
+.games-open {
+  position: fixed;
+  right: var(--sp-4);
+  bottom: 140px;
+  z-index: 3;
+  font-family: var(--mono);
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: var(--sp-1) var(--sp-2);
+  background: var(--surface);
+  color: var(--muted);
+}
+.games-head { display: flex; align-items: center; gap: var(--sp-1); margin-bottom: var(--sp-3); }
+.games-tab {
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px var(--sp-2);
+  border-color: transparent;
+  color: var(--muted);
+}
+.games-tab.active { color: var(--accent); border-color: var(--accent); }
+.games-spacer { flex: 1; }
+.games-nudge { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--warn); }
+.games-close { padding: 0 var(--sp-2); border-color: transparent; font-size: var(--fs-lg); line-height: 1; }
+.game { outline: none; display: flex; flex-direction: column; gap: var(--sp-3); }
+
+/* Tiles are the one shape both games share. */
+.tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.tile.typed { border-color: var(--border-strong); }
+.tile.hit { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tile.near { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+.tile.miss { background: var(--raised); color: var(--muted); }
+.tile.lifted { opacity: 0.25; }
+
+.wordle-grid { display: flex; flex-direction: column; gap: var(--sp-1); align-items: center; }
+.wordle-row { display: flex; gap: var(--sp-1); }
+
+.keys { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+.keys-row { display: flex; gap: 3px; }
+.key {
+  width: 22px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--muted);
+}
+.key.hit { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.key.near { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+.key.miss { background: var(--raised); color: var(--border-strong); }
+
+.rack { display: flex; gap: var(--sp-1); justify-content: center; }
+.draft {
+  display: flex;
+  align-items: baseline;
+  min-height: 24px;
+  padding: 0 var(--sp-1);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-lg);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.game-score { margin-left: auto; font-size: var(--fs-2xs); letter-spacing: 0.1em; color: var(--muted); }
+.found { display: flex; flex-wrap: wrap; gap: var(--sp-1); min-height: 20px; }
+.found-word { font-size: var(--fs-xs); padding: 1px var(--sp-2); border: 1px solid var(--border); border-radius: var(--r-sm); }
+.found-word.hit { border-color: var(--accent); color: var(--accent); }
+.found-word.missed { color: var(--muted); border-style: dashed; }
+.game-note { margin: 0; font-size: var(--fs-xs); color: var(--muted); min-height: 1.4em; }
+.game-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; }
