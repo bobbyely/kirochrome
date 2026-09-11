@@ -72,6 +72,8 @@ describe("a schedule", () => {
 
     const record = store.getSession(run.sessionId);
     assert.equal(record.scheduleId, schedule.id, "the conversation knows its schedule");
+    assert.match(record.title, /^Nightly · /, "named after the schedule, not the prompt");
+    assert.ok(record.titleLocked, "and the agent cannot rename it");
     assert.equal(sessions.getLive(run.sessionId), null, "no agent left attached");
 
     const types = store.eventsSince(run.sessionId, 0).map((e) => e.type);

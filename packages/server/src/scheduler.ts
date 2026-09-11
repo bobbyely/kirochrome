@@ -213,7 +213,7 @@ export class Scheduler {
     this.store.upsertRun(run);
     try {
       const session = await this.sessions.open(provider, schedule.cwd);
-      session.tagSchedule(schedule.id);
+      session.tagSchedule(schedule.id, runTitle(schedule, run.startedAt));
       session.setAutoApprove(schedule.autoApprove);
       run.sessionId = session.id;
       this.store.upsertRun(run);
@@ -280,6 +280,17 @@ function lastFailure(events: ReadonlyArray<{ type: string; error?: KcError }>): 
     if (event.type === "error" && event.error) return event.error;
   }
   return null;
+}
+
+/** "Nightly review · Fri 09:00" — what a run is called in the sidebar. */
+function runTitle(schedule: Schedule, startedAt: number): string {
+  const when = new Date(startedAt).toLocaleString(undefined, {
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${schedule.name} · ${when}`;
 }
 
 /** "HH:MM" → [hours, minutes], or null when it is not a clock time. */
