@@ -186,15 +186,30 @@ export class SessionManager {
       archived: record.status === "archived",
       supportsImages: false,
       commands: [],
+      scheduleId: record.scheduleId,
+      unread: false,
     };
   }
 
   list(limit = 100, includeArchived = false): SessionSummary[] {
+    const unread = this.store.unreadRunSessions();
     return this.store.listSessions(limit, includeArchived).map((record) => {
       const session = this.live.get(record.id);
       const summary = session ? session.summary() : this.summary(record.id);
-      return { ...summary, title: record.title, archived: record.status === "archived" };
+      return {
+        ...summary,
+        title: record.title,
+        archived: record.status === "archived",
+        unread: unread.has(record.id),
+      };
     });
+  }
+
+  /** Opening a scheduled run is what marks it read. A no-op for anything else. */
+  markRead(id: string): void {
+    if (!this.store.getSession(id)?.scheduleId) return;
+    this.store.markRunRead(id);
+    for (const fn of this.changeListeners) fn();
   }
 
   /**
@@ -214,6 +229,18 @@ export class SessionManager {
       }
     }
     this.store.setArchived(id, archived);
+    for (const fn of this.changeListeners) fn();
+  }
+
+  /**
+   * Detaches the agent from a conversation without archiving it. The log is
+   * untouched; 'Resume conversation' brings the agent back.
+   */
+  detach(id: string): void {
+    const live = this.live.get(id);
+    if (!live) return;
+    this.live.delete(id);
+    live.close();
     for (const fn of this.changeListeners) fn();
   }
 

@@ -161,6 +161,11 @@ All of these were real races, found the hard way.
   ~250ms flush.
 - **`node:sqlite` warns on Node 22**, stable on 24. Pin via `.nvmrc`. Do not
   swap it for a native module to silence the warning.
+- **`CREATE TABLE IF NOT EXISTS` never adds a column.** A table created by an
+  earlier build keeps its old shape, and the next INSERT fails with SQLite's
+  unhelpful "SQL logic error". Every column added after a table first shipped
+  needs its own `ALTER TABLE` in `Store.migrate()`, guarded by
+  `PRAGMA table_info` — the way `title_locked` and `auto_approve` are.
 
 ## Browser
 

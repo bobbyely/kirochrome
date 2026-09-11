@@ -2,11 +2,12 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { isImageMime, kcError, type KcError } from "@kirochrome/shared";
-import type { AgentSessionsResponse, ProviderView } from "@kirochrome/shared";
+import type { AgentSessionsResponse, ProviderView, Schedule, ScheduleInput, SchedulesResponse } from "@kirochrome/shared";
 import { listAgentSessions } from "./agentSessions.js";
 import { checkProvider } from "./check.js";
 import { exportFilename, toMarkdown } from "./export.js";
 import { loadConfig, updateProvider } from "./config.js";
+import { Scheduler } from "./scheduler.js";
 import { SessionManager } from "./sessionManager.js";
 import { Store } from "./store.js";
 import { attachWebSocket } from "./ws.js";
@@ -47,6 +48,8 @@ const MIME: Record<string, string> = {
 export function startServer(port: number, webRoot: string | null): void {
   const store = new Store();
   const sessions = new SessionManager(store);
+  const scheduler = new Scheduler(store, sessions, () => loadConfig().providers);
+  scheduler.start();
 
   const server = createServer(async (req, res) => {
     if (!originAllowed(req, port)) {
@@ -55,6 +58,7 @@ export function startServer(port: number, webRoot: string | null): void {
 
     const url = new URL(req.url ?? "/", `http://${HOST}:${port}`);
     try {
+      if (url.pathname.startsWith("/api/schedules")) return await handleSchedules(req, res, url, scheduler);
       if (url.pathname.startsWith("/api/")) return await handleApi(req, res, url, store);
       if (webRoot) return serveStatic(res, webRoot, url.pathname);
       return sendJson(res, 404, { error: kcError("INTERNAL", "No web build. Run `npm run build`.") });
@@ -63,7 +67,7 @@ export function startServer(port: number, webRoot: string | null): void {
         typeof err === "object" && err !== null && "code" in err
           ? (err as KcError)
           : kcError("INTERNAL", "Unhandled server error.", { cause: String(err) });
-      sendError(res, 500, error);
+      sendError(res, statusFor(error), error);
     }
   });
 
@@ -76,6 +80,7 @@ export function startServer(port: number, webRoot: string | null): void {
   // Agents are child processes; leaving them behind is the orphan bug we
   // designed against, so tear them down on the way out.
   const shutdown = () => {
+    scheduler.stop();
     sessions.closeAll();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 2_000).unref();
@@ -197,6 +202,46 @@ async function handleApi(
   sendError(res, 404, kcError("INTERNAL", `No route for ${req.method} ${url.pathname}.`));
 }
 
+/**
+ * Schedules are plain CRUD over HTTP: nothing streams, and the runs they
+ * produce reach the browser as ordinary conversations over the socket.
+ */
+async function handleSchedules(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+  scheduler: Scheduler,
+): Promise<void> {
+  if (url.pathname === "/api/schedules" && req.method === "GET") {
+    const body: SchedulesResponse = { schedules: scheduler.list() };
+    return sendJson(res, 200, body);
+  }
+
+  if (url.pathname === "/api/schedules" && req.method === "POST") {
+    const input = (await readJson(req)) as ScheduleInput;
+    return sendJson(res, 201, { schedule: scheduler.create(input) });
+  }
+
+  const one = /^\/api\/schedules\/([^/]+)$/.exec(url.pathname);
+  if (one && req.method === "PATCH") {
+    const id = decodeURIComponent(one[1]!);
+    const patch = (await readJson(req)) as Partial<ScheduleInput> & { status?: Schedule["status"] };
+    return sendJson(res, 200, { schedule: scheduler.update(id, patch) });
+  }
+  if (one && req.method === "DELETE") {
+    scheduler.delete(decodeURIComponent(one[1]!));
+    return sendJson(res, 200, { ok: true });
+  }
+
+  const runMatch = /^\/api\/schedules\/([^/]+)\/run$/.exec(url.pathname);
+  if (runMatch && req.method === "POST") {
+    const run = await scheduler.runNow(decodeURIComponent(runMatch[1]!));
+    return sendJson(res, 200, { run });
+  }
+
+  sendError(res, 404, kcError("INTERNAL", `No route for ${req.method} ${url.pathname}.`));
+}
+
 function hostPlatform(): "darwin" | "linux" | "win32" | "other" {
   const p = process.platform;
   return p === "darwin" || p === "linux" || p === "win32" ? p : "other";
@@ -233,6 +278,13 @@ function serveStatic(res: ServerResponse, root: string, pathname: string): void 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
+}
+
+/** A typed error already says whose fault it is; the status should agree. */
+function statusFor(error: KcError): number {
+  if (error.code.endsWith("_UNKNOWN")) return 404;
+  if (error.code.endsWith("_INVALID")) return 400;
+  return 500;
 }
 
 const sendError = (res: ServerResponse, status: number, error: KcError) =>

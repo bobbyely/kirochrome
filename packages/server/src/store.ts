@@ -1,6 +1,14 @@
 import { chmodSync, mkdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import type { KcEvent, ProviderCheckResult, SearchHit, SessionRecord } from "@kirochrome/shared";
+import type {
+  KcError,
+  KcEvent,
+  ProviderCheckResult,
+  Schedule,
+  ScheduleRun,
+  SearchHit,
+  SessionRecord,
+} from "@kirochrome/shared";
 import { dataDir, dbPath } from "./paths.js";
 
 /**
@@ -83,6 +91,39 @@ export class Store {
         value       TEXT NOT NULL,   -- JSON, so booleans survive the round trip
         PRIMARY KEY (provider_id, config_id)
       ) WITHOUT ROWID;
+
+      -- Prompts the server runs on a timer. Here rather than in config.json
+      -- because the UI edits them.
+      CREATE TABLE IF NOT EXISTS schedules (
+        id            TEXT PRIMARY KEY,
+        name          TEXT NOT NULL,
+        provider_id   TEXT NOT NULL,
+        cwd           TEXT NOT NULL,
+        prompt        TEXT NOT NULL,
+        every_minutes INTEGER NOT NULL,
+        at            TEXT,               -- "HH:MM" local, or NULL for the interval
+        weekdays_only INTEGER NOT NULL DEFAULT 0,
+        keep_runs     INTEGER NOT NULL DEFAULT 20,
+        auto_approve  INTEGER NOT NULL DEFAULT 0,
+        status        TEXT NOT NULL,
+        created_at    INTEGER NOT NULL,
+        updated_at    INTEGER NOT NULL
+      );
+
+      -- One row per firing, including the ones that never became a
+      -- conversation, so a schedule that keeps failing to start is visible.
+      CREATE TABLE IF NOT EXISTS schedule_runs (
+        id          TEXT PRIMARY KEY,
+        schedule_id TEXT NOT NULL,
+        started_at  INTEGER NOT NULL,
+        ended_at    INTEGER,
+        session_id  TEXT,
+        outcome     TEXT NOT NULL,
+        error       TEXT,             -- KcError as JSON
+        message     TEXT,
+        unread      INTEGER NOT NULL DEFAULT 1
+      );
+      CREATE INDEX IF NOT EXISTS idx_runs_schedule ON schedule_runs(schedule_id, started_at DESC);
     `);
 
     this.migrate();
@@ -149,6 +190,28 @@ export class Store {
     if (!columns.includes("title_locked")) {
       this.db.exec(`ALTER TABLE sessions ADD COLUMN title_locked INTEGER NOT NULL DEFAULT 0`);
     }
+    if (!columns.includes("schedule_id")) {
+      this.db.exec(`ALTER TABLE sessions ADD COLUMN schedule_id TEXT`);
+    }
+    const scheduleColumns = (this.db.prepare(`PRAGMA table_info(schedules)`).all() as Array<{ name: string }>).map(
+      (c) => c.name,
+    );
+    if (!scheduleColumns.includes("auto_approve")) {
+      this.db.exec(`ALTER TABLE schedules ADD COLUMN auto_approve INTEGER NOT NULL DEFAULT 0`);
+    }
+    if (!scheduleColumns.includes("at")) {
+      this.db.exec(`
+        ALTER TABLE schedules ADD COLUMN at TEXT;
+        ALTER TABLE schedules ADD COLUMN weekdays_only INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE schedules ADD COLUMN keep_runs INTEGER NOT NULL DEFAULT 20;
+      `);
+    }
+    const runColumns = (this.db.prepare(`PRAGMA table_info(schedule_runs)`).all() as Array<{ name: string }>).map(
+      (c) => c.name,
+    );
+    if (!runColumns.includes("unread")) {
+      this.db.exec(`ALTER TABLE schedule_runs ADD COLUMN unread INTEGER NOT NULL DEFAULT 1`);
+    }
   }
 
   // ---------- sessions ----------
@@ -156,14 +219,15 @@ export class Store {
   upsertSession(record: SessionRecord): void {
     this.db
       .prepare(
-        `INSERT INTO sessions (id, agent_session_id, provider_id, provider_name, cwd, title, status, created_at, updated_at, title_locked)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO sessions (id, agent_session_id, provider_id, provider_name, cwd, title, status, created_at, updated_at, title_locked, schedule_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            agent_session_id = excluded.agent_session_id,
            title = excluded.title,
            status = excluded.status,
            updated_at = excluded.updated_at,
-           title_locked = excluded.title_locked`,
+           title_locked = excluded.title_locked,
+           schedule_id = excluded.schedule_id`,
       )
       .run(
         record.id,
@@ -176,6 +240,7 @@ export class Store {
         record.createdAt,
         record.updatedAt,
         record.titleLocked ? 1 : 0,
+        record.scheduleId ?? null,
       );
   }
 
@@ -216,6 +281,130 @@ export class Store {
     this.db
       .prepare(`UPDATE sessions SET status = ?, updated_at = ? WHERE id = ?`)
       .run(archived ? "archived" : "active", Date.now(), id);
+  }
+
+  // ---------- schedules ----------
+
+  upsertSchedule(schedule: Schedule): void {
+    this.db
+      .prepare(
+        `INSERT INTO schedules (id, name, provider_id, cwd, prompt, every_minutes, at, weekdays_only, keep_runs, auto_approve, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           name = excluded.name, provider_id = excluded.provider_id, cwd = excluded.cwd,
+           prompt = excluded.prompt, every_minutes = excluded.every_minutes, at = excluded.at,
+           weekdays_only = excluded.weekdays_only, keep_runs = excluded.keep_runs,
+           auto_approve = excluded.auto_approve, status = excluded.status,
+           updated_at = excluded.updated_at`,
+      )
+      .run(
+        schedule.id,
+        schedule.name,
+        schedule.providerId,
+        schedule.cwd,
+        schedule.prompt,
+        schedule.everyMinutes,
+        schedule.at,
+        schedule.weekdaysOnly ? 1 : 0,
+        schedule.keepRuns,
+        schedule.autoApprove ? 1 : 0,
+        schedule.status,
+        schedule.createdAt,
+        schedule.updatedAt,
+      );
+  }
+
+  getSchedule(id: string): Schedule | null {
+    const row = this.db.prepare(`SELECT * FROM schedules WHERE id = ?`).get(id) as
+      | Record<string, string | number | null>
+      | undefined;
+    return row ? toSchedule(row) : null;
+  }
+
+  listSchedules(): Schedule[] {
+    const rows = this.db.prepare(`SELECT * FROM schedules ORDER BY created_at`).all() as Array<
+      Record<string, string | number | null>
+    >;
+    return rows.map(toSchedule);
+  }
+
+  /** Removes the schedule and its run history. Its conversations stay. */
+  deleteSchedule(id: string): void {
+    this.db.prepare(`DELETE FROM schedule_runs WHERE schedule_id = ?`).run(id);
+    this.db.prepare(`DELETE FROM schedules WHERE id = ?`).run(id);
+  }
+
+  upsertRun(run: ScheduleRun): void {
+    this.db
+      .prepare(
+        `INSERT INTO schedule_runs (id, schedule_id, started_at, ended_at, session_id, outcome, error, message, unread)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           ended_at = excluded.ended_at, session_id = excluded.session_id,
+           outcome = excluded.outcome, error = excluded.error, message = excluded.message,
+           unread = excluded.unread`,
+      )
+      .run(
+        run.id,
+        run.scheduleId,
+        run.startedAt,
+        run.endedAt,
+        run.sessionId,
+        run.outcome,
+        run.error ? JSON.stringify(run.error) : null,
+        run.message,
+        run.unread ? 1 : 0,
+      );
+  }
+
+  listRuns(scheduleId: string, limit = 10): ScheduleRun[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM schedule_runs WHERE schedule_id = ? ORDER BY started_at DESC LIMIT ?`)
+      .all(scheduleId, limit) as Array<Record<string, string | number | null>>;
+    return rows.map(toRun);
+  }
+
+  /** Opening a run's conversation is what reads it. */
+  markRunRead(sessionId: string): void {
+    this.db.prepare(`UPDATE schedule_runs SET unread = 0 WHERE session_id = ?`).run(sessionId);
+  }
+
+  /** Session ids of scheduled runs nobody has opened yet, for the sidebar. */
+  unreadRunSessions(): Set<string> {
+    const rows = this.db
+      .prepare(`SELECT session_id FROM schedule_runs WHERE unread = 1 AND session_id IS NOT NULL AND outcome != 'running'`)
+      .all() as Array<{ session_id: string }>;
+    return new Set(rows.map((r) => r.session_id));
+  }
+
+  /**
+   * Runs beyond the newest `keep` for a schedule. Their rows stay — the
+   * history page is the point of them — but their conversations can go.
+   */
+  runsBeyond(scheduleId: string, keep: number): ScheduleRun[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM schedule_runs WHERE schedule_id = ? ORDER BY started_at DESC LIMIT -1 OFFSET ?`)
+      .all(scheduleId, keep) as Array<Record<string, string | number | null>>;
+    return rows.map(toRun);
+  }
+
+  /** Most recent firing per schedule, attempted or not — what the next one is counted from. */
+  lastRunStartedAt(scheduleId: string): number | null {
+    const row = this.db
+      .prepare(`SELECT MAX(started_at) AS at FROM schedule_runs WHERE schedule_id = ?`)
+      .get(scheduleId) as { at: number | null } | undefined;
+    return row?.at ?? null;
+  }
+
+  /**
+   * Runs the previous server left mid-flight. Their agents died with it, so
+   * they are over — but nothing else will ever close them.
+   */
+  failOrphanRuns(error: KcError): number {
+    const result = this.db
+      .prepare(`UPDATE schedule_runs SET outcome = 'failed', ended_at = ?, error = ? WHERE outcome = 'running'`)
+      .run(Date.now(), JSON.stringify(error));
+    return Number(result.changes);
   }
 
   // ---------- attachments ----------
@@ -368,6 +557,39 @@ export class Store {
   }
 }
 
+function toSchedule(row: Record<string, string | number | null>): Schedule {
+  return {
+    id: String(row["id"]),
+    name: String(row["name"]),
+    providerId: String(row["provider_id"]),
+    cwd: String(row["cwd"]),
+    prompt: String(row["prompt"]),
+    everyMinutes: Number(row["every_minutes"]),
+    at: (row["at"] as string | null) ?? null,
+    weekdaysOnly: Boolean(row["weekdays_only"]),
+    keepRuns: Number(row["keep_runs"]),
+    autoApprove: Boolean(row["auto_approve"]),
+    status: String(row["status"]) as Schedule["status"],
+    createdAt: Number(row["created_at"]),
+    updatedAt: Number(row["updated_at"]),
+  };
+}
+
+function toRun(row: Record<string, string | number | null>): ScheduleRun {
+  const error = row["error"];
+  return {
+    id: String(row["id"]),
+    scheduleId: String(row["schedule_id"]),
+    startedAt: Number(row["started_at"]),
+    endedAt: (row["ended_at"] as number | null) ?? null,
+    sessionId: (row["session_id"] as string | null) ?? null,
+    outcome: String(row["outcome"]) as ScheduleRun["outcome"],
+    error: typeof error === "string" ? (JSON.parse(error) as KcError) : null,
+    message: (row["message"] as string | null) ?? null,
+    unread: Boolean(row["unread"]),
+  };
+}
+
 function toRecord(row: Record<string, string | number | null>): SessionRecord {
   return {
     id: String(row["id"]),
@@ -378,6 +600,7 @@ function toRecord(row: Record<string, string | number | null>): SessionRecord {
     title: (row["title"] as string | null) ?? null,
     status: String(row["status"]) as SessionRecord["status"],
     titleLocked: Boolean(row["title_locked"]),
+    scheduleId: (row["schedule_id"] as string | null) ?? null,
     createdAt: Number(row["created_at"]),
     updatedAt: Number(row["updated_at"]),
   };

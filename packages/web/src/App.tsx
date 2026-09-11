@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Chat } from "./Chat.js";
 import { NewChat, type AdoptTarget } from "./NewChat.js";
+import { Schedules } from "./Schedules.js";
 import { Setup } from "./Setup.js";
 import { Sidebar } from "./Sidebar.js";
 import { useShortcuts } from "./useShortcuts.js";
@@ -8,6 +9,7 @@ import { useShortcuts } from "./useShortcuts.js";
 type View =
   | { name: "welcome" }
   | { name: "setup" }
+  | { name: "schedules" }
   | { name: "new" }
   | {
       name: "chat";
@@ -55,6 +57,8 @@ export function App() {
         onOpenSession={openSession}
         onOpenSetup={() => setView({ name: "setup" })}
         setupActive={view.name === "setup"}
+        onOpenSchedules={() => setView({ name: "schedules" })}
+        schedulesActive={view.name === "schedules"}
       />
 
       <main className="main">
@@ -69,6 +73,7 @@ export function App() {
         )}
 
         {view.name === "setup" && <Setup />}
+        {view.name === "schedules" && <Schedules onOpenSession={openSession} />}
 
         {view.name === "new" && (
           <NewChat

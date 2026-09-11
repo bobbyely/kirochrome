@@ -3,6 +3,10 @@ import type {
   CheckResponse,
   KcError,
   ProvidersResponse,
+  Schedule,
+  ScheduleInput,
+  ScheduleRun,
+  SchedulesResponse,
 } from "@kirochrome/shared";
 
 /** Thrown for any non-2xx response, carrying the server's typed error. */
@@ -42,3 +46,26 @@ export const fetchAgentSessions = (id: string) =>
 
 export const runCheck = (id: string) =>
   request<CheckResponse>(`/api/providers/${encodeURIComponent(id)}/check`, { method: "POST" });
+
+export const fetchSchedules = () => request<SchedulesResponse>("/api/schedules");
+
+export const createSchedule = (input: ScheduleInput) =>
+  request<{ schedule: Schedule }>("/api/schedules", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+export const updateSchedule = (id: string, patch: Partial<ScheduleInput> & { status?: Schedule["status"] }) =>
+  request<{ schedule: Schedule }>(`/api/schedules/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+
+export const deleteSchedule = (id: string) =>
+  request<{ ok: true }>(`/api/schedules/${encodeURIComponent(id)}`, { method: "DELETE" });
+
+/** Resolves when the run has finished, however it ended. */
+export const runSchedule = (id: string) =>
+  request<{ run: ScheduleRun }>(`/api/schedules/${encodeURIComponent(id)}/run`, { method: "POST" });
