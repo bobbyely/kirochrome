@@ -554,6 +554,7 @@ kbd {
 .work > summary::-webkit-details-marker { display: none; }
 .work > summary:hover { color: var(--accent); }
 .work-mark { font-size: var(--fs-2xs); }
+.work-now { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .work-mark.active { color: var(--accent); animation: spin 0.9s linear infinite; display: inline-block; }
 .work-children {
   display: flex;
