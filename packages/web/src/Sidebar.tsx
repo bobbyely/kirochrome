@@ -1,8 +1,9 @@
 import { useEffect, useImperativeHandle, useRef, useState, type RefObject } from "react";
 import type { SessionSummary } from "@kirochrome/shared";
+import { GamesPanel } from "./games/Games.js";
 import { useChat } from "./useChat.js";
 
-/** Persistent left rail: new chat, past conversations, and a way into Setup. */
+/** Persistent left rail: new chat, past conversations, a way into Setup, and the games. */
 export interface SidebarApi {
   focusSearch: () => void;
   step: (delta: number) => void;
@@ -28,6 +29,10 @@ export function Sidebar({
   const { connected, sessions, listSessions, renameSession, archiveSession, search, searchHits } =
     useChat();
   const [renaming, setRenaming] = useState<string | null>(null);
+  // The games live here rather than in Chat because this rail is on every
+  // screen, and it already knows which conversation is waiting on the user.
+  // They are positioned fixed, so where they render makes no visual difference.
+  const [playing, setPlaying] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [query, setQuery] = useState("");
   const searchInput = useRef<HTMLInputElement>(null);
@@ -161,6 +166,16 @@ export function Sidebar({
         </button>
         <span className={`dot ${connected ? "dot-ok" : "dot-off"}`} title={connected ? "Connected" : "Disconnected"} />
       </div>
+      {!playing && (
+        <button className="games-open" onClick={() => setPlaying(true)} title="Something to do while an agent works">
+          Play
+        </button>
+      )}
+      <GamesPanel
+        open={playing}
+        awaitingInput={sessions?.some((s) => s.awaitingInput) ?? false}
+        onClose={() => setPlaying(false)}
+      />
     </aside>
   );
 }
