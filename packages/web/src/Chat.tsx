@@ -318,9 +318,11 @@ const Message = memo(function Message({
 /**
  * A run of tool calls and thinking, collapsed into one row.
  *
- * Open while the agent is still working so progress is visible, then collapsed
- * once it finishes — unless the reader has taken control of the toggle, in
- * which case their choice wins.
+ * Collapsed from the start, including while the agent is working. It used to
+ * open itself during the turn to show progress, which meant the transcript was
+ * at its most open exactly when it was moving fastest — a long think dumped
+ * the whole thing on screen and the page jumped. Progress is on the summary
+ * line instead: the count, the mark, and what the agent is doing right now.
  */
 function WorkGroup({
   row,
@@ -331,30 +333,26 @@ function WorkGroup({
   onPermission: (requestId: string, optionId: string | null) => void;
   onElicitation: AnswerElicitation;
 }) {
-  const [open, setOpen] = useState(row.active);
-  const touched = useRef(false);
-
-  useEffect(() => {
-    if (!touched.current) setOpen(row.active);
-  }, [row.active]);
+  const [open, setOpen] = useState(false);
 
   const parts = [
     row.tools > 0 ? `Ran ${row.tools} tool${row.tools === 1 ? "" : "s"}` : null,
     row.thoughts > 0 ? "thought" : null,
   ].filter(Boolean);
+  // The newest tool call is what the agent is doing; the reader can tell
+  // whether it is worth opening without opening it.
+  const latest = row.active ? [...row.children].reverse().find((child) => child.kind === "tool") : undefined;
 
   return (
     <details
       className="work"
       open={open}
-      onToggle={(e) => {
-        touched.current = true;
-        setOpen((e.currentTarget as HTMLDetailsElement).open);
-      }}
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
     >
       <summary>
         <span className={`work-mark ${row.active ? "active" : ""}`}>{row.active ? "◐" : "●"}</span>
         <span>{parts.join(" · ") || "Work"}</span>
+        {latest?.kind === "tool" && <span className="work-now">{latest.title}</span>}
       </summary>
       <div className="work-children">
         {row.children.map((child) => (
