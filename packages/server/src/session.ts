@@ -979,9 +979,15 @@ export class Session {
     });
   }
 
-  /** Records which schedule started this conversation. */
-  tagSchedule(scheduleId: string): void {
+  /**
+   * Records which schedule started this conversation, and names it after the
+   * schedule and the time — every run has the same first message, so a title
+   * derived from it would tell forty-eight runs apart by nothing.
+   */
+  tagSchedule(scheduleId: string, title: string): void {
     this.scheduleId = scheduleId;
+    this.title = title;
+    this.titleLocked = true;
     this.persistMeta();
     this.notifyState();
   }
