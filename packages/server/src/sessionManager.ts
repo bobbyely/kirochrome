@@ -187,21 +187,14 @@ export class SessionManager {
       supportsImages: false,
       commands: [],
       scheduleId: record.scheduleId,
-      unread: false,
     };
   }
 
   list(limit = 100, includeArchived = false): SessionSummary[] {
-    const unread = this.store.unreadRunSessions();
     return this.store.listSessions(limit, includeArchived).map((record) => {
       const session = this.live.get(record.id);
       const summary = session ? session.summary() : this.summary(record.id);
-      return {
-        ...summary,
-        title: record.title,
-        archived: record.status === "archived",
-        unread: unread.has(record.id),
-      };
+      return { ...summary, title: record.title, archived: record.status === "archived" };
     });
   }
 

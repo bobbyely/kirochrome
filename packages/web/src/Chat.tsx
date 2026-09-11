@@ -24,6 +24,7 @@ export function Chat({
   adopt,
   onStarted,
   onOpenSetup,
+  onBack,
 }: {
   providerId?: string;
   cwd?: string;
@@ -32,6 +33,8 @@ export function Chat({
   adopt?: { agentSessionId: string; cwd: string; title: string | null };
   onStarted?: () => void;
   onOpenSetup?: () => void;
+  /** Where this conversation was opened from, when that is not the sidebar. */
+  onBack?: (() => void) | undefined;
 }) {
   const {
     connected,
@@ -139,6 +142,11 @@ export function Chat({
   return (
     <div className="chat">
       <header className="chat-head">
+        {onBack && (
+          <button className="head-action" onClick={onBack} title="Back to the schedule's runs">
+            ← Runs
+          </button>
+        )}
         <div className="chat-title">
           <strong>{session?.title ?? session?.providerName ?? "Conversation"}</strong>
           {session && <code className="cmd">{session.cwd}</code>}

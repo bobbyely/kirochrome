@@ -1,5 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, useState, type RefObject } from "react";
-import type { SessionSummary } from "@kirochrome/shared";
+import type { ScheduleRun, ScheduleView, SessionSummary } from "@kirochrome/shared";
+import { fetchSchedules } from "./api.js";
 import { GamesPanel } from "./games/Games.js";
 import { useChat } from "./useChat.js";
 
@@ -19,6 +20,8 @@ export function Sidebar({
   setupActive,
   onOpenSchedules,
   schedulesActive,
+  onOpenSchedule,
+  activeScheduleId,
 }: {
   api: RefObject<SidebarApi | null>;
   listVersion: number;
@@ -29,6 +32,8 @@ export function Sidebar({
   setupActive: boolean;
   onOpenSchedules: () => void;
   schedulesActive: boolean;
+  onOpenSchedule: (id: string) => void;
+  activeScheduleId?: string | undefined;
 }) {
   const { connected, sessions, listSessions, renameSession, archiveSession, search, searchHits } =
     useChat();
@@ -65,10 +70,25 @@ export function Sidebar({
 
   const searching = query.trim().length > 0;
 
-  // A schedule's runs are one conversation each; forty-eight a day would
-  // bury the ones you typed, so they sit under a fold.
+  // A schedule's runs are one conversation each, and forty-eight a day of the
+  // same prompt would bury the ones you typed. The sidebar lists the schedule
+  // instead, once; its runs are on its own page.
   const own = (sessions ?? []).filter((s) => !s.scheduleId);
-  const scheduled = (sessions ?? []).filter((s) => s.scheduleId);
+  const [schedules, setSchedules] = useState<ScheduleView[]>([]);
+  // Refetched when the session list changes, which a run ending always does.
+  useEffect(() => {
+    let cancelled = false;
+    fetchSchedules()
+      .then((r) => {
+        if (!cancelled) setSchedules(r.schedules);
+      })
+      .catch(() => {
+        // The list is decoration here; the Schedules page reports the error.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessions]);
 
   const renderItem = (session: SessionSummary) =>
     renaming === session.id ? (
@@ -160,13 +180,31 @@ export function Sidebar({
           <p className="sidebar-empty">{showArchived ? "Nothing here." : "No conversations yet."}</p>
         )}
         {own.map(renderItem)}
-        {scheduled.length > 0 && (
-          <details className="sidebar-group">
+        {schedules.length > 0 && (
+          <details className="sidebar-group" open>
             <summary>
-              Scheduled runs ({scheduled.length})
-              {scheduled.some((s) => s.unread) && <span className="status status-unread" aria-label="Unread runs" />}
+              Schedules ({schedules.length})
+              {schedules.some((s) => s.runs[0]?.unread) && (
+                <span className="status status-unread" aria-label="Unread runs" />
+              )}
             </summary>
-            {scheduled.map(renderItem)}
+            {schedules.map((schedule) => (
+              <div
+                key={schedule.id}
+                className={`sidebar-item ${schedule.id === activeScheduleId ? "active" : ""}`}
+              >
+                <button className="sidebar-item-main" onClick={() => onOpenSchedule(schedule.id)} title={schedule.name}>
+                  <span className="sidebar-item-title">
+                    <RunIcon run={schedule.runs[0]} />
+                    {schedule.name}
+                  </span>
+                  <span className="sidebar-item-sub">
+                    {schedule.runs.length} run{schedule.runs.length === 1 ? "" : "s"}
+                    {schedule.status === "paused" && " · paused"}
+                  </span>
+                </button>
+              </div>
+            ))}
           </details>
         )}
       </nav>
@@ -206,15 +244,21 @@ export function Sidebar({
  * At-a-glance state for a conversation: waiting on you, working, idle, or
  * detached. Ordered by urgency — a blocked agent matters more than a busy one.
  */
+/** A schedule's state is its latest run's. */
+function RunIcon({ run }: { run: ScheduleRun | undefined }) {
+  if (!run) return <span className="status status-detached" title="Never run" aria-label="Never run" />;
+  if (run.outcome === "running") return <span className="status status-working" title="Running" aria-label="Running" />;
+  if (run.unread) return <span className="status status-unread" title="A run you have not opened" aria-label="Unread" />;
+  if (run.outcome === "failed") return <span className="status status-failed" title="Last run failed" aria-label="Failed" />;
+  return <span className="status status-idle" title="Last run ok" aria-label="Ok" />;
+}
+
 function StatusIcon({ session }: { session: SessionSummary }) {
   if (session.awaitingInput) {
     return <span className="status status-input" title="Waiting for your answer" aria-label="Needs input" />;
   }
   if (session.busy) {
     return <span className="status status-working" title="Working" aria-label="Working" />;
-  }
-  if (session.unread) {
-    return <span className="status status-unread" title="A scheduled run you have not opened" aria-label="Unread" />;
   }
   if (!session.live) {
     return <span className="status status-detached" title="No agent attached" aria-label="Detached" />;

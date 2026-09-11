@@ -32,8 +32,8 @@ parser.
 - refresh or crash mid-turn without losing anything
 - hung commands killed cleanly, with no orphaned processes
 - **Schedules**: a saved prompt the server runs every N minutes or daily at a
-  time, each run an ordinary conversation — the browser can be closed, the
-  server cannot
+  time. Each run is an ordinary conversation, reached from the schedule's log
+  rather than the sidebar — the browser can be closed, the server cannot
 - two word games in the corner for while the agent is busy — **Play**,
   bottom right; a game in progress survives switching conversations
 

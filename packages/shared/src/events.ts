@@ -98,8 +98,6 @@ export interface SessionSummary {
   commands: SlashCommand[];
   /** Set when a schedule started this conversation rather than a person. */
   scheduleId: string | null;
-  /** A scheduled run nobody has opened yet. Always false for a conversation a person began. */
-  unread: boolean;
 }
 
 /**

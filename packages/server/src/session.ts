@@ -1081,7 +1081,6 @@ export class Session {
       supportsImages: this.supportsImages,
       commands: this.commands,
       scheduleId: this.scheduleId,
-      unread: false,
     };
   }
 

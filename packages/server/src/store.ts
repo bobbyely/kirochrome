@@ -369,14 +369,6 @@ export class Store {
     this.db.prepare(`UPDATE schedule_runs SET unread = 0 WHERE session_id = ?`).run(sessionId);
   }
 
-  /** Session ids of scheduled runs nobody has opened yet, for the sidebar. */
-  unreadRunSessions(): Set<string> {
-    const rows = this.db
-      .prepare(`SELECT session_id FROM schedule_runs WHERE unread = 1 AND session_id IS NOT NULL AND outcome != 'running'`)
-      .all() as Array<{ session_id: string }>;
-    return new Set(rows.map((r) => r.session_id));
-  }
-
   /**
    * Runs beyond the newest `keep` for a schedule. Their rows stay — the
    * history page is the point of them — but their conversations can go.

@@ -65,12 +65,17 @@ export class Scheduler {
 
   // ---------- the schedule list ----------
 
-  list(): ScheduleView[] {
-    return this.store.listSchedules().map((schedule) => ({
-      ...schedule,
-      runs: this.store.listRuns(schedule.id),
-      nextRunAt: this.nextRunAt(schedule),
-    }));
+  /** Every schedule, or one, each with its newest `runs` runs. */
+  list(id?: string, runs = 10): ScheduleView[] {
+    const limit = Number.isInteger(runs) && runs > 0 ? Math.min(runs, 1000) : 10;
+    return this.store
+      .listSchedules()
+      .filter((schedule) => id === undefined || schedule.id === id)
+      .map((schedule) => ({
+        ...schedule,
+        runs: this.store.listRuns(schedule.id, limit),
+        nextRunAt: this.nextRunAt(schedule),
+      }));
   }
 
   create(input: ScheduleInput): Schedule {

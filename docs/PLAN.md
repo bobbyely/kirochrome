@@ -372,8 +372,11 @@ changed in the building:
 - **Retention archives, never deletes.** `keepRuns` per schedule; older
   conversations are archived (append-only log untouched), run rows stay for
   the history.
-- **Unread**: a run nobody has opened shows a dot in the sidebar fold, cleared
-  on subscribe. Codex's inbox idea, without a second inbox.
+- **The sidebar lists the schedule, not its runs.** The first version put
+  every run in a fold; four runs of the same one-line prompt made the point —
+  they said nothing there. A schedule is one sidebar item whose dot is its
+  latest run's state (running, unread, failed, ok); opening it is the log:
+  every run, and each run's transcript from there with a way back.
 - Timers live in the Node process. A restart recomputes the next run and marks
   the run that was in flight `failed` — the agent died with the server.
 
