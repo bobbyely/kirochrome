@@ -17,6 +17,8 @@ export function Sidebar({
   onOpenSession,
   onOpenSetup,
   setupActive,
+  onOpenSchedules,
+  schedulesActive,
 }: {
   api: RefObject<SidebarApi | null>;
   listVersion: number;
@@ -25,6 +27,8 @@ export function Sidebar({
   onOpenSession: (id: string) => void;
   onOpenSetup: () => void;
   setupActive: boolean;
+  onOpenSchedules: () => void;
+  schedulesActive: boolean;
 }) {
   const { connected, sessions, listSessions, renameSession, archiveSession, search, searchHits } =
     useChat();
@@ -60,6 +64,60 @@ export function Sidebar({
   }, [query, search]);
 
   const searching = query.trim().length > 0;
+
+  // A schedule's runs are one conversation each; forty-eight a day would
+  // bury the ones you typed, so they sit under a fold.
+  const own = (sessions ?? []).filter((s) => !s.scheduleId);
+  const scheduled = (sessions ?? []).filter((s) => s.scheduleId);
+
+  const renderItem = (session: SessionSummary) =>
+    renaming === session.id ? (
+      <RenameField
+        key={session.id}
+        session={session}
+        onCommit={(title) => {
+          if (title.trim()) renameSession(session.id, title);
+          setRenaming(null);
+        }}
+        onCancel={() => setRenaming(null)}
+      />
+    ) : (
+      <div
+        key={session.id}
+        className={`sidebar-item ${session.id === activeSessionId ? "active" : ""} ${
+          session.archived ? "archived" : ""
+        }`}
+      >
+        <button
+          className="sidebar-item-main"
+          onClick={() => onOpenSession(session.id)}
+          onDoubleClick={() => setRenaming(session.id)}
+          title={session.title ?? "Untitled"}
+        >
+          <span className="sidebar-item-title">
+            <StatusIcon session={session} />
+            {session.title ?? "Untitled"}
+          </span>
+          <span className="sidebar-item-sub">{session.providerName}</span>
+        </button>
+        <button
+          className="sidebar-action"
+          title="Rename"
+          aria-label={`Rename ${session.title ?? "conversation"}`}
+          onClick={() => setRenaming(session.id)}
+        >
+          ✎
+        </button>
+        <button
+          className="sidebar-action"
+          title={session.archived ? "Restore" : "Archive"}
+          aria-label={`${session.archived ? "Restore" : "Archive"} ${session.title ?? "conversation"}`}
+          onClick={() => archiveSession(session.id, !session.archived)}
+        >
+          {session.archived ? "⤺" : "⌸"}
+        </button>
+      </div>
+    );
 
   return (
     <aside className="sidebar">
@@ -101,54 +159,15 @@ export function Sidebar({
         {sessions?.length === 0 && (
           <p className="sidebar-empty">{showArchived ? "Nothing here." : "No conversations yet."}</p>
         )}
-        {sessions?.map((session) =>
-          renaming === session.id ? (
-            <RenameField
-              key={session.id}
-              session={session}
-              onCommit={(title) => {
-                if (title.trim()) renameSession(session.id, title);
-                setRenaming(null);
-              }}
-              onCancel={() => setRenaming(null)}
-            />
-          ) : (
-            <div
-              key={session.id}
-              className={`sidebar-item ${session.id === activeSessionId ? "active" : ""} ${
-                session.archived ? "archived" : ""
-              }`}
-            >
-              <button
-                className="sidebar-item-main"
-                onClick={() => onOpenSession(session.id)}
-                onDoubleClick={() => setRenaming(session.id)}
-                title={session.title ?? "Untitled"}
-              >
-                <span className="sidebar-item-title">
-                  <StatusIcon session={session} />
-                  {session.title ?? "Untitled"}
-                </span>
-                <span className="sidebar-item-sub">{session.providerName}</span>
-              </button>
-              <button
-                className="sidebar-action"
-                title="Rename"
-                aria-label={`Rename ${session.title ?? "conversation"}`}
-                onClick={() => setRenaming(session.id)}
-              >
-                ✎
-              </button>
-              <button
-                className="sidebar-action"
-                title={session.archived ? "Restore" : "Archive"}
-                aria-label={`${session.archived ? "Restore" : "Archive"} ${session.title ?? "conversation"}`}
-                onClick={() => archiveSession(session.id, !session.archived)}
-              >
-                {session.archived ? "⤺" : "⌸"}
-              </button>
-            </div>
-          ),
+        {own.map(renderItem)}
+        {scheduled.length > 0 && (
+          <details className="sidebar-group">
+            <summary>
+              Scheduled runs ({scheduled.length})
+              {scheduled.some((s) => s.unread) && <span className="status status-unread" aria-label="Unread runs" />}
+            </summary>
+            {scheduled.map(renderItem)}
+          </details>
         )}
       </nav>
       )}
@@ -156,6 +175,9 @@ export function Sidebar({
       <div className="sidebar-foot">
         <button className={`setup-link ${setupActive ? "active" : ""}`} onClick={onOpenSetup}>
           Setup
+        </button>
+        <button className={`setup-link ${schedulesActive ? "active" : ""}`} onClick={onOpenSchedules}>
+          Schedules
         </button>
         <button
           className={`setup-link ${showArchived ? "active" : ""}`}
@@ -190,6 +212,9 @@ function StatusIcon({ session }: { session: SessionSummary }) {
   }
   if (session.busy) {
     return <span className="status status-working" title="Working" aria-label="Working" />;
+  }
+  if (session.unread) {
+    return <span className="status status-unread" title="A scheduled run you have not opened" aria-label="Unread" />;
   }
   if (!session.live) {
     return <span className="status status-detached" title="No agent attached" aria-label="Detached" />;

@@ -144,6 +144,8 @@ export class Session {
   private title: string | null = null;
   /** Set once the user renames the chat, so the agent stops renaming it back. */
   private titleLocked = false;
+  /** Set when a schedule started this conversation; see `tagSchedule`. */
+  private scheduleId: string | null = null;
   private configOptions: ConfigOption[] = [];
   private supportsImages = false;
   private commands: SlashCommand[] = [];
@@ -199,6 +201,7 @@ export class Session {
     const session = new Session(record.id, provider, record.cwd, store);
     session.title = record.title;
     session.titleLocked = record.titleLocked;
+    session.scheduleId = record.scheduleId;
     session.agentSessionId = record.agentSessionId;
     session.seq = store.lastSeq(record.id);
     session.log.push(...store.eventsSince(record.id, 0));
@@ -972,7 +975,15 @@ export class Session {
       createdAt: now,
       updatedAt: now,
       titleLocked: this.titleLocked,
+      scheduleId: this.scheduleId,
     });
+  }
+
+  /** Records which schedule started this conversation. */
+  tagSchedule(scheduleId: string): void {
+    this.scheduleId = scheduleId;
+    this.persistMeta();
+    this.notifyState();
   }
 
   /** Everything after `sinceSeq` — the whole of catch-up-after-reconnect. */
@@ -1063,6 +1074,8 @@ export class Session {
       archived: false,
       supportsImages: this.supportsImages,
       commands: this.commands,
+      scheduleId: this.scheduleId,
+      unread: false,
     };
   }
 

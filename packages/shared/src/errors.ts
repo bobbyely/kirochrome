@@ -17,6 +17,8 @@ export const KC_ERROR_CODES = [
   "SESSION_NOT_LIVE",
   "SESSION_UNKNOWN",
   "PROVIDER_UNKNOWN",
+  "SCHEDULE_UNKNOWN",
+  "SCHEDULE_INVALID",
   "CONFIG_INVALID",
   "MESSAGE_INVALID",
   "INTERNAL",
@@ -78,6 +80,8 @@ export const REMEDIATION: Record<KcErrorCode, string> = {
     "No agent is attached to this conversation — it was restored from disk, or its agent exited. The transcript is readable; use 'Resume conversation' to continue it.",
   SESSION_UNKNOWN: "That conversation no longer exists.",
   PROVIDER_UNKNOWN: "No provider is configured with that id. Check your config file.",
+  SCHEDULE_UNKNOWN: "That schedule no longer exists.",
+  SCHEDULE_INVALID: "Check the schedule's fields: a name, a verified provider, a directory, a prompt and an interval in minutes.",
   CONFIG_INVALID: "The configuration file could not be read. Fix or delete it to regenerate defaults.",
   MESSAGE_INVALID:
     "The browser sent a message this server does not understand. Reload the page; if it keeps happening, the page and the server are different versions.",

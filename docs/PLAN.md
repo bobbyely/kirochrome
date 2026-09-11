@@ -217,61 +217,6 @@ Do not confuse this with [AGENTS.local.md](../AGENTS.local.md), which steers
 agents working *on this repo*. This one steers agents the user runs *through*
 KiroChrome.
 
-#### 7. Scheduled runs — a prompt on a timer
-
-"Every 30 minutes, run this check; do this with what it finds." A saved
-prompt, a provider, a working directory and an interval; the server starts a
-fresh conversation when it is due and lets it run to its `stopReason`.
-
-This is the feature the architecture was already shaped for. Invariant 4 —
-the server owns the turn, not the socket — means a run needs no browser open,
-and each run is an ordinary conversation: it appears in the sidebar, has a
-full transcript, is searchable and exportable, and can be resumed by hand to
-ask a follow-up. There is no separate log to build. What is built:
-
-- **A `schedules` table** — `id, name, providerId, cwd, prompt, every, status
-  (active|paused), configOptions`. In SQLite, not `config.json`: the UI edits
-  it.
-- **A `runs` table** — `scheduleId, startedAt, endedAt, sessionId, outcome
-  (ok|failed|skipped), error`. A run that never produced a conversation (the
-  agent would not spawn, the handshake timed out) has nowhere else to be seen,
-  and a skipped run must say why it was skipped.
-- **A runner** — one interval timer on the server. Every minute it asks which
-  schedules are due; for each, `session/new` → `session/prompt` → wait →
-  close the agent. Skip, and record the skip, when the schedule's previous
-  run is still going. A hard cap on run duration kills the process group
-  (invariant 6) and records `failed`.
-- **A page** beside Setup — list, add, edit, pause, **Run now**, and per
-  schedule a row of recent runs (time, duration, outcome) that open the
-  conversation. Runs sit under their schedule in the sidebar, collapsed, so
-  forty-eight of them a day do not bury the conversations you typed.
-
-*Decided:*
-
-- **The server must be running.** Timers live in the Node process; nothing
-  is written to launchd or cron. A restart recomputes the next run from
-  `every` and the last row in `runs`, and marks any run that was in flight
-  `failed` — it cannot be resumed, because the agent process died with the
-  server.
-- **"Do this with the results" is the second half of the prompt.** The agent
-  has tools; a chained run reading the previous transcript is a later
-  refinement, not the first version. Slash commands already pass through, so
-  a prompt can be `/review` and the agent's skills do the work.
-- **Interval, not cron.** `every: 30m` covers the ask; "weekdays at 9" can
-  come later as a second field, and cron syntax is not something to make a
-  user type into a chat UI.
-- **Permission requests park the run.** A scheduled run that hits a
-  permission prompt is a conversation waiting for input, shown as such in the
-  sidebar, and the run's cap still applies. Answering it is the same UI as
-  today. Per-schedule "always allow" is a later step, and a security one.
-
-*Prior art:* Claude Code Desktop's local scheduled tasks are the same shape
-— fresh session per firing, only while the app is open, one-minute minimum,
-skips recorded with a reason, a **Scheduled** section in the sidebar. Codex
-runs "automations" as a review queue with an unread marker per run that found
-something. The unread marker is worth copying once runs can say "nothing to
-report" versus "look at this".
-
 #### Deliberately not doing
 
 - **`nes/*` (next edit suggestions)** and **`document/did*`** — both assume an
@@ -409,6 +354,28 @@ than a surprise. Each entry says what would go wrong if it is left.
 - Whatever the work machine turns up once Kiro is actually driving it.
 
 ### Done since the roadmap was written
+
+**Scheduled runs shipped**, roughly as roadmapped: `schedules` and
+`schedule_runs` tables, a one-minute timer in `scheduler.ts`, a page beside
+Setup, and runs under a fold in the sidebar. Each run is an ordinary
+conversation; a run that never became one is a row with its error. What
+changed in the building:
+
+- **Unattended runs need a permission policy on day one, not later.** Every
+  agent asks before its first edit, and nobody is there to answer; the plan's
+  "park the run" would have meant every run failing at the sixty-minute cap.
+  A per-schedule *auto-approve* switch answers with the first "allow" option.
+  It is off by default and the form says what it means.
+- **Clock time came in with the interval**, because "weekdays at 9" is the
+  common ask and the arithmetic is small: `at` is "HH:MM" local, counted from
+  the last run so 09:00:30 does not fire twice.
+- **Retention archives, never deletes.** `keepRuns` per schedule; older
+  conversations are archived (append-only log untouched), run rows stay for
+  the history.
+- **Unread**: a run nobody has opened shows a dot in the sidebar fold, cleared
+  on subscribe. Codex's inbox idea, without a second inbox.
+- Timers live in the Node process. A restart recomputes the next run and marks
+  the run that was in flight `failed` — the agent died with the server.
 
 **`session/list` landed, and this file was nearly right about it.** The method
 is stable v1, not draft — but `sessionCapabilities` lives *inside*

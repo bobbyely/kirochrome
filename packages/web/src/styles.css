@@ -274,6 +274,7 @@ input, textarea, select { font-family: var(--mono); }
 .status { width: 7px; height: 7px; flex-shrink: 0; }
 .status-idle { background: var(--ok); }
 .status-detached { background: var(--muted); opacity: 0.45; }
+.status-unread { background: var(--accent); }
 .status-input { background: var(--warn); animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .status-working {
@@ -876,6 +877,76 @@ kbd {
 .command-name { color: var(--accent); font-weight: 600; flex-shrink: 0; }
 .command-desc { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .command-hint { margin-left: auto; color: var(--muted); font-size: var(--fs-2xs); font-style: italic; flex-shrink: 0; }
+
+/* ---------- schedules ---------- */
+.field select, .field textarea {
+  width: 100%;
+  font-size: var(--fs-sm);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.field textarea { resize: vertical; line-height: 1.5; }
+.field select:focus, .field textarea:focus { outline: none; border-color: var(--accent); }
+.schedule-check { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-1) var(--sp-2); align-items: center; }
+.schedule-check input { margin: 0; }
+.schedule-check .field-hint { grid-column: 2; margin-top: 0; }
+.schedule-when { display: flex; flex-direction: column; gap: var(--sp-2); }
+.schedule-radio { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
+.schedule-radio input[type="number"] { width: 80px; }
+.schedule-radio input[type="number"], .schedule-radio input[type="time"] {
+  font-size: var(--fs-sm);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.schedule-inline { display: inline-flex; align-items: center; gap: var(--sp-1); margin-left: var(--sp-2); font-size: var(--fs-xs); color: var(--muted); }
+.schedule-form { margin-bottom: var(--sp-5); padding-bottom: var(--sp-5); border-bottom: 1px solid var(--border); }
+
+.schedule { margin-top: var(--sp-5); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+.schedule-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); }
+.schedule-title { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; font-size: var(--fs-md); }
+.schedule-title .muted { font-size: var(--fs-xs); }
+.schedule-prompt {
+  margin: var(--sp-3) 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  background: var(--bg);
+  border-left: 2px solid var(--border-strong);
+}
+.schedule-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+
+.runs { list-style: none; margin: var(--sp-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.run { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); padding: var(--sp-1) 0; border-top: 1px solid var(--border); }
+.run-mark { width: 1em; text-align: center; }
+.run-ok .run-mark { color: var(--accent); }
+.run-failed .run-mark { color: var(--fail); }
+.run-running .run-mark { color: var(--warn); }
+.run-when { font-variant-numeric: tabular-nums; }
+.run-outcome { text-transform: uppercase; letter-spacing: 0.08em; font-size: var(--fs-2xs); }
+.run-detail { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-open { font-size: var(--fs-2xs); padding: 2px var(--sp-2); }
+
+/* Scheduled runs fold away in the sidebar. */
+.sidebar-group summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  cursor: pointer;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  list-style: none;
+}
+.sidebar-group summary::before { content: "▸ "; }
+.sidebar-group[open] summary::before { content: "▾ "; }
 
 /* ---------- games: a small panel in the corner of every screen ---------- */
 .games {

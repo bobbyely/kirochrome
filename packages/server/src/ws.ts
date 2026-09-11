@@ -167,6 +167,7 @@ async function dispatch(
       watch(msg.sessionId);
       send({ type: "events", sessionId: msg.sessionId, events: backlog });
       send({ type: "session_state", session: sessions.summary(msg.sessionId) });
+      sessions.markRead(msg.sessionId);
       return;
     }
 

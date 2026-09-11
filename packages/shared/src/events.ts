@@ -96,6 +96,10 @@ export interface SessionSummary {
   supportsImages: boolean;
   /** Commands the agent advertises, for the composer's picker. */
   commands: SlashCommand[];
+  /** Set when a schedule started this conversation rather than a person. */
+  scheduleId: string | null;
+  /** A scheduled run nobody has opened yet. Always false for a conversation a person began. */
+  unread: boolean;
 }
 
 /**
@@ -248,6 +252,8 @@ export interface SessionRecord {
   status: "active" | "closed" | "archived";
   /** True once the user has renamed it, which stops the agent renaming it back. */
   titleLocked: boolean;
+  /** The schedule that started it, or null for a conversation a person began. */
+  scheduleId: string | null;
   createdAt: number;
   updatedAt: number;
 }
