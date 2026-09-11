@@ -275,6 +275,7 @@ input, textarea, select { font-family: var(--mono); }
 .status-idle { background: var(--ok); }
 .status-detached { background: var(--muted); opacity: 0.45; }
 .status-unread { background: var(--accent); }
+.status-failed { background: var(--fail); }
 .status-input { background: var(--warn); animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .status-working {
@@ -920,6 +921,11 @@ kbd {
   border-left: 2px solid var(--border-strong);
 }
 .schedule-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.schedule-name { padding: 0; border: none; font: inherit; font-weight: 600; color: var(--text); text-align: left; }
+.schedule-name:hover { color: var(--accent); border: none; }
+.schedule-more { margin-top: var(--sp-2); font-size: var(--fs-xs); }
+.backlink { border: none; padding: 0; font-size: var(--fs-xs); color: var(--muted); margin-bottom: var(--sp-3); }
+.backlink:hover { border: none; }
 
 .runs { list-style: none; margin: var(--sp-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
 .run { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); padding: var(--sp-1) 0; border-top: 1px solid var(--border); }

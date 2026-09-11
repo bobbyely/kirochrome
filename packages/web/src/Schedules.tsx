@@ -35,7 +35,13 @@ const EMPTY: ScheduleInput = {
  * sidebar; this page is the view across runs — when each fired, how it ended,
  * and the ones that never got as far as a conversation.
  */
-export function Schedules({ onOpenSession }: { onOpenSession: (id: string) => void }) {
+export function Schedules({
+  onOpenSession,
+  onOpenSchedule,
+}: {
+  onOpenSession: (id: string) => void;
+  onOpenSchedule: (id: string) => void;
+}) {
   const [schedules, setSchedules] = useState<ScheduleView[] | null>(null);
   const [providers, setProviders] = useState<ProviderView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +122,9 @@ export function Schedules({ onOpenSession }: { onOpenSession: (id: string) => vo
         <section className="schedule" key={schedule.id}>
           <div className="schedule-head">
             <div className="schedule-title">
-              <strong>{schedule.name}</strong>
+              <button className="schedule-name" onClick={() => onOpenSchedule(schedule.id)}>
+                {schedule.name}
+              </button>
               <span className="muted">
                 {cadence(schedule)} · {providerName(providers, schedule.providerId)} ·{" "}
                 <code className="cmd">{schedule.cwd}</code> · keeps {schedule.keepRuns}
@@ -139,9 +147,95 @@ export function Schedules({ onOpenSession }: { onOpenSession: (id: string) => vo
             <button onClick={() => setEditing(schedule)}>Edit</button>
             <button onClick={() => act(() => deleteSchedule(schedule.id))}>Delete</button>
           </div>
-          <RunList runs={schedule.runs} onOpenSession={onOpenSession} />
+          <RunList runs={schedule.runs.slice(0, 3)} onOpenSession={onOpenSession} />
+          {schedule.runs.length > 3 && (
+            <button className="schedule-more" onClick={() => onOpenSchedule(schedule.id)}>
+              All runs →
+            </button>
+          )}
         </section>
       ))}
+    </div>
+  );
+}
+
+/**
+ * One schedule's log: every run, newest first. This is the one place a
+ * schedule's conversations are listed — they stay out of the sidebar, since
+ * forty-eight a day of the same prompt would say nothing there.
+ */
+export function ScheduleLog({
+  scheduleId,
+  onOpenSession,
+  onBack,
+}: {
+  scheduleId: string;
+  onOpenSession: (id: string) => void;
+  onBack: () => void;
+}) {
+  const [schedule, setSchedule] = useState<ScheduleView | null | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const { schedules } = await fetchSchedules(scheduleId);
+      setSchedule(schedules.find((s) => s.id === scheduleId) ?? null);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.kc.message : String(err));
+    }
+  }, [scheduleId]);
+
+  useEffect(() => {
+    void refresh();
+    const timer = setInterval(() => void refresh(), 30_000);
+    return () => clearInterval(timer);
+  }, [refresh]);
+
+  const act = async (fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.kc.message : String(err));
+    }
+  };
+
+  if (schedule === undefined) return <div className="page"><p className="muted">Loading…</p></div>;
+  if (schedule === null) {
+    return (
+      <div className="page">
+        <div className="banner">That schedule no longer exists.</div>
+        <button onClick={onBack}>All schedules</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page">
+      <button className="backlink" onClick={onBack}>
+        ← All schedules
+      </button>
+      <header className="header">
+        <h1>{schedule.name}</h1>
+        <p className="subtitle">
+          {cadence(schedule)} · <code className="cmd">{schedule.cwd}</code> ·{" "}
+          {schedule.status === "active" ? `next ${relative(schedule.nextRunAt)}` : "paused"}
+        </p>
+      </header>
+      {error && <div className="banner">{error}</div>}
+      <pre className="schedule-prompt">{schedule.prompt}</pre>
+      <div className="schedule-actions">
+        <button onClick={() => act(() => runSchedule(schedule.id))}>Run now</button>
+        <button
+          onClick={() =>
+            act(() => updateSchedule(schedule.id, { status: schedule.status === "active" ? "paused" : "active" }))
+          }
+        >
+          {schedule.status === "active" ? "Pause" : "Resume"}
+        </button>
+      </div>
+      <RunList runs={schedule.runs} onOpenSession={onOpenSession} />
     </div>
   );
 }

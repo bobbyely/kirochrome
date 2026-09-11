@@ -213,7 +213,9 @@ async function handleSchedules(
   scheduler: Scheduler,
 ): Promise<void> {
   if (url.pathname === "/api/schedules" && req.method === "GET") {
-    const body: SchedulesResponse = { schedules: scheduler.list() };
+    const id = url.searchParams.get("id");
+    const runs = Number(url.searchParams.get("runs") ?? 10);
+    const body: SchedulesResponse = { schedules: scheduler.list(id ?? undefined, runs) };
     return sendJson(res, 200, body);
   }
 

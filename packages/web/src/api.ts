@@ -47,7 +47,9 @@ export const fetchAgentSessions = (id: string) =>
 export const runCheck = (id: string) =>
   request<CheckResponse>(`/api/providers/${encodeURIComponent(id)}/check`, { method: "POST" });
 
-export const fetchSchedules = () => request<SchedulesResponse>("/api/schedules");
+/** All schedules with their recent runs; one id for a schedule's full history. */
+export const fetchSchedules = (id?: string) =>
+  request<SchedulesResponse>(id ? `/api/schedules?id=${encodeURIComponent(id)}&runs=200` : "/api/schedules");
 
 export const createSchedule = (input: ScheduleInput) =>
   request<{ schedule: Schedule }>("/api/schedules", {

@@ -107,10 +107,10 @@ describe("a schedule", () => {
   it("is unread until its conversation is opened", async () => {
     const schedule = scheduler.create(input);
     const run = await scheduler.runNow(schedule.id);
-    assert.ok(sessions.list().find((s) => s.id === run.sessionId).unread);
+    const latest = () => scheduler.list(schedule.id)[0].runs[0];
+    assert.equal(latest().unread, true);
     sessions.markRead(run.sessionId);
-    assert.equal(sessions.list().find((s) => s.id === run.sessionId).unread, false);
-    assert.equal(scheduler.list().find((s) => s.id === schedule.id).runs[0].unread, false);
+    assert.equal(latest().unread, false);
   });
 
   it("archives conversations beyond the runs it keeps, and keeps every row", async () => {

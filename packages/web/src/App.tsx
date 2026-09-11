@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Chat } from "./Chat.js";
 import { NewChat, type AdoptTarget } from "./NewChat.js";
-import { Schedules } from "./Schedules.js";
+import { ScheduleLog, Schedules } from "./Schedules.js";
 import { Setup } from "./Setup.js";
 import { Sidebar } from "./Sidebar.js";
 import { useShortcuts } from "./useShortcuts.js";
@@ -10,6 +10,7 @@ type View =
   | { name: "welcome" }
   | { name: "setup" }
   | { name: "schedules" }
+  | { name: "schedule"; scheduleId: string }
   | { name: "new" }
   | {
       name: "chat";
@@ -18,6 +19,8 @@ type View =
       sessionId?: string;
       /** Set when taking over a conversation the agent already had. */
       adopt?: AdoptTarget;
+      /** Opened from a schedule's log, which is where "back" goes. */
+      scheduleId?: string;
     };
 
 /**
@@ -47,6 +50,8 @@ export function App() {
   );
   useShortcuts(shortcuts);
 
+  const chatBack = view.name === "chat" ? view.scheduleId : undefined;
+
   return (
     <div className="shell">
       <Sidebar
@@ -59,6 +64,8 @@ export function App() {
         setupActive={view.name === "setup"}
         onOpenSchedules={() => setView({ name: "schedules" })}
         schedulesActive={view.name === "schedules"}
+        onOpenSchedule={(scheduleId) => setView({ name: "schedule", scheduleId })}
+        activeScheduleId={view.name === "schedule" ? view.scheduleId : view.name === "chat" ? view.scheduleId : undefined}
       />
 
       <main className="main">
@@ -73,7 +80,19 @@ export function App() {
         )}
 
         {view.name === "setup" && <Setup />}
-        {view.name === "schedules" && <Schedules onOpenSession={openSession} />}
+        {view.name === "schedules" && (
+          <Schedules
+            onOpenSession={openSession}
+            onOpenSchedule={(scheduleId) => setView({ name: "schedule", scheduleId })}
+          />
+        )}
+        {view.name === "schedule" && (
+          <ScheduleLog
+            scheduleId={view.scheduleId}
+            onOpenSession={(sessionId) => setView({ name: "chat", sessionId, scheduleId: view.scheduleId })}
+            onBack={() => setView({ name: "schedules" })}
+          />
+        )}
 
         {view.name === "new" && (
           <NewChat
@@ -95,6 +114,7 @@ export function App() {
             adopt={view.adopt}
             onStarted={refreshList}
             onOpenSetup={() => setView({ name: "setup" })}
+            onBack={chatBack ? () => setView({ name: "schedule", scheduleId: chatBack }) : undefined}
           />
         )}
       </main>
