@@ -23,6 +23,7 @@ export const KC_ERROR_CODES = [
   "ROOM_INVALID",
   "CONFIG_INVALID",
   "MESSAGE_INVALID",
+  "ORIGIN_REJECTED",
   "INTERNAL",
 ] as const;
 
@@ -89,6 +90,8 @@ export const REMEDIATION: Record<KcErrorCode, string> = {
   CONFIG_INVALID: "The configuration file could not be read. Fix or delete it to regenerate defaults.",
   MESSAGE_INVALID:
     "The browser sent a message this server does not understand. Reload the page; if it keeps happening, the page and the server are different versions.",
+  ORIGIN_REJECTED:
+    "This page is not on an origin the server trusts. Open the app at the URL the server printed. In development, use the URL `npm run dev` printed and make sure no other dev server is holding port 5173 — Vite otherwise moves to another port the server rejects.",
   INTERNAL: "An unexpected internal error. Please report this with the details below.",
 };
 

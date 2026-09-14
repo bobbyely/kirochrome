@@ -100,7 +100,10 @@ that error names each problem. Delete the file to get the defaults back.
 directory. `KIROCHROME_DEV=1` additionally trusts Vite's origin on port 5173 —
 `npm run dev` sets it for you, and a normal run should not: 5173 is Vite's
 default port, so trusting it means trusting any project you happen to have
-running there.
+running there. Vite is pinned to that port and refuses to start if it is
+taken; a `Port 5173 is already in use` means another dev server is still
+running — stop it rather than working around it, since the API would reject
+whatever port Vite moved to.
 
 If a provider fails, the setup page names the rung it failed on and what to do
 about it. Two common ones:
