@@ -132,14 +132,16 @@ Breaking one of these is a design regression, not a style nit.
 (provider config, check results, HTTP payloads), `ws.ts` (socket messages),
 `schedules.ts` (schedules, their runs, the HTTP payloads), `rooms.ts` (rooms,
 participants, messages), `files.ts` (the Files pane's payloads and the roots
-replayed from the log).
+replayed from the log), `handoff.ts` (the transcript as prose for a provider
+switch, derived from the log on both sides).
 
 **`packages/web`** — `App.tsx` routes; `Chat.tsx` is **the other big one**
 (transcript, scroll-following, every row renderer); `Composer.tsx` is the
 message box and everything that changes per keystroke — draft, images,
 completion, the queue and the config pickers — kept out of `Chat` so typing does
 not re-render the transcript; `timeline.ts` folds events into typed rows;
-`useChat.ts` is the socket and resume-by-seq; `Setup.tsx` is the ladder UI;
+`useChat.ts` is the socket and resume-by-seq; `useReadyProviders.ts` is the
+checked-provider list the composer's provider picker uses; `Setup.tsx` is the ladder UI;
 `Schedules.tsx` is the schedule list, form and run history; `Rooms.tsx` is the
 room list, form and the room itself; `StartPickers.tsx` is the
 model/mode/opening-message choice the forms share; `SidePane.tsx` is the drawer beside the transcript with its two tabs:

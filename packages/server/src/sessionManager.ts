@@ -153,6 +153,23 @@ export class SessionManager {
     return attempt;
   }
 
+  /**
+   * Moves a live conversation to another provider. Invariant 11 is checked
+   * here, since the chat UI's list is the only other thing enforcing it: a
+   * provider that has not passed its check is not offered, and not accepted.
+   */
+  async switchProvider(id: string, provider: ProviderConfig): Promise<Session> {
+    const session = this.requireLive(id);
+    if (this.store.lastCheck(provider.id)?.status !== "ok") {
+      throw kcError("AGENT_SESSION_FAILED", `'${provider.name}' has not passed its setup check.`, {
+        remediation: "Run the check on the setup page first.",
+      });
+    }
+    await this.staleOnFailure(provider, () => session.switchProvider(provider));
+    for (const fn of this.changeListeners) fn(); // the sidebar shows the provider
+    return session;
+  }
+
   getLive(id: string): Session | null {
     return this.live.get(id) ?? null;
   }

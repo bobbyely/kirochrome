@@ -101,6 +101,12 @@ All of these were real races, found the hard way.
   awaits a handshake, so two calls arriving in that window each built a Session
   for the same conversation — both appending from the same seq, and each with
   its own agent process.
+- **"Nothing sent since" must be decided before this message is appended.**
+  The handoff owed after a provider switch is found by scanning back from the
+  end of the log for a `provider_switched` with no `user_message` after it.
+  Checked after appending the message being sent, it found that message first
+  and never sent the handoff. Order the read before the write when the read is
+  about what came before.
 - **Register a pending resolver before announcing the event that asks for it.**
   `append` notifies subscribers synchronously, so an answer arriving
   synchronously would find no pending entry and be dropped, blocking the agent
@@ -153,6 +159,12 @@ All of these were real races, found the hard way.
   while its run was still going — the overlap is recorded once.
 
 ## Processes
+
+- **A superseded agent's exit is not the session's.** `switchProvider` kills
+  the old process after the new one is up; its `exited` handler then ran and
+  marked the session dead, dropped the queue and released the new agent's
+  pending prompts. The handler checks `this.proc === proc` first. Any handler
+  bound to a process a session can outlive needs the same check.
 
 - **Killing a shell does not kill its children.** Kill the process group
   (`process.kill(-pid, …)`), SIGTERM then SIGKILL after a grace period, or
@@ -218,6 +230,12 @@ All of these were real races, found the hard way.
   document, not an inert raster.
 
 ## Storage
+
+- **`ON CONFLICT DO UPDATE` lists its columns; a new mutable field is not in
+  it.** `upsertSession` updated title and status but not `provider_id`, so a
+  switched conversation reopened on its old provider after a restart. When a
+  column stops being write-once, add it to the update list — the INSERT half
+  will not tell you.
 
 - **A lenient read is only safe while nothing writes back from it.**
   `loadConfig` skips a malformed provider so the setup page still loads;

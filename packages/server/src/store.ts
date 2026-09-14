@@ -269,6 +269,8 @@ export class Store {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            agent_session_id = excluded.agent_session_id,
+           provider_id = excluded.provider_id,
+           provider_name = excluded.provider_name,
            title = excluded.title,
            status = excluded.status,
            updated_at = excluded.updated_at,

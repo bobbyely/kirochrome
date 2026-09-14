@@ -1249,3 +1249,6 @@ kbd {
 /* The last check could not be re-run: not failed, not ready — unknown. */
 .pill-unverified { border-color: var(--warn); color: var(--warn); }
 .card.status-unverified { border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }
+
+/* ---------- the provider handoff, shown under its divider ---------- */
+.handoff-text { max-height: 320px; overflow: auto; margin: var(--sp-2) 0 0; padding: var(--sp-2); font-size: var(--fs-2xs); white-space: pre-wrap; background: var(--raised); border-radius: var(--r-sm); }

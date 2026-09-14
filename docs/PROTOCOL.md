@@ -271,6 +271,16 @@ and not ship on it before it stabilises, since v1-only peers will be common for
 a long time. We negotiate v1 strictly and fail the `version` rung on anything
 else — a decision to revisit when v2 settles, not an oversight.
 
+### There is no session transfer
+
+Nothing in v1 lets one agent load another's session: `session/load` takes an
+id the *same* agent issued, and the schema has no export. So "switch provider
+mid-conversation" is a KiroChrome handoff — a fresh `session/new` in the same
+`cwd` for the new agent, with the transcript serialised to text and put in
+front of the next `session/prompt`. The seam is a `provider_switched` event;
+the text is derived from the log by `handoffText` rather than stored, so the
+browser can show exactly what was sent.
+
 ### Agent extensions
 
 `_kiro.dev/commands/options` is a Kiro extension supplying argument suggestions

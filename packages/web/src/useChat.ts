@@ -252,6 +252,13 @@ export function useChat() {
     [send],
   );
 
+  const switchProvider = useCallback(
+    (providerId: string) => {
+      if (sessionId.current) send({ type: "switch_provider", sessionId: sessionId.current, providerId });
+    },
+    [send],
+  );
+
   /** Re-attaches an agent to a stored conversation so it can be continued. */
   const resumeSession = useCallback(
     (id: string) => send({ type: "resume", sessionId: id, sinceSeq: lastSeq.current }),
@@ -300,6 +307,7 @@ export function useChat() {
     adoptSession,
     attachSession,
     resumeSession,
+    switchProvider,
     listSessions,
     listWorkspaces,
     archiveSession,

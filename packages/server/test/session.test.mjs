@@ -220,6 +220,69 @@ describe("the Files pane's roots", () => {
   });
 });
 
+describe("switching provider mid-conversation", () => {
+  const second = { id: "mock2", name: "Mock Two", command: process.execPath, args: [MOCK] };
+  const broken = { id: "broken", name: "Broken", command: join(here, "no-such-agent"), args: [] };
+  const switches = (session) => session.eventsSince(0).filter((e) => e.type === "provider_switched");
+
+  it("hands the transcript to the new agent with the next message, and only then", async () => {
+    store.saveCheck({ providerId: "mock2", status: "ok", stage: "capabilities", stages: [], checkedAt: Date.now() });
+    const session = await sessions.open(provider, "/tmp");
+    const off = autoApprove(session);
+    await session.prompt("hello");
+    const before = session.summary().lastSeq;
+
+    await sessions.switchProvider(session.id, second);
+    assert.equal(session.summary().providerName, "Mock Two");
+    assert.equal(store.getSession(session.id).providerId, "mock2", "the record follows");
+    const [sw] = switches(session);
+    assert.deepEqual([sw.from.id, sw.to.id, sw.throughSeq], ["mock", "mock2", before]);
+    assert.ok(session.summary().live, "still live");
+
+    // The retired agent exits after the switch; that must not read as the session dying.
+    await new Promise((r) => setTimeout(r, 300));
+    assert.ok(sessions.getLive(session.id), "the old agent's exit is not the session's");
+    assert.ok(!session.eventsSince(0).some((e) => e.type === "agent_exited"));
+
+    await session.prompt("and now?");
+    const said = session.eventsSince(0).filter((e) => e.type === "agent_text").at(-1).text;
+    assert.equal(said, "[handoff: 1 person message(s); now: and now?]");
+    const typed = session.eventsSince(0).filter((e) => e.type === "user_message").at(-1).text;
+    assert.equal(typed, "and now?", "the log holds what was typed, not the handoff");
+
+    await session.prompt("hello");
+    const again = session.eventsSince(0).filter((e) => e.type === "agent_text").at(-1).text;
+    assert.doesNotMatch(again, /handoff/, "sent once");
+    off();
+    session.close();
+  });
+
+  it("leaves the conversation where it was when the new provider will not start", async () => {
+    store.saveCheck({ providerId: "broken", status: "ok", stage: "capabilities", stages: [], checkedAt: Date.now() });
+    const session = await sessions.open(provider, "/tmp");
+    const off = autoApprove(session);
+    await assert.rejects(sessions.switchProvider(session.id, broken));
+    assert.equal(session.summary().providerId, "mock");
+    assert.equal(switches(session).length, 0);
+    assert.equal(store.lastCheck("broken")?.status, "stale", "the provider that failed is the one marked");
+    await session.prompt("hello");
+    assert.ok(session.eventsSince(0).some((e) => e.type === "turn_end"), "still usable");
+    off();
+    session.close();
+  });
+
+  it("refuses mid-turn, and a provider that has not passed its check", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    void session.prompt("long");
+    await new Promise((r) => setTimeout(r, 150));
+    await assert.rejects(sessions.switchProvider(session.id, second), (e) => e.code === "SESSION_BUSY");
+    await session.cancel();
+    store.markStale("mock2");
+    await assert.rejects(sessions.switchProvider(session.id, second), (e) => e.code === "AGENT_SESSION_FAILED");
+    session.close();
+  });
+});
+
 describe("a prompt's promise", () => {
   it("resolves when that message's turn ends, not when the queue happens to be idle", async () => {
     // `prompt()` used to return at once while a turn was running. A scheduled

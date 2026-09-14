@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CommandOption, ConfigOption, SessionSummary, SlashCommand } from "@kirochrome/shared";
 import { commonPrefix, complete } from "./commands.js";
+import { useReadyProviders } from "./useReadyProviders.js";
 import { fileToImage, type PendingImage } from "./images.js";
 
 /**
@@ -22,6 +23,7 @@ export function Composer({
   onCancel,
   onSetAutoApprove,
   onSetConfigOption,
+  onSwitchProvider,
   onUnqueue,
   onEditQueued,
   onMoveQueued,
@@ -37,6 +39,7 @@ export function Composer({
   onCancel: () => void;
   onSetAutoApprove: (enabled: boolean) => void;
   onSetConfigOption: (configId: string, value: string | boolean) => void;
+  onSwitchProvider: (providerId: string) => void;
   onUnqueue: (index: number) => void;
   onEditQueued: (index: number, text: string) => void;
   onMoveQueued: (from: number, to: number) => void;
@@ -212,6 +215,7 @@ export function Composer({
               Auto-approve
             </label>
           )}
+          {session?.live && <ProviderPicker session={session} busy={busy} onSwitch={onSwitchProvider} />}
           {session && pickableCommands(session).map((command) => (
             <CommandPicker
               key={command.name}
@@ -393,6 +397,54 @@ function CommandPicker({
  * One agent-advertised setting, rendered from whatever the agent offers.
  * Never a hardcoded model list — see invariant 5 in AGENTS.md.
  */
+/**
+ * Provider first, before whatever that provider advertises. Only providers
+ * whose check passed are offered (invariant 11); the current one is shown
+ * even if it has since gone stale, since that is where the conversation is.
+ * Disabled mid-turn: a switch would abandon what is in flight, and the
+ * server refuses it anyway.
+ */
+function ProviderPicker({
+  session,
+  busy,
+  onSwitch,
+}: {
+  session: SessionSummary;
+  busy: boolean;
+  onSwitch: (providerId: string) => void;
+}) {
+  const ready = useReadyProviders();
+  const choices = ready.some((p) => p.id === session.providerId)
+    ? ready
+    : [{ id: session.providerId, name: session.providerName }, ...ready];
+  if (choices.length < 2) return null;
+  const pending = session.awaitingInput || session.queued.length > 0;
+  return (
+    <label
+      className="config-field"
+      title={
+        busy || pending
+          ? "Wait for the turn to finish before switching"
+          : "Move this conversation to another agent. It is given the transcript so far with your next message."
+      }
+    >
+      <span className="config-label">Provider</span>
+      <select
+        className="config-select"
+        value={session.providerId}
+        disabled={busy || pending}
+        onChange={(e) => onSwitch(e.target.value)}
+      >
+        {choices.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function ConfigPicker({
   option,
   onChange,

@@ -5,6 +5,7 @@ import type {
   ElicitationValue,
   KcEvent,
   PermissionOption,
+  ProviderRef,
 } from "@kirochrome/shared";
 import { updateCategory } from "@kirochrome/shared";
 
@@ -37,6 +38,8 @@ export type Row =
   | { kind: "note"; seq: number; label: string }
   /** Where a conversation the agent owns was taken over: history above, our log below. */
   | { kind: "adopted"; seq: number; providerName: string }
+  /** The conversation moved to another provider here; the handoff is derived from the log on demand. */
+  | { kind: "switched"; seq: number; from: ProviderRef; to: ProviderRef; throughSeq: number }
   /** Where the agent replaced conversation history with a summary. */
   | {
       kind: "compaction";
@@ -290,6 +293,10 @@ export function buildRows(events: KcEvent[]): Row[] {
 
       case "adopted":
         rows.push({ kind: "adopted", seq: event.seq, providerName: event.providerName });
+        break;
+
+      case "provider_switched":
+        rows.push({ kind: "switched", seq: event.seq, from: event.from, to: event.to, throughSeq: event.throughSeq });
         break;
 
       case "agent_exited":

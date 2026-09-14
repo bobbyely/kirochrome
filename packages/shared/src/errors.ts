@@ -15,6 +15,7 @@ export const KC_ERROR_CODES = [
   "RPC_TIMEOUT",
   "RPC_ERROR",
   "SESSION_NOT_LIVE",
+  "SESSION_BUSY",
   "SESSION_UNKNOWN",
   "PROVIDER_UNKNOWN",
   "SCHEDULE_UNKNOWN",
@@ -83,6 +84,7 @@ export const REMEDIATION: Record<KcErrorCode, string> = {
   RPC_ERROR: "The agent returned an error. See the details below.",
   SESSION_NOT_LIVE:
     "No agent is attached to this conversation — it was restored from disk, or its agent exited. The transcript is readable; use 'Resume conversation' to continue it.",
+  SESSION_BUSY: "Wait for the turn to finish, answer any open prompt, and clear the queue, then try again.",
   SESSION_UNKNOWN: "That conversation no longer exists.",
   PROVIDER_UNKNOWN: "No provider is configured with that id. Check your config file.",
   SCHEDULE_UNKNOWN: "That schedule no longer exists.",
