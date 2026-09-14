@@ -167,6 +167,8 @@ function RoomForm({
 
   return (
     <form className="schedule-form" onSubmit={submit}>
+      <section className="form-section">
+        <h2 className="form-section-title">The room</h2>
       <label className="field">
         <span className="field-label">Name</span>
         <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Planning the importer" />
@@ -203,11 +205,25 @@ function RoomForm({
           you want agents to be able to yield.
         </span>
       </label>
+      </section>
 
-      <div className="field">
-        <span className="field-label">Participants</span>
+      <section className="form-section">
+        <h2 className="form-section-title">Participants</h2>
+        <p className="field-hint">Each is its own agent with a name the others use, a one-line role, and its own settings.</p>
         {form.participants.map((p, i) => (
           <div className="room-participant-block" key={i}>
+            <div className="room-participant-head">
+              <span className="room-participant-n">{i + 1}</span>
+              <strong>{p.name || "Unnamed"}</strong>
+              <button
+                type="button"
+                className="room-participant-remove"
+                disabled={form.participants.length <= 2}
+                onClick={() => set("participants", form.participants.filter((_, j) => j !== i))}
+              >
+                Remove
+              </button>
+            </div>
             <div className="room-participant">
               <input value={p.name} onChange={(e) => setParticipant(i, { name: e.target.value })} placeholder="Name" />
               <select
@@ -221,14 +237,6 @@ function RoomForm({
                 ))}
               </select>
               <input value={p.role} onChange={(e) => setParticipant(i, { role: e.target.value })} placeholder="Role, one line" />
-              <button
-                type="button"
-                disabled={form.participants.length <= 2}
-                onClick={() => set("participants", form.participants.filter((_, j) => j !== i))}
-                aria-label="Remove"
-              >
-                ×
-              </button>
             </div>
             <StartPickers
               compact
@@ -241,16 +249,17 @@ function RoomForm({
         {form.participants.length < ROOM_MAX_PARTICIPANTS && (
           <button
             type="button"
-            className="chip"
             onClick={() =>
               set("participants", [...form.participants, { name: "", providerId: defaultProvider, role: "", start: {} }])
             }
           >
-            + participant
+            + Add a participant
           </button>
         )}
-      </div>
+      </section>
 
+      <section className="form-section">
+        <h2 className="form-section-title">Limits</h2>
       <div className="room-numbers">
         <label className="field">
           <span className="field-label">Agent turns per round</span>
@@ -276,6 +285,7 @@ function RoomForm({
         A round is what one message from you sets off. Every agent turn re-reads what was said since its last one,
         so the turn budget is also the cost budget.
       </p>
+      </section>
 
       <div className="schedule-actions">
         <button type="submit" className="primary" disabled={pending}>
