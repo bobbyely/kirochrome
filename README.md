@@ -30,6 +30,8 @@ parser.
 - conversations you started in the agent's own CLI listed and continued here,
   where the agent supports it
 - refresh or crash mid-turn without losing anything
+- a **Changes** drawer: every file the agent has edited this conversation,
+  with its net diff, without hunting the transcript for the tool call
 - messages typed mid-turn queue up, or **Interrupt & send** cuts the turn
   short for one that cannot wait
 - hung commands killed cleanly, with no orphaned processes

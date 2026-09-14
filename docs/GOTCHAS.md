@@ -211,6 +211,13 @@ All of these were real races, found the hard way.
 
 ## Working on the repo
 
+- **A tested web module names its sibling imports `.ts`, not `.js`.** The
+  unit suite runs `src/*.ts` under Node's type stripping, which does not
+  rewrite `.js` specifiers to `.ts`, so `import "./diff.js"` from a module the
+  tests load fails with module-not-found. `allowImportingTsExtensions` is on
+  for the web package for exactly this; Vite resolves either. `changes.ts` is
+  the example. (The server suite sidesteps it by running against `dist`.)
+
 - **`git branch --merged main` is useless here.** We rebase-merge, which
   rewrites the commits, so a merged branch is never an ancestor of `main` and
   the command lists nothing — branches accumulate locally looking unmerged, and

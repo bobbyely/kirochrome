@@ -74,16 +74,14 @@ it never appeared in a picker — see
 A drawer that slides over the transcript, with two tabs. They are one surface,
 not two features: both answer "what is in this project right now".
 
-**Changes.** Every file the agent has touched this conversation, with its diff,
-rather than hunting the transcript for the tool call that did it. The data is
-already there — `ToolCallContent` diffs carry `path`, `oldText`, `newText`, and
-`timeline.ts` extracts them. The work is aggregating per file across the log
-(last write wins per path, with a running +/− count) and the panel.
-
-*Decide:* reported diffs only, or read the working tree. Reported diffs need no
-filesystem access and stay honest about what the agent claims it did; the tree
-shows ground truth but can disagree with the transcript. Either survives a
-restart, since the diffs are in the event log.
+**Changes — shipped.** `changes.ts` folds the log's reported diffs per path
+(first `oldText` to last `newText`, an edit count, +/−), and `ChangesPane` is
+the drawer: file list, click for the net diff. Reported diffs only, decided on
+the grounds above: no filesystem access, honest about what the agent claims,
+survives a restart. What the working tree actually holds — a later hand edit,
+a checkout — is the Files tab's question, below. A git status line (branch,
++/− against HEAD, commit) is a natural addition once the server shells out to
+git for the Files tab anyway.
 
 **Files.** A *renderer*, not a text dump: each format shown the way it is meant
 to be read, with a tree to navigate the session's working directory. Read-only
