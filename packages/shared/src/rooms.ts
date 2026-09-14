@@ -67,6 +67,8 @@ export interface RoomMessage {
 
 export interface RoomView extends Room {
   messages: RoomMessage[];
+  /** Participant ids whose agent is attached right now. The rest re-attach when spoken to, or on Reconnect. */
+  live: string[];
   /** Which participant is being prompted right now, if any. */
   speaking: string | null;
   /** What it has said so far this turn — its reply, streaming. */
