@@ -303,6 +303,12 @@ export function buildRows(events: KcEvent[]): Row[] {
       case "interrupted":
         rows.push({ kind: "note", seq: event.seq, label: "Interrupted — the next message was sent now" });
         break;
+      case "root_added":
+        rows.push({ kind: "note", seq: event.seq, label: `Added ${event.path} to Files` });
+        break;
+      case "root_removed":
+        rows.push({ kind: "note", seq: event.seq, label: `Removed ${event.path} from Files` });
+        break;
       case "turn_end":
         if (rows.length > 0) rows.push({ kind: "divider", seq: event.seq });
         break;
@@ -381,9 +387,13 @@ export function toolContent(details: unknown[]): ToolContent {
 export function languageFor(path: string): string {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   const map: Record<string, string> = {
-    ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
-    py: "python", rs: "rust", go: "go", sh: "bash", bash: "bash",
-    json: "json", css: "css", html: "xml", md: "markdown", yml: "yaml", yaml: "yaml", sql: "sql",
+    ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript", mjs: "javascript", cjs: "javascript",
+    py: "python", rs: "rust", go: "go", sh: "bash", bash: "bash", zsh: "bash",
+    json: "json", css: "css", scss: "scss", less: "less", html: "xml", xml: "xml", svg: "xml",
+    md: "markdown", yml: "yaml", yaml: "yaml", toml: "ini", ini: "ini", sql: "sql",
+    c: "c", h: "c", cpp: "cpp", hpp: "cpp", cs: "csharp", java: "java", kt: "kotlin", swift: "swift",
+    rb: "ruby", php: "php", lua: "lua", pl: "perl", r: "r", diff: "diff", patch: "diff",
+    makefile: "makefile", dockerfile: "dockerfile", graphql: "graphql", proto: "protobuf",
   };
   return map[ext] ?? "";
 }

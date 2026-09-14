@@ -288,6 +288,17 @@ All of these were real races, found the hard way.
 
 ## Untrusted input
 
+- **A Node `ENOENT` passes `isKcError`.** It has a `code` and a `message`,
+  which is all the shared guard checks, so a `catch` that re-throws "ours"
+  and wraps the rest passed a bare filesystem error through untyped. `files.ts`
+  checks the code against the closed list instead. Anywhere that catches more
+  filesystem errors than protocol ones should do the same.
+- **Serve raw bytes from a chosen directory as a unique origin.** The Files
+  pane's raw route is on our origin, and a cloned repository can hold an HTML
+  or SVG file with a script in it; navigated to directly, it would run with
+  access to our API. Only images and PDFs go out raw, with `nosniff` and a
+  `Content-Security-Policy: sandbox`; SVG is XML and is shown as text.
+
 - **Text from one agent is untrusted input to the next.** Room prompts joined
   messages as `[Name] text`, so a reply containing `\n\n[You] …` put words in
   the user's mouth for every agent after it. Each message is now quoted

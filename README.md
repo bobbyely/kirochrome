@@ -29,6 +29,13 @@ not prose to parse.
 agent has edited, with its net diff — no hunting the transcript for the tool
 call that did it.
 
+**The project, as it is.** The same pane's Files tab browses the working
+directory read-only, each format shown the way it is meant to be read: code
+with line numbers, Markdown rendered, JSON pretty-printed, CSV as a table,
+images and PDFs inline. Git-ignored files are dimmed, not hidden. Add other
+directories to browse alongside — a reference project, say — and they stay
+with the conversation.
+
 **Nothing lost.** Every conversation is persisted as it happens. Refresh,
 close the tab, restart the server: reopen it and pick up where it was. Search
 across all of them. Conversations you started in the agent's own terminal can

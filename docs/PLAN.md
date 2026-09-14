@@ -71,47 +71,15 @@ it never appeared in a picker — see
 
 #### 1. The side pane — changes and files
 
-A drawer that slides over the transcript, with two tabs. They are one surface,
-not two features: both answer "what is in this project right now".
-
-**Changes — shipped.** `changes.ts` folds the log's reported diffs per path
-(first `oldText` to last `newText`, an edit count, +/−), and `ChangesPane` is
-the drawer: file list, click for the net diff. Reported diffs only, decided on
-the grounds above: no filesystem access, honest about what the agent claims,
-survives a restart. What the working tree actually holds — a later hand edit,
-a checkout — is the Files tab's question, below. A git status line (branch,
-+/− against HEAD, commit) is a natural addition once the server shells out to
-git for the Files tab anyway.
-
-**Files.** A *renderer*, not a text dump: each format shown the way it is meant
-to be read, with a tree to navigate the session's working directory. Read-only
-to begin with — editing invites a race with the agent writing the same file.
-
-| Format | Rendered as | What exists already |
-|---|---|---|
-| Code | Highlighted, with line numbers | `rehype-highlight`, used by tool cards |
-| Markdown | Rendered, with a toggle to source | `MarkdownBody` |
-| JSON / YAML | Pretty-printed and highlighted | highlighting; formatting is new |
-| CSV / TSV | A table | new |
-| Images | Inline | serving is new — see below |
-| PDF | Embedded viewer | new; the browser can do this |
-| Binary / very large | Say so, with size and type | new — never dump bytes |
-
-**The complication: ACP's `fs/read_text_file` is text-only.** Images, PDFs and
-anything binary need a separate route, and that route has a different trust
-boundary from the ACP methods.
-
-The ACP handlers serve *the agent*, a local process that can already read
-anything the user can, so they are deliberately unsandboxed. An HTTP endpoint
-serves *the browser*, and any page the user has open can attempt a request to
-localhost — we check `Origin`, but that is one control, not a boundary. So the
-file endpoint must be confined to the session's working directory, with the
-resolved real path checked to be inside it after symlinks are followed. Sharing
-the unsandboxed ACP path would turn a chat UI into a read-anything endpoint.
-
-Worth deciding early: whether the tree also shows files ignored by git. Showing
-`node_modules` makes it useless; hiding it by reading `.gitignore` is more work
-than it sounds, and hiding files the agent is actively editing would be worse.
+**Shipped, both tabs.** See *Done since the roadmap was written*. What was
+decided along the way: reported diffs only for Changes (no filesystem access,
+honest about what the agent claims, survives a restart); a browser-facing file
+endpoint confined to the conversation's roots for Files, with the roots
+replayed from `root_added` events; git-ignored entries dimmed rather than
+hidden, so a file the agent is editing under one is still there. Left for
+later: a git status line (branch, +/− against HEAD) now that the server shells
+out to git for `check-ignore`; editing, which invites a race with the agent
+writing the same file.
 
 #### 2. Switch provider without leaving the conversation
 
@@ -277,8 +245,9 @@ than a surprise. Each entry says what would go wrong if it is left.
   inside it before the server suite can run at all. Renaming it is a rename plus
   a path in two files; folding it into the workspace would also remove that
   second install and the drift.
-- **`packages/web/src` is flat** — twenty files, no directories. Fine now,
-  awkward once the side pane lands.
+- **`packages/web/src` is flat** — twenty-seven files, no directories, and the
+  side pane has now landed on top. Still navigable; a `pane/` folder for the
+  drawer and its two tabs would be the first cut.
 - **`session.ts` (971) does several jobs.** Covered by the review section above;
   listed here so the debt is in one place. `Chat.tsx` has come down from 992 to
   711 with the composer split out, but it still owns the transcript, the scroll
@@ -293,14 +262,16 @@ than a surprise. Each entry says what would go wrong if it is left.
 
 #### Smaller, still open
 
-- **More directories in a conversation's context.** Wanted: from inside a
-  conversation, add a second project directory the agent may read. ACP v1
-  gives a session exactly one `cwd` and no way to widen it, so this cannot be
-  a KiroChrome feature in general. What exists is per agent: Claude Code has
-  `/add-dir`, which already reaches it through the composer's slash commands;
-  Kiro and Gemini need probing. If more than one agent offers it, a picker in
-  the header that maps to whichever command the agent advertised is the shape
-  — invariant 5, branch on what was advertised, never on the provider id.
+- **More directories in the agent's context.** The Files pane now browses
+  any directory the user adds, but that is for the person: ACP v1 gives a
+  session exactly one `cwd` and no way to widen it, so the *agent* reading a
+  second directory cannot be a KiroChrome feature in general. What exists is
+  per agent: Claude Code has `/add-dir`, which already reaches it through the
+  composer's slash commands; Kiro and Gemini need probing. If more than one
+  agent offers it, adding a root could also offer "tell the agent" mapped to
+  whichever command it advertised — invariant 5, branch on what was
+  advertised, never on the provider id. `@` mentions (item 4) should complete
+  across every root.
 - **Docs the second review found behind the code.** [DESIGN.md](DESIGN.md)
   says nothing about schedules (a timer running sessions unattended) or rooms
   (a router over sessions), the two largest additions since it was written.
@@ -325,6 +296,20 @@ than a surprise. Each entry says what would go wrong if it is left.
 - Whatever the work machine turns up once Kiro is actually driving it.
 
 ### Done since the roadmap was written
+
+**The Files tab shipped**, beside Changes in one drawer (`SidePane.tsx`). A
+lazy tree over the conversation's directories — the working directory plus
+any the user adds — with a viewer per format: code highlighted a line at a
+time with line numbers, Markdown rendered with a source toggle, JSON
+pretty-printed, CSV and TSV as a table capped at 500 rows, images and PDFs
+inline, and "binary, 3 MB" for the rest. The server side is `files.ts`, a
+second file reader with a different trust boundary from the agent's `fs.ts`:
+every path is confined to a root on its real path, images and PDFs go out with
+`nosniff` and a `sandbox` CSP, SVG is text. Added directories are `root_added`
+/ `root_removed` events, so the endpoint's allowlist is replayed from the log
+and the transcript shows when it changed; adding one needs a live session,
+browsing does not. Ignored files come from `git check-ignore` when the root is
+in a repository, dimmed and sorted last.
 
 **Rooms shipped**, and turned out to fit the architecture rather than fight
 it: each participant is an ordinary session, and the room is a router over

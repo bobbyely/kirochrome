@@ -1,6 +1,8 @@
 import type {
   AgentSessionsResponse,
   CheckResponse,
+  FileContent,
+  FilesResponse,
   KcError,
   ProvidersResponse,
   Room,
@@ -98,4 +100,28 @@ export const roomVerb = (
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
+  });
+
+// ---------- the Files pane ----------
+
+const filesUrl = (sessionId: string, verb: "files" | "file" | "raw", root: string, path: string) =>
+  `/api/sessions/${encodeURIComponent(sessionId)}/${verb}?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`;
+
+/** One directory's entries; the tree asks as it is expanded. */
+export const fetchDirectory = (sessionId: string, root: string, path: string) =>
+  request<FilesResponse>(filesUrl(sessionId, "files", root, path));
+
+/** A file as text, or the reason it is not: binary, or too large. */
+export const fetchFile = (sessionId: string, root: string, path: string) =>
+  request<FileContent>(filesUrl(sessionId, "file", root, path));
+
+/** Images and PDFs are shown from a URL, not fetched: the browser renders them itself. */
+export const rawFileUrl = (sessionId: string, root: string, path: string) => filesUrl(sessionId, "raw", root, path);
+
+/** Adds or removes a directory the pane may browse. Appends to the log, so the session must be live. */
+export const setRoot = (sessionId: string, path: string, present: boolean) =>
+  request<{ roots: string[] }>(`/api/sessions/${encodeURIComponent(sessionId)}/roots`, {
+    method: present ? "POST" : "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ path }),
   });
