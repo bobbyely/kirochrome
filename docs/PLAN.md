@@ -272,6 +272,65 @@ is where a fixed bug belongs.
   best-effort by design — but doing nothing quietly is worse than not
   supporting it.
 
+Found by the second review (`dedc8bc`), over the rooms, schedules, start
+options and command pickers. In severity order:
+
+- **A schedule with an opening message never runs its prompt.** `Session.open`
+  fires the opening turn un-awaited, which sets `busy`; the scheduler's
+  `session.prompt(schedule.prompt)` then returns at the `if (this.busy)`
+  early exit, `finally` detaches the agent mid-opening, and `lastFailure`
+  finds no `turn_end` so the run is recorded **ok** with nothing done.
+  `scheduler.ts:222-238`, `session.ts:202,480-484`. Fix: `prompt()` should
+  resolve when *that* message's turn ends, not when the queue happens to be
+  idle — a per-message promise — or `open()` awaits the opening.
+- **The same early exit corrupts a room turn.** `rooms.ts:260`: a participant
+  with an opening, or one the user is chatting with in its own conversation
+  while the room prompts it, returns at once, and `saidSince` records the
+  *other* turn's partial text as its reply. Same fix.
+- **A room turn has no cap.** The scheduler has `RUN_CAP_MS`; a room turn has
+  nothing, and the room never surfaces `awaitingInput`, so a participant
+  raising a permission or elicitation request blocks the round for ever —
+  invariant 10. `withTimeout` around the prompt, and stop the room with a
+  typed error.
+- **Origin check accepts a missing `Origin` and never checks `Host`.**
+  `http.ts:37-46`. Same-origin GETs carry no `Origin`, so a page on a
+  DNS-rebound name resolving to 127.0.0.1 can read every GET route — room
+  transcripts, schedule prompts and cwds, exports. Pre-existing; the new
+  routes widen what leaks. Also require `Host` to be localhost or 127.0.0.1
+  on the port.
+- **Auto-approve grants `allow_always`.** `session.ts:805-808` takes the first
+  option whose kind starts with `allow`, and an unattended run can thereby
+  grant a permanent agent-side trust nobody saw. Prefer `allow_once`.
+- **Releasing a hold before the turn ends stalls the round.** `rooms.ts:165`
+  restarts only if `runtime.resumable`, which the loop sets after the turn in
+  flight — so type-then-clear within one turn leaves the room idle until
+  Continue. The test sleeps past the turn and never hits it.
+- **Cut in does not start a fresh round.** `rooms.ts:131-146` says it does, but
+  `round()` returns because the old round is still running; the budget and
+  the pass count carry over.
+- **Room messages are concatenated verbatim into other agents' prompts.** A
+  reply containing `\n\n[You] …` impersonates the user to the next agent.
+  Inherent to prompting, but fence each message and say that only the room
+  inserts speaker tags. `rooms.ts:290-298`.
+- **A failed participant spawn leaks the ones before it.** `rooms.ts:97-101`
+  opens participants in turn before `upsertRoom`; if the third fails, two
+  stay live under a room id that never exists. Killable at shutdown, leaked
+  until then. Detach in a catch.
+- **The scheduler writes a `skipped` row every minute** while a run overlaps
+  its own next due time (`scheduler.ts:175-181`), and `tick` awaits each run
+  in series, so one long run delays every other schedule's check.
+- **The Changes pane misreads an omitted `oldText` as an empty file.** ACP's
+  `oldText` is optional; `timeline.ts:359-360` coerces absence to `""` and
+  `changes.ts` then labels a write to an existing file **new**. Keep null
+  distinct from empty.
+- **`setAutoApprove` runs after the opening turn has started**
+  (`scheduler.ts:224` vs `session.ts:202`), so the opening's permission
+  prompts are not auto-approved. Pass it into `open()`.
+- **`PATCH /api/schedules/:id` stores any `status` string.** `scheduler.ts:89`.
+  Accept only the two literals.
+- **An empty `catch {}` discards a resume failure's cause** at
+  `rooms.ts:308-312` — invariant 9.
+
 #### Recorded debt
 
 Known, deliberate, and not urgent — written down so it is a decision rather
@@ -320,6 +379,23 @@ than a surprise. Each entry says what would go wrong if it is left.
   Kiro and Gemini need probing. If more than one agent offers it, a picker in
   the header that maps to whichever command the agent advertised is the shape
   — invariant 5, branch on what was advertised, never on the provider id.
+- **Docs the second review found behind the code.** [DESIGN.md](DESIGN.md)
+  says nothing about schedules (a timer running sessions unattended) or rooms
+  (a router over sessions), the two largest additions since it was written.
+  [GOTCHAS.md](GOTCHAS.md) has no entry for the rooms-without-rules migration
+  or the CSS rule a rebase left unclosed, both fixed bugs. The counts in this
+  file's review section are stale, and the AGENTS.md code map omits
+  `startOptions.ts` and describes the web side in prose where the server side
+  has a table.
+- **Tests the second review asked for.** Release-before-turn-ends and cut-in
+  budget reset in rooms; `nextClockRun` across a DST boundary (it uses local
+  `setHours`/`setDate`); the Changes pane with `oldText` omitted versus empty.
+- **One `useReadyProviders()` hook.** `Rooms.tsx`, `Schedules.tsx` and
+  `NewChat.tsx` each fetch and filter providers by `lastCheck.status === "ok"`
+  with two different error idioms.
+- **Dead exports**: `parseClock`, `looksAbsolute`, `WS_PATH`, `systemTheme`,
+  `SidebarApi`, `ToolContent`, `DiffLine` — exported, used nowhere else.
+- `.kiro/settings/lsp.json` is untracked and not ignored; decide which.
 - Verify the design pass on a real screen: the theme, the K spinner and the
   switch were all built without a browser to look at.
 - True virtualisation, if the windowed transcript proves insufficient.
