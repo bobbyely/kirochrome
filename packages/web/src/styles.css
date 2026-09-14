@@ -1105,3 +1105,13 @@ kbd {
 .stat-add { color: var(--ok); }
 .stat-del { color: var(--fail); }
 .head-action.active { color: var(--accent); border-color: var(--accent); }
+.head-action.has-changes { color: var(--text); border-color: var(--border-strong); }
+.head-count {
+  margin-left: var(--sp-1);
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+}
