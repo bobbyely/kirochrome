@@ -9,6 +9,7 @@ import type {
 import { Composer } from "./Composer.js";
 import { KSpinner } from "./KSpinner.js";
 import { ChangesPane } from "./ChangesPane.js";
+import { collectChanges } from "./changes.js";
 import { CodeBlock, DiffView } from "./DiffView.js";
 import { MarkdownBody } from "./Markdown.js";
 import { countChanges, lineDiff } from "./diff.js";
@@ -94,6 +95,9 @@ export function Chat({
   const hidden = Math.max(0, allRows.length - windowSize);
   const rows = hidden > 0 ? allRows.slice(hidden) : allRows;
   const usage = useMemo(() => latestUsage(events), [events]);
+  // Counted here as well as in the pane, so the button can say there is
+  // something behind it before it is opened.
+  const changed = useMemo(() => collectChanges(events).length, [events]);
 
   // Changes as text streams into the last row, not just when a row is added —
   // otherwise a long reply scrolls once and then stops following.
@@ -171,11 +175,11 @@ export function Chat({
           )}
           {session && (
             <button
-              className={`head-action ${changesOpen ? "active" : ""}`}
+              className={`head-action ${changesOpen ? "active" : ""} ${changed > 0 ? "has-changes" : ""}`}
               onClick={() => setChangesOpen((v) => !v)}
               title="Files the agent has changed this conversation"
             >
-              Changes
+              Changes{changed > 0 && <span className="head-count">{changed}</span>}
             </button>
           )}
           {/* Live sessions always show it; a restored one shows it whenever its
