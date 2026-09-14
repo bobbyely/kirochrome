@@ -211,6 +211,12 @@ export interface SlashCommand {
   description: string;
   /** Present when the command takes an argument; `hint` describes it. */
   input?: { hint?: string } | null;
+  /**
+   * The argument is one of a fixed set the agent will enumerate on request,
+   * so the command can be a picker rather than something typed. Kiro says
+   * so with `meta.inputType: "selection"`; ACP itself has no such flag.
+   */
+  selection?: boolean;
 }
 
 /** One suggestion from an agent that supports argument completion. */

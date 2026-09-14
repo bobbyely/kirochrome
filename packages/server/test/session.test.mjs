@@ -109,6 +109,26 @@ describe("start options", () => {
   });
 });
 
+describe("Kiro's command catalogue", () => {
+  it("replaces the list, without slashes, marking commands whose argument is picked", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    await session.prompt("kiro-commands");
+    await until(() => session.summary().commands.some((c) => c.name === "effort"));
+    const commands = session.summary().commands;
+    assert.deepEqual(
+      commands.map((c) => [c.name, c.selection ?? false]),
+      [["effort", true], ["clear", false]],
+    );
+    const options = await session.commandOptions("/effort", "");
+    assert.deepEqual(
+      options.map((o) => [o.value, o.label, o.current ?? false]),
+      [["low", "LOW", false], ["medium", "MEDIUM", true], ["high", "high", true], ["xhigh", "XHIGH", false], ["max", "MAX", false]],
+      "a slash-prefixed name still works, and [active] becomes current",
+    );
+    session.close();
+  });
+});
+
 describe("Kiro's usage notification", () => {
   it("is logged as an update under its own method name", async () => {
     const session = await sessions.open(provider, "/tmp");

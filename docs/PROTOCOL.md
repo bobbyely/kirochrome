@@ -263,6 +263,17 @@ else — a decision to revisit when v2 settles, not an oversight.
 for a command. It is probed **once** per session; a failure marks it
 unsupported for that session rather than being retried on every keystroke.
 
+**`_kiro.dev/commands/available` is how Kiro 2.21 advertises its commands.**
+Not `available_commands_update`: a raw probe showed no `session/update` of
+that kind at all, so the composer's slash picker had silently stopped working
+for Kiro. Names arrive with their slash (`/effort`) and a `meta.inputType`;
+`selection` means the argument is one of a set the agent enumerates through
+`_kiro.dev/commands/options`, which wants the name *without* the slash and
+marks the value in effect by appending `[active]` to its label. `Session`
+folds both catalogues to one shape — slash-less names, `selection: true` —
+and the composer offers selection commands as pickers beside the settings,
+except where a setting already covers the same knob.
+
 **`_kiro.dev/metadata` is how Kiro reports context usage.** Kiro (2.21.4)
 never sends ACP's `usage_update`; after each turn it sends this notification
 instead, with `contextUsagePercentage`, `meteringUsage` (credits, not a
