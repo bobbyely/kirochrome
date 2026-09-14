@@ -1,21 +1,30 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { ROOM_DEFAULT_PAUSE, ROOM_DEFAULT_TURNS, ROOM_MAX_PARTICIPANTS, ROOM_MAX_TURNS, ROOM_USER } from "@kirochrome/shared";
+import {
+  ROOM_DEFAULT_PAUSE,
+  ROOM_DEFAULT_RULES,
+  ROOM_DEFAULT_TURNS,
+  ROOM_MAX_PARTICIPANTS,
+  ROOM_MAX_TURNS,
+  ROOM_USER,
+} from "@kirochrome/shared";
 import type { ProviderView, RoomInput, RoomView } from "@kirochrome/shared";
 import { ApiError, createRoom, deleteRoom, fetchProviders, fetchRoom, fetchRooms, roomVerb } from "./api.js";
 import { KSpinner } from "./KSpinner.js";
 import { MarkdownBody } from "./Markdown.js";
+import { chosen, StartPickers } from "./StartPickers.js";
 import { useChat } from "./useChat.js";
 
 const EMPTY: RoomInput = {
   name: "",
   cwd: "",
   topic: "",
+  rules: ROOM_DEFAULT_RULES,
   maxTurnsPerRound: ROOM_DEFAULT_TURNS,
   pauseSeconds: ROOM_DEFAULT_PAUSE,
   creditCap: null,
   participants: [
-    { name: "Planner", providerId: "", role: "lays out the steps and owns the plan" },
-    { name: "Critic", providerId: "", role: "finds what is missing or wrong, and says so briefly" },
+    { name: "Planner", providerId: "", role: "lays out the steps and owns the plan", start: {} },
+    { name: "Critic", providerId: "", role: "finds what is missing or wrong, and says so briefly", start: {} },
   ],
 };
 
@@ -147,9 +156,13 @@ function RoomForm({
   const setParticipant = (i: number, patch: Partial<RoomInput["participants"][number]>) =>
     setForm((f) => ({ ...f, participants: f.participants.map((p, j) => (j === i ? { ...p, ...patch } : p)) }));
 
+  const providerOf = (id: string) => providers.find((p) => p.id === id);
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    onSave(form);
+    onSave({
+      ...form,
+      participants: form.participants.map((p) => ({ ...p, start: chosen(providerOf(p.providerId), p.start) })),
+    });
   };
 
   return (
@@ -182,35 +195,56 @@ function RoomForm({
         />
         <span className="field-hint">Every participant sees this on every turn.</span>
       </label>
+      <label className="field">
+        <span className="field-label">Rules</span>
+        <textarea value={form.rules} onChange={(e) => set("rules", e.target.value)} rows={4} />
+        <span className="field-hint">
+          How everyone should behave, after the topic in every prompt. Keep &ldquo;reply with exactly PASS&rdquo; if
+          you want agents to be able to yield.
+        </span>
+      </label>
 
       <div className="field">
         <span className="field-label">Participants</span>
         {form.participants.map((p, i) => (
-          <div className="room-participant" key={i}>
-            <input value={p.name} onChange={(e) => setParticipant(i, { name: e.target.value })} placeholder="Name" />
-            <select value={p.providerId} onChange={(e) => setParticipant(i, { providerId: e.target.value })}>
-              {providers.map((pr) => (
-                <option key={pr.id} value={pr.id}>
-                  {pr.name}
-                </option>
-              ))}
-            </select>
-            <input value={p.role} onChange={(e) => setParticipant(i, { role: e.target.value })} placeholder="Role, one line" />
-            <button
-              type="button"
-              disabled={form.participants.length <= 2}
-              onClick={() => set("participants", form.participants.filter((_, j) => j !== i))}
-              aria-label="Remove"
-            >
-              ×
-            </button>
+          <div className="room-participant-block" key={i}>
+            <div className="room-participant">
+              <input value={p.name} onChange={(e) => setParticipant(i, { name: e.target.value })} placeholder="Name" />
+              <select
+                value={p.providerId}
+                onChange={(e) => setParticipant(i, { providerId: e.target.value, start: {} })}
+              >
+                {providers.map((pr) => (
+                  <option key={pr.id} value={pr.id}>
+                    {pr.name}
+                  </option>
+                ))}
+              </select>
+              <input value={p.role} onChange={(e) => setParticipant(i, { role: e.target.value })} placeholder="Role, one line" />
+              <button
+                type="button"
+                disabled={form.participants.length <= 2}
+                onClick={() => set("participants", form.participants.filter((_, j) => j !== i))}
+                aria-label="Remove"
+              >
+                ×
+              </button>
+            </div>
+            <StartPickers
+              compact
+              provider={providerOf(p.providerId)}
+              value={p.start}
+              onChange={(start) => setParticipant(i, { start })}
+            />
           </div>
         ))}
         {form.participants.length < ROOM_MAX_PARTICIPANTS && (
           <button
             type="button"
             className="chip"
-            onClick={() => set("participants", [...form.participants, { name: "", providerId: defaultProvider, role: "" }])}
+            onClick={() =>
+              set("participants", [...form.participants, { name: "", providerId: defaultProvider, role: "", start: {} }])
+            }
           >
             + participant
           </button>
@@ -299,7 +333,8 @@ export function RoomView({
     bottom.current?.scrollIntoView({ block: "end" });
   }, [room?.messages.length, room?.speakingText.length]);
 
-  const verb = async (name: "say" | "hold" | "resume" | "stop" | "reconnect", body?: unknown) => {
+  const [steering, setSteering] = useState<{ topic: string; rules: string } | null>(null);
+  const verb = async (name: "say" | "hold" | "resume" | "stop" | "reconnect" | "steer", body?: unknown) => {
     try {
       setRoom((await roomVerb(roomId, name, body)).room);
       setError(null);
@@ -359,6 +394,13 @@ export function RoomView({
           <strong>{room.name}</strong>
           <code className="cmd">{room.topic}</code>
         </div>
+        <button
+          className={`head-action ${steering ? "active" : ""}`}
+          onClick={() => setSteering(steering ? null : { topic: room.topic, rules: room.rules })}
+          title="Change the topic or the rules; the next prompt carries them"
+        >
+          Steer
+        </button>
         <span className="room-meter" title="Agent turns this round, and credits the agents have reported">
           turn {room.turnsThisRound}/{room.maxTurnsPerRound} · {room.creditsUsed.toFixed(2)} cr
         </span>
@@ -366,6 +408,35 @@ export function RoomView({
           {room.status === "running" && speaking ? `${speaking.name} is speaking` : room.status}
         </span>
       </header>
+
+      {steering && (
+        <form
+          className="room-steer"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            await verb("steer", steering);
+            setSteering(null);
+          }}
+        >
+          <label className="field">
+            <span className="field-label">Topic</span>
+            <textarea value={steering.topic} onChange={(e) => setSteering({ ...steering, topic: e.target.value })} rows={2} />
+          </label>
+          <label className="field">
+            <span className="field-label">Rules</span>
+            <textarea value={steering.rules} onChange={(e) => setSteering({ ...steering, rules: e.target.value })} rows={4} />
+            <span className="field-hint">Every agent sees both on its next turn; nothing already said changes.</span>
+          </label>
+          <div className="schedule-actions">
+            <button type="submit" className="primary">
+              Apply
+            </button>
+            <button type="button" onClick={() => setSteering(null)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
       <div className="room-people">
         {room.participants.map((p) => {

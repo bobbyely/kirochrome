@@ -292,6 +292,9 @@ async function handleRooms(req: IncomingMessage, res: ServerResponse, url: URL, 
     case "reconnect":
       await rooms.reconnect(id);
       break;
+    case "steer":
+      rooms.steer(id, (await readJson(req)) as { topic?: unknown; rules?: unknown });
+      break;
     case "stop":
       rooms.stop(id);
       break;

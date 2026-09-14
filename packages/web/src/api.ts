@@ -89,7 +89,11 @@ export const deleteRoom = (id: string) =>
   request<{ ok: true }>(`/api/rooms/${encodeURIComponent(id)}`, { method: "DELETE" });
 
 /** The four verbs: say (optionally cutting in), hold while typing, resume a round, stop. */
-export const roomVerb = (id: string, verb: "say" | "hold" | "resume" | "stop" | "reconnect", body: unknown = {}) =>
+export const roomVerb = (
+  id: string,
+  verb: "say" | "hold" | "resume" | "stop" | "reconnect" | "steer",
+  body: unknown = {},
+) =>
   request<{ room: RoomView }>(`/api/rooms/${encodeURIComponent(id)}/${verb}`, {
     method: "POST",
     headers: { "content-type": "application/json" },

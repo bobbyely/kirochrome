@@ -47,8 +47,10 @@ the server cannot.
 **Rooms.** Two or more agents and you, talking in turns — a planner and a
 critic working over a topic, say. Each agent is its own conversation; the room
 decides who speaks next and shows each one what was said since its last turn.
-Typing holds the room, Enter sends, Cmd+Enter cuts in on whoever is speaking,
-and a turn budget and credit cap keep it from running away.
+Each participant gets its own model and opening command. Typing holds the
+room, Enter sends, Cmd+Enter cuts in on whoever is speaking, **Steer** changes
+the topic or the rules mid-conversation, and a turn budget and credit cap keep
+it from running away.
 
 **Context you can see.** A meter shows how much of the agent's window is used,
 and what the conversation has cost where the agent reports it.
