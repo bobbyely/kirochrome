@@ -153,6 +153,18 @@ const app = agent({ name: "mock-agent" })
       return { stopReason: "end_turn" };
     }
 
+    // Kiro's own usage notification, which is not a session/update at all.
+    if (params.prompt?.[0]?.text === "kiro-usage") {
+      await notify({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "ok" } });
+      client.notify("_kiro.dev/metadata", {
+        sessionId: params.sessionId,
+        contextUsagePercentage: 12.5,
+        meteringUsage: [{ value: 0.25, unit: "credit", unitPlural: "credits" }],
+        turnDurationMs: 10,
+      });
+      return { stopReason: "end_turn" };
+    }
+
     // Context compaction, which the client only sees if it advertised support.
     if (params.prompt?.[0]?.text === "compact") {
       if (!compactionAllowed) {

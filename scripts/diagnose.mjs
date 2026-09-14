@@ -37,6 +37,10 @@ for (const s of sessions) {
         const update = JSON.parse(row.payload).update ?? {};
         key = `agent_update:${update.sessionUpdate ?? "?"}`;
         if (update.sessionUpdate === "usage_update") usage = update;
+        // Kiro's own notification: a percentage, no token counts.
+        if (update.sessionUpdate === "_kiro.dev/metadata" && typeof update.contextUsagePercentage === "number") {
+          usage = { used: update.contextUsagePercentage, size: 100 };
+        }
       } catch { /* unreadable row */ }
     }
     kinds[key] = (kinds[key] ?? 0) + 1;
@@ -46,7 +50,7 @@ for (const s of sessions) {
   console.log(
     usage && typeof usage.used === "number" && typeof usage.size === "number"
       ? `   context: ${Math.round((1 - usage.used / usage.size) * 100)}% left  (${usage.used}/${usage.size})`
-      : "   context: agent never sent a usable usage_update — the meter will show a dash",
+      : "   context: agent never sent usage_update or _kiro.dev/metadata — the meter will show a dash",
   );
   for (const [kind, n] of Object.entries(kinds).sort((a, b) => b[1] - a[1])) console.log(`     ${kind}: ${n}`);
   console.log();

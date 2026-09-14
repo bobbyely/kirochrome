@@ -116,7 +116,8 @@ auth method on the setup page.
 
 It usually does not, and reaching for a special case is normally a sign the
 data-driven path was not read carefully. But agents do ship extensions —
-`_kiro.dev/commands/options` is one.
+`_kiro.dev/commands/options` is one, and `_kiro.dev/metadata` (context usage,
+in place of `usage_update`) is another.
 
 The rules for those:
 
