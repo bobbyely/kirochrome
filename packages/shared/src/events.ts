@@ -120,6 +120,7 @@ export interface SessionSummary {
  */
 const STATE_UPDATES = new Set([
   "usage_update",
+  "_kiro.dev/metadata",
   "session_info_update",
   "available_commands_update",
   "current_mode_update",
@@ -133,12 +134,20 @@ export function updateCategory(sessionUpdate: string | undefined): UpdateCategor
   return sessionUpdate && STATE_UPDATES.has(sessionUpdate) ? "state" : "transcript";
 }
 
-/** Context-window usage, as reported by `usage_update`. */
+/**
+ * Context-window usage, as reported by `usage_update` — or by Kiro's
+ * `_kiro.dev/metadata`, which gives a percentage and no token counts, in
+ * which case `used`/`size` are that percentage out of 100 and `percentOnly`
+ * says not to print them as tokens.
+ */
 export interface SessionUsage {
   used: number;
   size: number;
+  percentOnly?: boolean;
   /** ACP requires both fields on Cost, so never assume a currency. */
   cost?: { amount: number; currency: string };
+  /** Kiro meters in credits, which are not a currency. */
+  credits?: number;
 }
 
 /** Reads the latest usage out of the event log. The browser derives state; it never stores it. */
@@ -151,10 +160,23 @@ export function latestUsage(events: KcEvent[]): SessionUsage | null {
       used?: number;
       size?: number;
       cost?: { amount: number; currency: string };
+      contextUsagePercentage?: number;
+      meteringUsage?: Array<{ value?: number; unit?: string }>;
     };
-    if (u.sessionUpdate !== "usage_update") continue;
-    if (typeof u.used !== "number" || typeof u.size !== "number") continue;
-    return { used: u.used, size: u.size, ...(u.cost ? { cost: u.cost } : {}) };
+    if (u.sessionUpdate === "usage_update") {
+      if (typeof u.used !== "number" || typeof u.size !== "number") continue;
+      return { used: u.used, size: u.size, ...(u.cost ? { cost: u.cost } : {}) };
+    }
+    if (u.sessionUpdate === "_kiro.dev/metadata") {
+      if (typeof u.contextUsagePercentage !== "number") continue;
+      const credits = u.meteringUsage?.find((m) => m.unit === "credit")?.value;
+      return {
+        used: u.contextUsagePercentage,
+        size: 100,
+        percentOnly: true,
+        ...(typeof credits === "number" ? { credits } : {}),
+      };
+    }
   }
   return null;
 }

@@ -11,7 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const MOCK = join(here, "..", "..", "..", "spike", "mock-agent.mjs");
 const provider = { id: "mock", name: "Mock", command: process.execPath, args: [MOCK] };
 
-let Store, SessionManager, dir, store, sessions;
+let Store, SessionManager, latestUsage, dir, store, sessions;
 
 before(async () => {
   dir = mkdtempSync(join(tmpdir(), "kc-session-"));
@@ -19,6 +19,7 @@ before(async () => {
   writeFileSync(join(dir, "config.json"), JSON.stringify({ providers: [provider] }));
   ({ Store } = await import("../dist/store.js"));
   ({ SessionManager } = await import("../dist/sessionManager.js"));
+  ({ latestUsage } = await import("@kirochrome/shared"));
   store = new Store(join(dir, "test.db"));
   sessions = new SessionManager(store);
 });
@@ -86,6 +87,20 @@ describe("a turn", () => {
     await session.prompt("second message");
     assert.equal(session.summary().title, "My name", "the agent must not rename it back");
     off();
+    session.close();
+  });
+});
+
+describe("Kiro's usage notification", () => {
+  it("is logged as an update under its own method name", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    await session.prompt("kiro-usage");
+    const logged = session
+      .eventsSince(0)
+      .find((e) => e.type === "agent_update" && e.update?.sessionUpdate === "_kiro.dev/metadata");
+    assert.ok(logged, "the notification reached the log");
+    assert.equal(logged.update.contextUsagePercentage, 12.5);
+    assert.deepEqual(latestUsage(session.eventsSince(0)), { used: 12.5, size: 100, percentOnly: true, credits: 0.25 });
     session.close();
   });
 });

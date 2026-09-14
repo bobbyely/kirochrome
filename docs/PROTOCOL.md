@@ -263,6 +263,16 @@ else — a decision to revisit when v2 settles, not an oversight.
 for a command. It is probed **once** per session; a failure marks it
 unsupported for that session rather than being retried on every keystroke.
 
+**`_kiro.dev/metadata` is how Kiro reports context usage.** Kiro (2.21.4)
+never sends ACP's `usage_update`; after each turn it sends this notification
+instead, with `contextUsagePercentage`, `meteringUsage` (credits, not a
+currency), `turnDurationMs` and `effort`. There are no token counts. It is
+logged as an `agent_update` under that method name — raw, like any update we
+do not otherwise parse — and `latestUsage` reads either shape, so the meter
+shows a percentage for Kiro and tokens for agents that send `usage_update`.
+Found with a raw probe after every Kiro conversation on the machine showed a
+dash; `scripts/diagnose.mjs` now names both sources.
+
 Extensions are the one place per-agent code is legitimate. Keep them behind a
 capability probe and make sure the standard path still works when the probe
 fails — see invariant 5 in [AGENTS.md](../AGENTS.md).

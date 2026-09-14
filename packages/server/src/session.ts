@@ -90,6 +90,12 @@ export interface ExitReason {
  * disconnects mid-turn the turn keeps running and keeps appending, and the
  * client catches up by `seq` when it returns.
  */
+/** Kiro's per-turn metadata: `contextUsagePercentage`, credits, turn duration. */
+const KIRO_METADATA = "_kiro.dev/metadata";
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+
 export class Session {
   readonly id: string;
   private readonly log: KcEvent[] = [];
@@ -276,6 +282,15 @@ export class Session {
 
     const app = client({ name: "kirochrome" })
       .onNotification("session/update", ({ params }) => this.onUpdate(params.update))
+      // Kiro reports context usage on its own notification rather than ACP's
+      // `usage_update`. Logged as an update under that method name — raw, like
+      // any update we do not otherwise recognise — so the meter can derive
+      // from it and the log says exactly what arrived.
+      .onNotification(KIRO_METADATA, asRecord, ({ params }) => {
+        if (this.replaying) return;
+        this.flushText();
+        this.append({ type: "agent_update", update: { sessionUpdate: KIRO_METADATA, ...params } });
+      })
       .onRequest("session/request_permission", ({ params }) => this.requestPermission(params))
       // Form mode only — that is exactly what we advertise below.
       .onRequest("elicitation/create", ({ params }) => this.createElicitation(params))

@@ -144,6 +144,24 @@ describe("toolContent", () => {
 });
 
 describe("latestUsage", () => {
+  it("reads Kiro's metadata notification as usage, by percentage", () => {
+    const usage = latestUsage([
+      ev({ type: "agent_update", update: { sessionUpdate: "usage_update", used: 10, size: 100 } } as never, 1),
+      ev(
+        {
+          type: "agent_update",
+          update: {
+            sessionUpdate: "_kiro.dev/metadata",
+            contextUsagePercentage: 3.2,
+            meteringUsage: [{ value: 0.22, unit: "credit" }],
+          },
+        } as never,
+        2,
+      ),
+    ]);
+    assert.deepEqual(usage, { used: 3.2, size: 100, percentOnly: true, credits: 0.22 });
+  });
+
   it("reads the most recent usage update from the log", () => {
     const usage = latestUsage([
       ev({ type: "agent_update", update: { sessionUpdate: "usage_update", used: 10, size: 100 } } as never, 1),

@@ -733,16 +733,18 @@ function ContextMeter({ usage }: { usage: SessionUsage | null }) {
     );
   }
 
-  const { used, size, cost } = usage;
+  const { used, size, cost, credits, percentOnly } = usage;
   const usedPct = Math.min(100, Math.round((used / size) * 100));
   const leftPct = 100 - usedPct;
   const money =
     cost &&
     new Intl.NumberFormat(undefined, { style: "currency", currency: cost.currency }).format(cost.amount);
+  const spend = money ?? (credits !== undefined ? `${credits.toFixed(2)} credits this turn` : "");
 
-  const title =
-    `${(size - used).toLocaleString()} of ${size.toLocaleString()} tokens left ` +
-    `(${used.toLocaleString()} used)${money ? ` · ${money}` : ""}`;
+  const title = percentOnly
+    ? `${leftPct}% of the context window left${spend ? ` · ${spend}` : ""}`
+    : `${(size - used).toLocaleString()} of ${size.toLocaleString()} tokens left ` +
+      `(${used.toLocaleString()} used)${spend ? ` · ${spend}` : ""}`;
 
   return (
     <div className="context-meter" title={title}>
