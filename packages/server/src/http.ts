@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
-import { isImageMime, kcError, type KcError } from "@kirochrome/shared";
+import { collectRoots, isImageMime, kcError, type KcError } from "@kirochrome/shared";
 import type {
   AgentSessionsResponse,
   ProviderView,
@@ -13,6 +13,7 @@ import type {
 import { listAgentSessions } from "./agentSessions.js";
 import { checkProvider } from "./check.js";
 import { exportFilename, toMarkdown } from "./export.js";
+import { listDirectory, rawFile, readText, validateRoot } from "./files.js";
 import { loadConfig, updateProvider } from "./config.js";
 import { RoomManager } from "./rooms.js";
 import { Scheduler } from "./scheduler.js";
@@ -99,6 +100,9 @@ export function startServer(port: number, webRoot: string | null): void {
     try {
       if (url.pathname.startsWith("/api/schedules")) return await handleSchedules(req, res, url, scheduler);
       if (url.pathname.startsWith("/api/rooms")) return await handleRooms(req, res, url, rooms);
+      if (/^\/api\/sessions\/[^/]+\/(files|file|raw|roots)$/.test(url.pathname)) {
+        return await handleFiles(req, res, url, store, sessions);
+      }
       if (url.pathname.startsWith("/api/")) return await handleApi(req, res, url, store);
       if (webRoot) return serveStatic(res, webRoot, url.pathname);
       return sendJson(res, 404, { error: kcError("INTERNAL", "No web build. Run `npm run build`.") });
@@ -331,6 +335,64 @@ async function handleRooms(req: IncomingMessage, res: ServerResponse, url: URL, 
       return sendError(res, 404, kcError("INTERNAL", `No route for ${req.method} ${url.pathname}.`));
   }
   return sendJson(res, 200, { room: rooms.get(id) });
+}
+
+/**
+ * The Files pane. Confined to the conversation's roots — its working
+ * directory plus whatever `root_added` events say — by `files.ts`; here is
+ * only the routing and the one response that is not JSON.
+ */
+async function handleFiles(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+  store: Store,
+  sessions: SessionManager,
+): Promise<void> {
+  const m = /^\/api\/sessions\/([^/]+)\/(files|file|raw|roots)$/.exec(url.pathname)!;
+  const id = decodeURIComponent(m[1]!);
+  const verb = m[2]!;
+  const record = store.getSession(id);
+  if (!record) return sendError(res, 404, kcError("SESSION_UNKNOWN", `No conversation with id '${id}'.`));
+  const roots = collectRoots(record.cwd, store.eventsSince(id, 0));
+
+  if (verb === "roots") {
+    if (req.method === "GET") return sendJson(res, 200, { roots });
+    if (req.method !== "POST" && req.method !== "DELETE") {
+      return sendError(res, 404, kcError("INTERNAL", `No route for ${req.method} ${url.pathname}.`));
+    }
+    // Into the log, which needs the session live: a restored conversation has
+    // no writer. Browsing works without one; changing the roots does not.
+    const body = (await readJson(req)) as { path?: unknown };
+    const path = await validateRoot(body.path);
+    sessions.requireLive(id).setRoot(path, req.method === "POST");
+    return sendJson(res, 200, { roots: collectRoots(record.cwd, store.eventsSince(id, 0)) });
+  }
+
+  if (req.method !== "GET") return sendError(res, 404, kcError("INTERNAL", `No route for ${req.method} ${url.pathname}.`));
+  const root = url.searchParams.get("root") ?? record.cwd;
+  const path = url.searchParams.get("path") ?? "";
+
+  if (verb === "files") return sendJson(res, 200, await listDirectory(roots, root, path));
+  if (verb === "file") return sendJson(res, 200, await readText(roots, root, path));
+
+  const { file, mime } = await rawFile(roots, root, path);
+  const { size } = statSync(file);
+  res.writeHead(200, {
+    "content-type": mime,
+    "content-length": String(size),
+    "x-content-type-options": "nosniff",
+    // A unique origin for anything served raw: a file in a cloned repository
+    // must not run as us if someone navigates to it directly.
+    "content-security-policy": "sandbox",
+    "content-disposition": "inline",
+  });
+  createReadStream(file)
+    .on("error", () => {
+      if (!res.headersSent) res.writeHead(500);
+      res.end();
+    })
+    .pipe(res);
 }
 
 function hostPlatform(): "darwin" | "linux" | "win32" | "other" {

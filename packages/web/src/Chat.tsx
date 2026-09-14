@@ -10,6 +10,8 @@ import type {
 import { Composer } from "./Composer.js";
 import { KSpinner } from "./KSpinner.js";
 import { ChangesPane } from "./ChangesPane.js";
+import { FilesPane } from "./FilesPane.js";
+import { SidePane, type SideTab } from "./SidePane.js";
 import { collectChanges } from "./changes.js";
 import { CodeBlock, DiffView } from "./DiffView.js";
 import { MarkdownBody } from "./Markdown.js";
@@ -90,7 +92,7 @@ export function Chat({
 
   const allRows = useMemo(() => buildRows(events), [events]);
   const [windowSize, setWindowSize] = useState(INITIAL_ROWS);
-  const [changesOpen, setChangesOpen] = useState(false);
+  const [pane, setPane] = useState<SideTab | null>(null);
 
   // Long conversations render every row otherwise, and each agent message is a
   // full markdown parse. Show the most recent slice and let the reader ask for
@@ -139,7 +141,7 @@ export function Chat({
   useEffect(() => {
     setWindowSize(INITIAL_ROWS);
     setFollowing(true);
-    setChangesOpen(false);
+    setPane(null);
     landed.current = false;
   }, [sessionId, providerId, adopt?.agentSessionId]);
 
@@ -178,11 +180,20 @@ export function Chat({
           )}
           {session && (
             <button
-              className={`head-action ${changesOpen ? "active" : ""} ${changed > 0 ? "has-changes" : ""}`}
-              onClick={() => setChangesOpen((v) => !v)}
+              className={`head-action ${pane === "changes" ? "active" : ""} ${changed > 0 ? "has-changes" : ""}`}
+              onClick={() => setPane((p) => (p === "changes" ? null : "changes"))}
               title="Files the agent has changed this conversation"
             >
               Changes{changed > 0 && <span className="head-count">{changed}</span>}
+            </button>
+          )}
+          {session && (
+            <button
+              className={`head-action ${pane === "files" ? "active" : ""}`}
+              onClick={() => setPane((p) => (p === "files" ? null : "files"))}
+              title="Browse the conversation's directories"
+            >
+              Files
             </button>
           )}
           {/* Live sessions always show it; a restored one shows it whenever its
@@ -268,8 +279,22 @@ export function Chat({
           />
         )}
       </div>
-      {changesOpen && session && (
-        <ChangesPane events={events} cwd={session.cwd} onClose={() => setChangesOpen(false)} />
+      {pane && session && (
+        <SidePane
+          tab={pane}
+          onTab={setPane}
+          onClose={() => setPane(null)}
+          tabs={{
+            changes: { label: "Changes", badge: changed > 0 ? <span className="head-count">{changed}</span> : null },
+            files: { label: "Files" },
+          }}
+        >
+          {pane === "changes" ? (
+            <ChangesPane events={events} cwd={session.cwd} />
+          ) : (
+            <FilesPane sessionId={session.id} cwd={session.cwd} events={events} live={session.live} />
+          )}
+        </SidePane>
       )}
     </div>
   );

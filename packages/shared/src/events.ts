@@ -57,6 +57,14 @@ export type KcEvent = KcEventBase &
      * looks the same as Stop — this says why the answer ends mid-sentence.
      */
     | { type: "interrupted" }
+    /**
+     * A directory the user added to, or removed from, the Files pane. An
+     * event rather than browser state because the server's file endpoint is
+     * confined to these roots: the allowlist must be derivable from the log
+     * (invariants 2 and 3). Says nothing to the agent — ACP has one `cwd`.
+     */
+    | { type: "root_added"; path: string }
+    | { type: "root_removed"; path: string }
     | { type: "turn_end"; stopReason: string }
     | { type: "error"; error: KcError }
     | { type: "agent_exited"; code: number | null; signal: string | null }

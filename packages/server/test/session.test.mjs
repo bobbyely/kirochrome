@@ -203,6 +203,23 @@ describe("the queue", () => {
   });
 });
 
+describe("the Files pane's roots", () => {
+  it("are events in the log: added once, removable, the cwd never among them", async () => {
+    // The file endpoint's allowlist is replayed from these, so they have to
+    // be in the log rather than in the browser (invariants 2 and 3).
+    const session = await sessions.open(provider, "/tmp");
+    const roots = (events) => events.filter((e) => e.type === "root_added" || e.type === "root_removed").map((e) => `${e.type}:${e.path}`);
+    session.setRoot("/tmp", true); // the cwd is always a root; nothing to record
+    session.setRoot("/opt", true);
+    session.setRoot("/opt", true); // already there
+    session.setRoot("/var", false); // never added
+    session.setRoot("/opt", false);
+    assert.deepEqual(roots(session.eventsSince(0)), ["root_added:/opt", "root_removed:/opt"]);
+    assert.deepEqual(roots(store.eventsSince(session.id, 0)), ["root_added:/opt", "root_removed:/opt"], "durable");
+    session.close();
+  });
+});
+
 describe("a prompt's promise", () => {
   it("resolves when that message's turn ends, not when the queue happens to be idle", async () => {
     // `prompt()` used to return at once while a turn was running. A scheduled

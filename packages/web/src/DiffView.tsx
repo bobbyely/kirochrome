@@ -11,7 +11,7 @@ import { languageFor, type ToolDiff } from "./timeline.js";
  * inside a multi-line string or comment, which is the trade GitHub makes too.
  * highlight.js escapes the text itself, so the markup it returns is safe to set.
  */
-function highlightLine(text: string, language: string): string {
+export function highlightLine(text: string, language: string): string {
   if (!language || !hljs.getLanguage(language)) return escapeHtml(text);
   return hljs.highlight(text, { language, ignoreIllegals: true }).value;
 }

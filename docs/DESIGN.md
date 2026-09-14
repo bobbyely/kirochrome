@@ -318,6 +318,18 @@ and knowing when an agent misbehaves.
   browser can otherwise open a socket to a local server.
 - `chmod 0600` the database; it will hold work conversations and source code.
 - Never log environment variables when logging spawns.
+- **Two file readers, two trust boundaries.** `fs.ts` answers the *agent's*
+  `fs/read_text_file` and is deliberately unsandboxed: the agent is a local
+  process that can already read anything the user can, and a false boundary
+  would suggest a guarantee we cannot make. `files.ts` answers the *browser*,
+  and any page the user has open can attempt a request to localhost — the
+  Origin check is one control, not a boundary — so it is confined to the
+  conversation's roots, compared on real paths after symlinks are followed.
+  The roots are the working directory plus `root_added` events, so the
+  allowlist is replayed from the log rather than trusted from a request.
+  Raw bytes (images, PDFs) go out with `nosniff` and a `sandbox` CSP, so a
+  file in a cloned repository cannot run as our origin; SVG is served as text
+  for the same reason.
 
 ## Portability
 

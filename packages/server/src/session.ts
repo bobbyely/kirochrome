@@ -3,6 +3,7 @@ import { client, PROTOCOL_VERSION, type ClientConnection } from "@agentclientpro
 import {
   advertisesLoadSession,
   causeOf,
+  collectRoots,
   isKcError,
   kcError,
   type KcError,
@@ -1139,6 +1140,18 @@ export class Session {
       scheduleId: this.scheduleId,
       roomId: this.roomId,
     });
+  }
+
+  /**
+   * A directory added to, or removed from, the Files pane. Into the log, so
+   * the file endpoint's allowlist survives a restart and the transcript shows
+   * when it changed. The agent is not told: ACP has one `cwd`.
+   */
+  setRoot(path: string, present: boolean): void {
+    if (path === this.cwd) return;
+    const current = collectRoots(this.cwd, this.log).includes(path);
+    if (current === present) return;
+    this.append(present ? { type: "root_added", path } : { type: "root_removed", path });
   }
 
   /** Records which room this conversation speaks in, and names it for the sidebar. */
