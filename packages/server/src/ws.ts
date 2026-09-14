@@ -228,7 +228,7 @@ async function dispatch(
     case "prompt": {
       const session = sessions.requireLive(msg.sessionId);
       send({ type: "session_state", session: { ...session.summary(), busy: true } });
-      await session.prompt(msg.text, msg.images ?? []);
+      await session.prompt(msg.text, msg.images ?? [], msg.files ?? []);
       send({ type: "session_state", session: session.summary() });
       return;
     }
@@ -294,7 +294,7 @@ async function dispatch(
     }
 
     case "interrupt": {
-      await sessions.requireLive(msg.sessionId).interrupt(msg.text, msg.images ?? []);
+      await sessions.requireLive(msg.sessionId).interrupt(msg.text, msg.images ?? [], msg.files ?? []);
       return;
     }
   }

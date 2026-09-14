@@ -271,6 +271,16 @@ and not ship on it before it stabilises, since v1-only peers will be common for
 a long time. We negotiate v1 strictly and fail the `version` rung on anything
 else — a decision to revisit when v2 settles, not an oversight.
 
+### `resource_link` is baseline; embedded resources are not
+
+Initialization says every agent MUST accept `text` and `resource_link` in a
+prompt; `image`, `audio` and `resource` (embedded content) are gated by
+`promptCapabilities`. So `@` mentions go as `resource_link` blocks — a
+`file://` URI, a name and a size — with no capability check, and the agent
+reads the file through the `fs/read_text_file` we advertise. Sending the
+content inline for agents that advertise `embeddedContext` would spare them
+the read; not done yet, and it must stay behind that capability when it is.
+
 ### There is no session transfer
 
 Nothing in v1 lets one agent load another's session: `session/load` takes an

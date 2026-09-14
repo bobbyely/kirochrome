@@ -1,7 +1,7 @@
 // End-to-end against the mock agent: the behaviours that were previously only
 // verified by throwaway scripts.
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -216,6 +216,24 @@ describe("the Files pane's roots", () => {
     session.setRoot("/opt", false);
     assert.deepEqual(roots(session.eventsSince(0)), ["root_added:/opt", "root_removed:/opt"]);
     assert.deepEqual(roots(store.eventsSince(session.id, 0)), ["root_added:/opt", "root_removed:/opt"], "durable");
+    session.close();
+  });
+});
+
+describe("@ mentions", () => {
+  it("go to the agent as resource links, are recorded on the message, and a bad one is an error not a refusal", async () => {
+    const session = await sessions.open(provider, dir); // the data dir doubles as the working directory
+    await session.prompt("read @config.json and @missing.txt please", [], ["config.json", "missing.txt"]);
+    const log = session.eventsSince(0);
+    const message = log.find((e) => e.type === "user_message");
+    assert.deepEqual(message.files.map((f) => f.name), ["config.json"], "the good one is on the event");
+    assert.ok(message.files[0].size > 0);
+    assert.equal(message.text, "read @config.json and @missing.txt please", "the text is as typed");
+    const reply = log.filter((e) => e.type === "agent_text").at(-1).text;
+    // The link is the real path: on macOS /tmp is a symlink and confinement resolves it.
+    assert.equal(reply, `[files: config.json@file://${realpathSync(join(dir, "config.json"))}]`, "the agent got a resource link");
+    const error = log.find((e) => e.type === "error");
+    assert.equal(error?.error.code, "FILE_UNKNOWN", "the missing one is said, and the message still went");
     session.close();
   });
 });

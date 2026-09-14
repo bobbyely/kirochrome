@@ -107,9 +107,15 @@ So this one needs a way to degrade when it disappears, which listing did not.
 
 #### 4. `@` file mentions in the composer
 
-Type `@` to complete against the working directory and attach file contents as
-`resource_link` blocks. The completion machinery built for slash commands
-generalises to this, and `fs` is now implemented.
+**Shipped.** `@` completes against the conversation's roots — the working
+directory relatively, the added ones by name at the top level and then by
+absolute path — and a chosen file goes as a `resource_link` block, which the
+spec makes baseline. Only paths picked from the picker count: a hand-typed
+`@thing` is prose, so a stray `@` never fails a message. The server re-checks
+each against the roots and logs a visible error for one that does not
+resolve rather than refusing the message. Left: embedding the content for
+agents that advertise `embeddedContext` (PROTOCOL.md says why it must stay
+behind that capability).
 
 #### 6. Instructions of your own, across every agent
 
@@ -247,8 +253,9 @@ than a surprise. Each entry says what would go wrong if it is left.
   composer's slash commands; Kiro and Gemini need probing. If more than one
   agent offers it, adding a root could also offer "tell the agent" mapped to
   whichever command it advertised — invariant 5, branch on what was
-  advertised, never on the provider id. `@` mentions (item 4) should complete
-  across every root.
+  advertised, never on the provider id. `@` mentions complete across every
+  root now, which is the other half: a file in an added directory can be
+  handed to the agent even though the directory itself cannot.
 - **Docs the second review found behind the code.** [DESIGN.md](DESIGN.md)
   says nothing about schedules (a timer running sessions unattended) or rooms
   (a router over sessions), the two largest additions since it was written.
@@ -273,6 +280,14 @@ than a surprise. Each entry says what would go wrong if it is left.
 - Whatever the work machine turns up once Kiro is actually driving it.
 
 ### Done since the roadmap was written
+
+**`@` mentions shipped.** `mentions.ts` finds the mention under the caret and
+completes it from the Files endpoint's listing of the directory it names;
+`Composer` keeps the set of paths chosen from the picker and sends those still
+in the text as `files` on the prompt frame. `resolveMention` confines each to
+a root exactly as the pane does, and `runTurn` adds a `resource_link` per file
+beside the text block. The `user_message` event carries the files, so the
+transcript shows chips and the export a line.
 
 **Provider switching shipped.** `Session.switchProvider` replaces the agent
 under a live session in place: spawn, `initialize`, `session/new` for the new

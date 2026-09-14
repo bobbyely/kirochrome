@@ -69,6 +69,11 @@ schedule or room starts, and can open with a command like `/effort high`.
 Settings an agent exposes only as a command, like Kiro's `/effort`, sit beside
 the model picker anyway.
 
+**Point the agent at a file.** Type `@` and pick from the conversation's
+directories — the working directory, and any you added in the Files tab. The
+file goes to the agent as a resource link beside your message, which every
+ACP agent accepts, and the message shows what was attached.
+
 **Switch agents mid-conversation.** A provider picker sits first in that row.
 Choose another and the same conversation carries on with it: the new agent
 starts in the same directory and is given the transcript so far with your

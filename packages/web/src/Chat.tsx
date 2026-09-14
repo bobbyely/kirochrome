@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { handoffText, isProviderFault, latestUsage } from "@kirochrome/shared";
+import { collectRoots, handoffText, isProviderFault, latestUsage } from "@kirochrome/shared";
 import type {
   ElicitationAction,
   ElicitationField,
@@ -69,6 +69,12 @@ export function Chat({
     interrupt,
     cancel,
   } = useChat();
+
+  // The `@` picker completes against the conversation's roots. Keyed on the
+  // joined string so the array is stable between events that do not change it,
+  // and the composer does not re-render per delta.
+  const rootsKey = session ? collectRoots(session.cwd, events).join("\0") : "";
+  const roots = useMemo(() => (rootsKey ? rootsKey.split("\0") : []), [rootsKey]);
 
   // The switch divider shows the handoff on demand. Read through a ref so the
   // callback is stable and the memoized rows do not re-render on every event.
@@ -289,6 +295,7 @@ export function Chat({
             onSetAutoApprove={setAutoApprove}
             onSetConfigOption={setConfigOption}
             onSwitchProvider={switchProvider}
+            roots={roots}
             onUnqueue={unqueue}
             onEditQueued={editQueued}
             onMoveQueued={moveQueued}
@@ -349,6 +356,15 @@ const Message = memo(function Message({
             </div>
           )}
           {row.text}
+          {row.files.length > 0 && (
+            <div className="msg-files">
+              {row.files.map((f) => (
+                <code key={f.path} className="msg-file" title={f.path}>
+                  @{f.name}
+                </code>
+              ))}
+            </div>
+          )}
         </div>
       );
     case "agent":

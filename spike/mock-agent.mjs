@@ -179,6 +179,17 @@ const app = agent({ name: "mock-agent" })
       return { stopReason: "end_turn" };
     }
 
+    // Files mentioned with `@` arrive as resource links beside the text; say
+    // which, so the mentions test can see them.
+    const links = (params.prompt ?? []).filter((b) => b.type === "resource_link");
+    if (links.length > 0) {
+      await notify({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: `[files: ${links.map((l) => `${l.name}@${l.uri}`).join(", ")}]` },
+      });
+      return { stopReason: "end_turn" };
+    }
+
     // A handoff from another provider: say what arrived, so the switch test
     // can see the transcript came through in front of the person's message.
     const text0 = params.prompt?.[0]?.text ?? "";
