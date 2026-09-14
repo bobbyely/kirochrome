@@ -5,6 +5,7 @@ import type {
   ElicitationField,
   ElicitationValue,
   SessionUsage,
+  StartOptions,
 } from "@kirochrome/shared";
 import { Composer } from "./Composer.js";
 import { KSpinner } from "./KSpinner.js";
@@ -23,6 +24,7 @@ const MORE_ROWS = 60;
 export function Chat({
   providerId,
   cwd,
+  start,
   sessionId,
   adopt,
   onStarted,
@@ -31,6 +33,7 @@ export function Chat({
 }: {
   providerId?: string;
   cwd?: string;
+  start?: StartOptions | undefined;
   sessionId?: string;
   /** A conversation the agent already had, being taken over for the first time. */
   adopt?: { agentSessionId: string; cwd: string; title: string | null };
@@ -82,8 +85,8 @@ export function Chat({
     attached.current = target;
     if (sessionId) attachSession(sessionId);
     else if (providerId && adopt) adoptSession(providerId, adopt);
-    else if (providerId) openSession(providerId, cwd);
-  }, [connected, openSession, adoptSession, attachSession, providerId, cwd, sessionId, adopt]);
+    else if (providerId) openSession(providerId, cwd, start);
+  }, [connected, openSession, adoptSession, attachSession, providerId, cwd, start, sessionId, adopt]);
 
   const allRows = useMemo(() => buildRows(events), [events]);
   const [windowSize, setWindowSize] = useState(INITIAL_ROWS);

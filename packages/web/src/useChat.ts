@@ -9,6 +9,7 @@ import type {
   SearchHit,
   ServerMessage,
   SessionSummary,
+  StartOptions,
 } from "@kirochrome/shared";
 
 /**
@@ -126,7 +127,8 @@ export function useChat() {
   }, [connect]);
 
   const openSession = useCallback(
-    (providerId: string, cwd?: string) => send({ type: "open", providerId, ...(cwd ? { cwd } : {}) }),
+    (providerId: string, cwd?: string, start?: StartOptions) =>
+      send({ type: "open", providerId, ...(cwd ? { cwd } : {}), ...(start ? { start } : {}) }),
     [send],
   );
 

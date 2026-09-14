@@ -11,6 +11,7 @@ import {
 } from "@kirochrome/shared";
 import { resolveProvider, spawnAgent, type AgentProcess } from "./agentProcess.js";
 import { defaultCwd } from "./session.js";
+import { normaliseConfigOptions } from "./configOptions.js";
 import { withTimeout } from "./timeout.js";
 
 /** JSON-RPC code an ACP agent returns when it needs the client to authenticate. */
@@ -175,6 +176,7 @@ export async function checkProvider(provider: ProviderConfig): Promise<ProviderC
         authMethods,
         configOptions: response["configOptions"] ?? null,
         modes: session.modes ?? null,
+        options: normaliseConfigOptions({ ...response, ...(session.modes ? { modes: session.modes } : {}) }),
       });
     });
   } catch (err) {

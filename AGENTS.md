@@ -130,7 +130,8 @@ message box and everything that changes per keystroke — draft, images,
 completion, the queue and the config pickers — kept out of `Chat` so typing does
 not re-render the transcript; `timeline.ts` folds events into typed rows;
 `useChat.ts` is the socket and resume-by-seq; `Setup.tsx` is the ladder UI;
-`Schedules.tsx` is the schedule list, form and run history; `changes.ts` folds
+`Schedules.tsx` is the schedule list, form and run history; `StartPickers.tsx`
+is the model/mode/opening-message choice the forms share; `changes.ts` folds
 the log's reported diffs per file and `ChangesPane.tsx` is the drawer that
 shows them, with `DiffView.tsx` shared with the tool cards; then
 `Sidebar`, `NewChat`, `commands`, `diff`, `images`, `theme`, `useShortcuts`,

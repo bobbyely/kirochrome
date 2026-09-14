@@ -12,9 +12,12 @@ bug from the next person, who has no reason to know.
 
 ## Protocol
 
-- **Models are only known after `session/new`.** The composer's pickers cannot
-  be populated before a session exists, which is why a session is created as
-  soon as a provider is chosen. Do not "fix" this by hardcoding a list.
+- **Models are only known after `session/new`.** So the setup check, which
+  runs one, keeps what the agent advertised (`ProviderCheckResult.options`,
+  normalised) and the New chat, Schedule and Room forms offer pickers from
+  that. It is a cache: it can lag the agent, so a value it no longer offers
+  is skipped when the session starts, never refused up front. Do not "fix"
+  any of this by hardcoding a list.
 - **Agents emit both config dialects at once**, sometimes with different
   settings in each. Merge `configOptions` with the legacy `models`/`modes`
   rather than letting one hide the other.

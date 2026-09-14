@@ -16,6 +16,7 @@ import {
   runSchedule,
   updateSchedule,
 } from "./api.js";
+import { chosen, StartPickers } from "./StartPickers.js";
 import { useChat } from "./useChat.js";
 
 const EMPTY: ScheduleInput = {
@@ -28,6 +29,7 @@ const EMPTY: ScheduleInput = {
   weekdaysOnly: false,
   keepRuns: SCHEDULE_DEFAULT_KEEP,
   autoApprove: false,
+  start: {},
 };
 
 /**
@@ -261,9 +263,10 @@ function ScheduleForm({
   const set = <K extends keyof ScheduleInput>(key: K, value: ScheduleInput[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  const provider = providers.find((p) => p.id === form.providerId);
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    onSave(form);
+    onSave({ ...form, start: chosen(provider, form.start) });
   };
 
   return (
@@ -275,7 +278,10 @@ function ScheduleForm({
 
       <label className="field">
         <span className="field-label">Provider</span>
-        <select value={form.providerId} onChange={(e) => set("providerId", e.target.value)}>
+        <select
+          value={form.providerId}
+          onChange={(e) => setForm((f) => ({ ...f, providerId: e.target.value, start: {} }))}
+        >
           {providers.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -283,6 +289,10 @@ function ScheduleForm({
           ))}
         </select>
       </label>
+      <div className="field">
+        <span className="field-label">Settings for each run</span>
+        <StartPickers provider={provider} value={form.start} onChange={(start) => set("start", start)} />
+      </div>
 
       <label className="field">
         <span className="field-label">Working directory</span>

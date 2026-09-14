@@ -15,6 +15,7 @@ import {
   type ElicitationValue,
   type ProviderConfig,
   type SlashCommand,
+  type StartOptions,
   type SessionRecord,
   type SessionSummary,
 } from "@kirochrome/shared";
@@ -177,6 +178,7 @@ export class Session {
     provider: ProviderConfig,
     store: Store,
     cwdOverride?: string,
+    start: StartOptions = {},
   ): Promise<Session> {
     // Explicit choice wins, then the provider's pin, then the launch directory.
     const cwd = cwdOverride ?? provider.cwd ?? defaultCwd();
@@ -184,7 +186,12 @@ export class Session {
     // Persist only once the agent is actually up. Recording it first left a
     // phantom conversation in the sidebar whenever a provider failed to start.
     await session.connectOrClose();
+    await session.applyValues(start.configValues ?? {});
     session.persistMeta();
+    // The opening message is an ordinary first turn — a slash command for a
+    // setting the agent exposes no other way — and is in the transcript like
+    // anything else sent. Not awaited: anything prompted next queues behind it.
+    if (start.opening?.trim()) void session.prompt(start.opening.trim());
     return session;
   }
 
@@ -598,9 +605,17 @@ export class Session {
   private async applyDefaults(): Promise<void> {
     const defaults = this.store.providerDefaults(this.provider.id);
     if (defaults.size === 0) return;
+    await this.applyValues(Object.fromEntries(defaults));
+  }
 
+  /**
+   * Sets advertised options to the given values, skipping any the agent no
+   * longer offers or already has. Chosen up front from the setup check's
+   * list, which can lag what the agent offers today — hence the skipping.
+   */
+  private async applyValues(values: Record<string, string | boolean>): Promise<void> {
     for (const option of this.configOptions) {
-      const wanted = defaults.get(option.id);
+      const wanted = values[option.id];
       if (wanted === undefined || wanted === option.currentValue) continue;
       if (option.type === "select" && !option.options?.some((o) => o.value === wanted)) continue;
       await this.setConfigOption(option.id, wanted, { remember: false });

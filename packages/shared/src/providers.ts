@@ -1,4 +1,5 @@
 import type { CheckStage, KcError } from "./errors.js";
+import type { ConfigOption } from "./events.js";
 
 /**
  * A provider is just "which binary to spawn". Everything else about an agent —
@@ -63,6 +64,11 @@ export interface ProviderCheckResult {
   /** What the composer's pickers would render, in whichever dialect the agent speaks. */
   configOptions?: unknown;
   modes?: unknown;
+  /**
+   * The same, normalised: what a new session of this provider will offer, so
+   * a model or mode can be chosen before the session exists.
+   */
+  options?: ConfigOption[];
   /** Tail of the agent's stderr. The highest-value debugging artefact we have. */
   stderrTail?: string;
   checkedAt: number;

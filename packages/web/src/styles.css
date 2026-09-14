@@ -1136,3 +1136,20 @@ kbd {
   font-size: var(--fs-2xs);
   font-weight: 700;
 }
+
+/* ---------- settings chosen before a session exists ---------- */
+.start-block { margin-top: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); align-items: flex-start; }
+.start-pickers { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.start-picker { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 160px; }
+.start-picker-label { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.start-picker select, .start-picker input[type="text"], .start-picker input:not([type]) {
+  font-size: var(--fs-sm);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.start-pickers.compact { gap: var(--sp-2); }
+.start-pickers.compact .start-picker { min-width: 120px; }
+.provider-choice.chosen { border-color: var(--accent); box-shadow: var(--glow); }

@@ -1,3 +1,4 @@
+import type { StartOptions } from "@kirochrome/shared";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Chat } from "./Chat.js";
 import { NewChat, type AdoptTarget } from "./NewChat.js";
@@ -16,6 +17,8 @@ type View =
       name: "chat";
       providerId?: string;
       cwd?: string;
+      /** Settings and an opening message for a session being started. */
+      start?: StartOptions;
       sessionId?: string;
       /** Set when taking over a conversation the agent already had. */
       adopt?: AdoptTarget;
@@ -96,7 +99,7 @@ export function App() {
 
         {view.name === "new" && (
           <NewChat
-            onStart={(providerId, cwd) => setView({ name: "chat", providerId, cwd })}
+            onStart={(providerId, cwd, start) => setView({ name: "chat", providerId, cwd, start })}
             onAdopt={(providerId, adopt) => setView({ name: "chat", providerId, adopt })}
             onOpenSession={openSession}
             onNeedsSetup={() => setView({ name: "setup" })}
@@ -110,6 +113,7 @@ export function App() {
           <Chat
             providerId={view.providerId}
             cwd={view.cwd}
+            start={view.start}
             sessionId={view.sessionId}
             adopt={view.adopt}
             onStarted={refreshList}

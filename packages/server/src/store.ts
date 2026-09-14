@@ -8,6 +8,7 @@ import type {
   ScheduleRun,
   SearchHit,
   SessionRecord,
+  StartOptions,
 } from "@kirochrome/shared";
 import { dataDir, dbPath } from "./paths.js";
 
@@ -105,6 +106,7 @@ export class Store {
         weekdays_only INTEGER NOT NULL DEFAULT 0,
         keep_runs     INTEGER NOT NULL DEFAULT 20,
         auto_approve  INTEGER NOT NULL DEFAULT 0,
+        start         TEXT NOT NULL DEFAULT '{}',  -- StartOptions as JSON
         status        TEXT NOT NULL,
         created_at    INTEGER NOT NULL,
         updated_at    INTEGER NOT NULL
@@ -206,6 +208,9 @@ export class Store {
         ALTER TABLE schedules ADD COLUMN keep_runs INTEGER NOT NULL DEFAULT 20;
       `);
     }
+    if (!scheduleColumns.includes("start")) {
+      this.db.exec(`ALTER TABLE schedules ADD COLUMN start TEXT NOT NULL DEFAULT '{}'`);
+    }
     const runColumns = (this.db.prepare(`PRAGMA table_info(schedule_runs)`).all() as Array<{ name: string }>).map(
       (c) => c.name,
     );
@@ -288,13 +293,13 @@ export class Store {
   upsertSchedule(schedule: Schedule): void {
     this.db
       .prepare(
-        `INSERT INTO schedules (id, name, provider_id, cwd, prompt, every_minutes, at, weekdays_only, keep_runs, auto_approve, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO schedules (id, name, provider_id, cwd, prompt, every_minutes, at, weekdays_only, keep_runs, auto_approve, start, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            name = excluded.name, provider_id = excluded.provider_id, cwd = excluded.cwd,
            prompt = excluded.prompt, every_minutes = excluded.every_minutes, at = excluded.at,
            weekdays_only = excluded.weekdays_only, keep_runs = excluded.keep_runs,
-           auto_approve = excluded.auto_approve, status = excluded.status,
+           auto_approve = excluded.auto_approve, start = excluded.start, status = excluded.status,
            updated_at = excluded.updated_at`,
       )
       .run(
@@ -308,6 +313,7 @@ export class Store {
         schedule.weekdaysOnly ? 1 : 0,
         schedule.keepRuns,
         schedule.autoApprove ? 1 : 0,
+        JSON.stringify(schedule.start),
         schedule.status,
         schedule.createdAt,
         schedule.updatedAt,
@@ -561,6 +567,7 @@ function toSchedule(row: Record<string, string | number | null>): Schedule {
     weekdaysOnly: Boolean(row["weekdays_only"]),
     keepRuns: Number(row["keep_runs"]),
     autoApprove: Boolean(row["auto_approve"]),
+    start: JSON.parse(String(row["start"] ?? "{}")) as StartOptions,
     status: String(row["status"]) as Schedule["status"],
     createdAt: Number(row["created_at"]),
     updatedAt: Number(row["updated_at"]),
