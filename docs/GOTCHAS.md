@@ -174,6 +174,13 @@ All of these were real races, found the hard way.
 
 - **`white-space: pre-wrap` must not reach markdown rows.** It renders the
   newlines between block elements literally, double-spacing every paragraph.
+- **Vite must not be allowed to drift ports.** The server trusts exactly
+  `5173` in dev mode. Vite's default when that port is busy — a dev server left
+  running in another worktree, say — is to start on `5174` and carry on, so
+  the page loads fine and then every request is a 403, while the runner still
+  prints 5173. `strictPort: true` makes it fail to start instead, which is the
+  honest outcome. If you do see `ORIGIN_REJECTED`, the error names the origin
+  it refused and the ones it would take; compare them before theorising.
 - **The WebSocket lives at `/ws`.** At `/` it collides with Vite's hot-reload
   socket, and dev mode silently never connects.
 - **State that changes per keystroke does not belong in the transcript's

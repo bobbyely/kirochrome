@@ -4,7 +4,7 @@
 // which binary we spawn — so these tests are about who gets to ask.
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { originAllowed } from "../dist/http.js";
+import { originAllowed, originRejection } from "../dist/http.js";
 
 const PORT = 4711;
 const from = (origin) => originAllowed({ headers: origin === null ? {} : { origin } }, PORT);
@@ -40,5 +40,17 @@ describe("the Origin allowlist", () => {
     assert.equal(from("http://127.0.0.1:5173"), true);
     // Still only that one port.
     assert.equal(from("http://localhost:5174"), false);
+  });
+
+  it("says which origin it rejected and what it would have accepted", () => {
+    // Vite drifts to 5174 when 5173 is busy, and the page then fails on every
+    // request. A bare "not allowed" gave nothing to compare against.
+    process.env.KIROCHROME_DEV = "1";
+    const error = originRejection({ headers: { origin: "http://127.0.0.1:5174" } }, PORT);
+    assert.equal(error.code, "ORIGIN_REJECTED");
+    assert.match(error.message, /5174/);
+    assert.ok(error.detail.allowed.includes("http://127.0.0.1:5173"));
+    assert.equal(error.detail.devMode, true);
+    assert.match(error.remediation, /5173/);
   });
 });

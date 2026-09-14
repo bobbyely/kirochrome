@@ -37,12 +37,29 @@ const VITE_PORT = 5173;
 export function originAllowed(req: IncomingMessage, port: number): boolean {
   const origin = req.headers.origin;
   if (origin === undefined) return true; // same-origin fetch or curl
+  return allowedOrigins(port).has(origin);
+}
+
+function allowedOrigins(port: number): Set<string> {
   const allowed = new Set([`http://localhost:${port}`, `http://127.0.0.1:${port}`]);
   if (process.env.KIROCHROME_DEV === "1") {
     allowed.add(`http://localhost:${VITE_PORT}`);
     allowed.add(`http://127.0.0.1:${VITE_PORT}`);
   }
-  return allowed.has(origin);
+  return allowed;
+}
+
+/**
+ * The error a rejected request gets. It names the origin and what would have
+ * been accepted: "Origin not allowed" on its own left someone staring at a
+ * working server and a working page that would not talk to each other.
+ */
+export function originRejection(req: IncomingMessage, port: number): KcError {
+  const origin = req.headers.origin ?? "(none)";
+  const allowed = [...allowedOrigins(port)];
+  return kcError("ORIGIN_REJECTED", `Requests from ${origin} are not accepted.`, {
+    detail: { origin, allowed, devMode: process.env.KIROCHROME_DEV === "1" },
+  });
 }
 
 const MIME: Record<string, string> = {
@@ -63,7 +80,7 @@ export function startServer(port: number, webRoot: string | null): void {
 
   const server = createServer(async (req, res) => {
     if (!originAllowed(req, port)) {
-      return sendError(res, 403, kcError("INTERNAL", "Origin not allowed."));
+      return sendError(res, 403, originRejection(req, port));
     }
 
     const url = new URL(req.url ?? "/", `http://${HOST}:${port}`);
