@@ -162,6 +162,13 @@ Before you call anything finished:
 
    Docs drift silently and are found much later. `README.md` claimed
    "implementation not started" through six shipped phases.
+
+   **Before `gh pr create`, re-read `README.md` against the change.** It is
+   the landing page, so the test is a reader's: if someone would choose
+   KiroChrome for what you added, it needs a paragraph; if you changed how
+   something it describes behaves, fix that sentence; if you removed a
+   feature, remove its claim. Mechanics, flags and setup do not belong there —
+   `docs/DEVELOPMENT.md` does.
 3. **A new failure path needs an error code and a remediation.** A new `throw`
    without one is incomplete work.
 4. **A fixed bug needs its test and its gotcha.** Add the case to the suite and
