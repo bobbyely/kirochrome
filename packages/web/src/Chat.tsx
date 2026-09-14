@@ -145,123 +145,124 @@ export function Chat({
   const readOnly = session !== null && !session.live;
 
   return (
-    <div className="chat">
-      <header className="chat-head">
-        {onBack && (
-          <button className="head-action" onClick={onBack} title="Back to the schedule's runs">
-            ← Runs
-          </button>
-        )}
-        <div className="chat-title">
-          <strong>{session?.title ?? session?.providerName ?? "Conversation"}</strong>
-          {session && <code className="cmd">{session.cwd}</code>}
-        </div>
-        {session && (
-          // A plain link: the server sets content-disposition, so the browser
-          // handles the download without any client-side blob juggling.
-          <a
-            className="head-action"
-            href={`/api/sessions/${encodeURIComponent(session.id)}/export`}
-            download
-            title="Export this conversation as Markdown"
-          >
-            Export
-          </a>
-        )}
-        {session && (
-          <button
-            className={`head-action ${changesOpen ? "active" : ""}`}
-            onClick={() => setChangesOpen((v) => !v)}
-            title="Files the agent has changed this conversation"
-          >
-            Changes
-          </button>
-        )}
-        {/* Live sessions always show it; a restored one shows it whenever its
-            log holds usage, since that history is still meaningful. */}
-        {(session?.live || usage) && <ContextMeter usage={usage} />}
-        <span className={`pill ${connected ? "pill-ok" : "pill-stale"}`}>
-          {connected ? "Connected" : "Reconnecting…"}
-        </span>
-      </header>
-
-      <div className="transcript" ref={transcript} onScroll={onScroll}>
-        {/* Inner wrapper caps line length; alignment happens inside it, so
-            user messages can still sit right while the column stays centred. */}
-        <div className="transcript-inner">
-          {!session && <p className="muted">{sessionId ? "Loading conversation…" : "Starting agent…"}</p>}
-          {hidden > 0 && (
-            <button className="show-earlier" onClick={() => setWindowSize((n) => n + MORE_ROWS)}>
-              Show earlier messages ({hidden} hidden)
+    <div className="chat-row">
+      <div className="chat">
+        <header className="chat-head">
+          {onBack && (
+            <button className="head-action" onClick={onBack} title="Back to the schedule's runs">
+              ← Runs
             </button>
           )}
-          {rows.map((row) => (
-            <Message
-              key={row.seq}
-              row={row}
-              onPermission={answerPermission}
-              onElicitation={answerElicitation}
-            />
-          ))}
-          {busy && (
-            <div className="thinking">
-              <KSpinner label={session?.awaitingInput ? "Waiting for you" : "Working"} />
-            </div>
+          <div className="chat-title">
+            <strong>{session?.title ?? session?.providerName ?? "Conversation"}</strong>
+            {session && <code className="cmd">{session.cwd}</code>}
+          </div>
+          {session && (
+            // A plain link: the server sets content-disposition, so the browser
+            // handles the download without any client-side blob juggling.
+            <a
+              className="head-action"
+              href={`/api/sessions/${encodeURIComponent(session.id)}/export`}
+              download
+              title="Export this conversation as Markdown"
+            >
+              Export
+            </a>
           )}
-          <div ref={bottom} />
-        </div>
-      </div>
+          {session && (
+            <button
+              className={`head-action ${changesOpen ? "active" : ""}`}
+              onClick={() => setChangesOpen((v) => !v)}
+              title="Files the agent has changed this conversation"
+            >
+              Changes
+            </button>
+          )}
+          {/* Live sessions always show it; a restored one shows it whenever its
+              log holds usage, since that history is still meaningful. */}
+          {(session?.live || usage) && <ContextMeter usage={usage} />}
+          <span className={`pill ${connected ? "pill-ok" : "pill-stale"}`}>
+            {connected ? "Connected" : "Reconnecting…"}
+          </span>
+        </header>
 
+        <div className="transcript" ref={transcript} onScroll={onScroll}>
+          {/* Inner wrapper caps line length; alignment happens inside it, so
+              user messages can still sit right while the column stays centred. */}
+          <div className="transcript-inner">
+            {!session && <p className="muted">{sessionId ? "Loading conversation…" : "Starting agent…"}</p>}
+            {hidden > 0 && (
+              <button className="show-earlier" onClick={() => setWindowSize((n) => n + MORE_ROWS)}>
+                Show earlier messages ({hidden} hidden)
+              </button>
+            )}
+            {rows.map((row) => (
+              <Message
+                key={row.seq}
+                row={row}
+                onPermission={answerPermission}
+                onElicitation={answerElicitation}
+              />
+            ))}
+            {busy && (
+              <div className="thinking">
+                <KSpinner label={session?.awaitingInput ? "Waiting for you" : "Working"} />
+              </div>
+            )}
+            <div ref={bottom} />
+          </div>
+        </div>
+
+        {!following && (
+          <button className="jump-latest" onClick={jumpToLatest}>
+            Jump to latest ↓
+          </button>
+        )}
+
+        {error && (
+          <div className="banner">
+            <div className="banner-body">
+              <strong>{error.code}</strong> {error.message}
+              {error.remediation && <p className="remediation">{error.remediation}</p>}
+            </div>
+            {/* A provider fault is not this conversation's problem to solve. */}
+            {isProviderFault(error.code) && onOpenSetup && (
+              <button onClick={onOpenSetup}>Go to Setup</button>
+            )}
+          </div>
+        )}
+
+        {readOnly ? (
+          <div className="composer readonly">
+            <p className="muted">
+              This conversation was restored from disk. Re-attach an agent to continue it.
+            </p>
+            <button className="primary" onClick={() => sessionId && resumeSession(sessionId)}>
+              Resume conversation
+            </button>
+          </div>
+        ) : (
+          <Composer
+            // Keyed so a half-typed message and its pasted images do not follow
+            // the reader into the next conversation.
+            key={session?.id ?? "new"}
+            session={session}
+            busy={busy}
+            commandOptions={commandOptions}
+            requestCommandOptions={requestCommandOptions}
+            onPrompt={prompt}
+            onInterrupt={interrupt}
+            onCancel={cancel}
+            onSetAutoApprove={setAutoApprove}
+            onSetConfigOption={setConfigOption}
+            onUnqueue={unqueue}
+            onEditQueued={editQueued}
+            onMoveQueued={moveQueued}
+          />
+        )}
+      </div>
       {changesOpen && session && (
         <ChangesPane events={events} cwd={session.cwd} onClose={() => setChangesOpen(false)} />
-      )}
-
-      {!following && (
-        <button className="jump-latest" onClick={jumpToLatest}>
-          Jump to latest ↓
-        </button>
-      )}
-
-      {error && (
-        <div className="banner">
-          <div className="banner-body">
-            <strong>{error.code}</strong> {error.message}
-            {error.remediation && <p className="remediation">{error.remediation}</p>}
-          </div>
-          {/* A provider fault is not this conversation's problem to solve. */}
-          {isProviderFault(error.code) && onOpenSetup && (
-            <button onClick={onOpenSetup}>Go to Setup</button>
-          )}
-        </div>
-      )}
-
-      {readOnly ? (
-        <div className="composer readonly">
-          <p className="muted">
-            This conversation was restored from disk. Re-attach an agent to continue it.
-          </p>
-          <button className="primary" onClick={() => sessionId && resumeSession(sessionId)}>
-            Resume conversation
-          </button>
-        </div>
-      ) : (
-        <Composer
-          // Keyed so a half-typed message and its pasted images do not follow
-          // the reader into the next conversation.
-          key={session?.id ?? "new"}
-          session={session}
-          busy={busy}
-          commandOptions={commandOptions}
-          requestCommandOptions={requestCommandOptions}
-          onPrompt={prompt}
-          onInterrupt={interrupt}
-          onCancel={cancel}
-          onSetAutoApprove={setAutoApprove}
-          onSetConfigOption={setConfigOption}
-          onUnqueue={unqueue}
-          onEditQueued={editQueued}
-          onMoveQueued={moveQueued}
-        />
       )}
     </div>
   );
