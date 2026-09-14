@@ -17,6 +17,8 @@ export interface FileChange {
   removed: number | null;
   /** The seq of the last edit, for "most recent first". */
   lastSeq: number;
+  /** Created this conversation (nothing before the first edit), or deleted (nothing after the last). */
+  status: "new" | "deleted" | "modified";
 }
 
 /**
@@ -30,6 +32,16 @@ export interface FileChange {
  * the Files tab's job, not this one's.
  */
 export function collectChanges(events: readonly KcEvent[]): FileChange[] {
+  return collect(events);
+}
+
+/** Agents report absolute paths; inside one conversation the working directory is noise. */
+export function relativeTo(cwd: string, path: string): string {
+  const root = cwd.endsWith("/") ? cwd : `${cwd}/`;
+  return path.startsWith(root) ? path.slice(root.length) : path;
+}
+
+function collect(events: readonly KcEvent[]): FileChange[] {
   // Same fold as the timeline: later updates to a call supersede earlier ones.
   const calls = new Map<string, { seq: number; details: unknown[] }>();
   for (const event of events) {
@@ -54,13 +66,23 @@ export function collectChanges(events: readonly KcEvent[]): FileChange[] {
         existing.edits += 1;
         existing.lastSeq = call.seq;
       } else {
-        byPath.set(diff.path, { path: diff.path, net: diff, edits: 1, added: null, removed: null, lastSeq: call.seq });
+        byPath.set(diff.path, {
+          path: diff.path,
+          net: diff,
+          edits: 1,
+          added: null,
+          removed: null,
+          lastSeq: call.seq,
+          status: "modified",
+        });
       }
     }
   }
 
   const changes = [...byPath.values()];
   for (const change of changes) {
+    if (change.net.oldText === "") change.status = "new";
+    else if (change.net.newText === "") change.status = "deleted";
     const lines = lineDiff(change.net.oldText, change.net.newText);
     if (!lines) continue;
     const { added, removed } = countChanges(lines);

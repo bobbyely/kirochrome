@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { KcEvent } from "@kirochrome/shared";
-import { collectChanges, type FileChange } from "./changes.js";
+import { collectChanges, relativeTo, type FileChange } from "./changes.js";
 import { DiffView } from "./DiffView.js";
 
 /**
@@ -10,7 +10,7 @@ import { DiffView } from "./DiffView.js";
  * that did it. Click a file for its net diff: the file before the first edit
  * against after the last.
  */
-export function ChangesPane({ events, onClose }: { events: KcEvent[]; onClose: () => void }) {
+export function ChangesPane({ events, cwd, onClose }: { events: KcEvent[]; cwd: string; onClose: () => void }) {
   const changes = useMemo(() => collectChanges(events), [events]);
   const [openPath, setOpenPath] = useState<string | null>(null);
   const pane = useRef<HTMLDivElement>(null);
@@ -60,7 +60,7 @@ export function ChangesPane({ events, onClose }: { events: KcEvent[]; onClose: (
               className={`changes-file ${change.path === openPath ? "active" : ""}`}
               onClick={() => setOpenPath(change.path === openPath ? null : change.path)}
             >
-              <code className="changes-path">{change.path}</code>
+              <code className="changes-path">{relativeTo(cwd, change.path)}</code>
               <Stat change={change} />
             </button>
           </li>
@@ -69,7 +69,14 @@ export function ChangesPane({ events, onClose }: { events: KcEvent[]; onClose: (
 
       {open && (
         <div className="changes-diff">
-          <DiffView diff={open.net} />
+          {open.net.oldText === "" && open.net.newText === "" ? (
+            <p className="muted">
+              <code>{relativeTo(cwd, open.path)}</code> was created empty, or the agent reported the edit without
+              its content.
+            </p>
+          ) : (
+            <DiffView diff={{ ...open.net, path: relativeTo(cwd, open.path) }} />
+          )}
         </div>
       )}
     </aside>
@@ -80,9 +87,10 @@ function Stat({ change }: { change: FileChange }) {
   return (
     <span className="changes-stat">
       {change.edits > 1 && <span className="muted">{change.edits}× </span>}
+      {change.status !== "modified" && <span className={`changes-status ${change.status}`}>{change.status} </span>}
       {change.added === null ? (
         <span className="muted">large</span>
-      ) : (
+      ) : change.added === 0 && change.removed === 0 ? null : (
         <>
           <span className="stat-add">+{change.added}</span> <span className="stat-del">−{change.removed}</span>
         </>

@@ -1097,7 +1097,10 @@ kbd {
 }
 .changes-file:hover { background: var(--raised); border: none; border-left: 2px solid transparent; }
 .changes-file.active { background: var(--raised); border-left-color: var(--accent); }
-.changes-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font-size: var(--fs-xs); }
+.changes-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); }
+.changes-status { text-transform: uppercase; letter-spacing: 0.08em; }
+.changes-status.new { color: var(--ok); }
+.changes-status.deleted { color: var(--fail); }
 .changes-stat { flex-shrink: 0; font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
 .changes-diff { flex: 1; overflow: auto; padding: var(--sp-3); }
 .stat-add { color: var(--ok); }
