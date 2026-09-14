@@ -101,6 +101,11 @@ All of these were real races, found the hard way.
   awaits a handshake, so two calls arriving in that window each built a Session
   for the same conversation — both appending from the same seq, and each with
   its own agent process.
+- **Nothing may `await` between "the person pressed Enter" and the queue
+  push.** Resolving `@` mentions before enqueueing made `prompt()` async at
+  the front, so `summary().queued` was empty right after a call and two
+  prompts could land in the queue in the wrong order. The entry is pushed at
+  once with the resolution as a promise, awaited when the drain reaches it.
 - **"Nothing sent since" must be decided before this message is appended.**
   The handoff owed after a provider switch is found by scanning back from the
   end of the log for a `provider_switched` with no `user_message` after it.

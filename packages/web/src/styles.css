@@ -543,6 +543,8 @@ kbd {
 .msg-error { align-self: flex-start; max-width: 100%; background: var(--fail-bg); color: var(--fail); border: 1px solid color-mix(in srgb, var(--fail) 40%, transparent); }
 .msg-images { display: flex; gap: var(--sp-1); flex-wrap: wrap; margin-bottom: var(--sp-1); }
 .msg-images img { max-width: 220px; border-radius: var(--r-sm); display: block; }
+.msg-files { display: flex; gap: var(--sp-1); flex-wrap: wrap; margin-top: var(--sp-1); }
+.msg-file { font-size: var(--fs-2xs); padding: 1px var(--sp-1); border-radius: var(--r-sm); background: var(--raised); }
 
 .turn-divider { width: 100%; border: none; border-top: 1px solid var(--border); margin: var(--sp-1) 0; opacity: 0.6; }
 .thinking { align-self: flex-start; }

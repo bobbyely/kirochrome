@@ -266,26 +266,28 @@ export function useChat() {
   );
 
   const prompt = useCallback(
-    (text: string, images: Array<{ mime: string; data: string }> = []) => {
+    (text: string, images: Array<{ mime: string; data: string }> = [], files: string[] = []) => {
       if (!sessionId.current) return;
       send({
         type: "prompt",
         sessionId: sessionId.current,
         text,
         ...(images.length > 0 ? { images } : {}),
+        ...(files.length > 0 ? { files } : {}),
       });
     },
     [send],
   );
 
   const interrupt = useCallback(
-    (text: string, images: Array<{ mime: string; data: string }> = []) => {
+    (text: string, images: Array<{ mime: string; data: string }> = [], files: string[] = []) => {
       if (!sessionId.current) return;
       send({
         type: "interrupt",
         sessionId: sessionId.current,
         text,
         ...(images.length > 0 ? { images } : {}),
+        ...(files.length > 0 ? { files } : {}),
       });
     },
     [send],

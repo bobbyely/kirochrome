@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { open, readdir, realpath, stat } from "node:fs/promises";
-import { extname, isAbsolute, join, resolve, sep } from "node:path";
+import { basename, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   causeOf,
   FILE_TEXT_LIMIT,
@@ -8,6 +8,7 @@ import {
   kcError,
   type FileContent,
   type FileEntry,
+  type FileMention,
   type FilesResponse,
   type KcError,
 } from "@kirochrome/shared";
@@ -199,3 +200,29 @@ const notFound = (path: string, err: unknown): KcError =>
  */
 const isOurs = (err: unknown): err is KcError =>
   typeof err === "object" && err !== null && "code" in err && (KC_ERROR_CODES as readonly unknown[]).includes(err.code);
+
+/**
+ * An `@` mention as typed — relative to the working directory, or absolute —
+ * resolved to a file inside one of the roots. The same confinement as the
+ * pane: a mention is the browser naming a path, and the agent is then told
+ * to read it.
+ */
+export async function resolveMention(roots: string[], cwd: string, typed: string): Promise<FileMention> {
+  const trimmed = typed.trim();
+  if (!trimmed) throw kcError("FILE_INVALID", "An empty mention.");
+  const root = isAbsolute(trimmed)
+    ? roots.find((r) => trimmed === r || trimmed.startsWith(r + sep))
+    : cwd;
+  if (!root) throw kcError("FILE_INVALID", `${trimmed} is not inside any of this conversation's directories.`);
+  const path = isAbsolute(trimmed) ? relative(root, trimmed) : trimmed;
+  const file = await confine(roots, root, path);
+  let size: number;
+  try {
+    const s = await stat(file);
+    if (!s.isFile()) throw kcError("FILE_INVALID", `${trimmed} is not a file.`);
+    size = s.size;
+  } catch (err) {
+    throw notFound(trimmed, err);
+  }
+  return { path: file, name: basename(file), size };
+}

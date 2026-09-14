@@ -5,6 +5,7 @@ import {
   causeOf,
   collectRoots,
   handoffText,
+  type FileMention,
   withHandoff,
   type Handoff,
   isKcError,
@@ -26,6 +27,8 @@ import {
 import { resolveProvider, spawnAgent, type AgentProcess } from "./agentProcess.js";
 import { normaliseConfigOptions } from "./configOptions.js";
 import { coerceContent, toFields } from "./elicitation.js";
+import { pathToFileURL } from "node:url";
+import { resolveMention } from "./files.js";
 import { readTextFile, writeTextFile } from "./fs.js";
 import type { Store } from "./store.js";
 import { TerminalRegistry } from "./terminals.js";
@@ -54,6 +57,8 @@ export const TURN_CLOSED = "closed";
 interface QueueEntry {
   text: string;
   attachments: Attachment[];
+  /** Resolved on the way out, not the way in: an `await` before the push let two prompts reorder. */
+  files: Promise<FileMention[]>;
   promise: Promise<void>;
   resolve: () => void;
 }
@@ -521,11 +526,11 @@ export class Session {
    * A running turn never blocks the composer: further messages join the queue
    * and are sent in order as each turn finishes.
    */
-  async prompt(text: string, images: Array<{ mime: string; data: string }> = []): Promise<void> {
+  async prompt(text: string, images: Array<{ mime: string; data: string }> = [], files: string[] = []): Promise<void> {
     // Resolves when *this* message's turn ends, not when the queue happens to
     // be idle. Returning early while busy let a scheduled run record success
     // having done nothing, and a room read another turn's text as the reply.
-    const entry: QueueEntry = { text, attachments: this.storeImages(images), ...deferred() };
+    const entry: QueueEntry = { text, attachments: this.storeImages(images), files: this.resolveFiles(files), ...deferred() };
     this.queue.push(entry);
     this.notifyState();
     void this.drain();
@@ -538,14 +543,33 @@ export class Session {
    * it picks this up next. Not steering — ACP v1 cannot inject into a running
    * turn, so whatever the agent was doing is abandoned, and the log says so.
    */
-  async interrupt(text: string, images: Array<{ mime: string; data: string }> = []): Promise<void> {
-    if (!this.busy) return this.prompt(text, images);
-    const entry: QueueEntry = { text, attachments: this.storeImages(images), ...deferred() };
+  async interrupt(text: string, images: Array<{ mime: string; data: string }> = [], files: string[] = []): Promise<void> {
+    if (!this.busy) return this.prompt(text, images, files);
+    const entry: QueueEntry = { text, attachments: this.storeImages(images), files: this.resolveFiles(files), ...deferred() };
     this.queue.unshift(entry);
     this.append({ type: "interrupted" });
     this.notifyState();
     await this.sendCancel();
     return entry.promise;
+  }
+
+  /**
+   * `@` mentions, checked against the conversation's roots now rather than
+   * when the message is sent. One that does not resolve — a typo the picker
+   * did not catch, a file gone since — is dropped with an error in the log,
+   * and the message still goes: refusing it would lose what was typed.
+   */
+  private async resolveFiles(typed: string[]): Promise<FileMention[]> {
+    const roots = collectRoots(this.cwd, this.log);
+    const files: FileMention[] = [];
+    for (const mention of typed) {
+      try {
+        files.push(await resolveMention(roots, this.cwd, mention));
+      } catch (err) {
+        this.emitError(isKcError(err) ? err : kcError("FILE_INVALID", `Could not attach ${mention}.`, { cause: causeOf(err) }));
+      }
+    }
+    return files;
   }
 
   /** Images are stored now and referenced by id, so the queue and the log never carry base64. */
@@ -569,7 +593,7 @@ export class Session {
         if (next === undefined) return;
         this.notifyState();
         try {
-          await this.runTurn(next.text, next.attachments);
+          await this.runTurn(next.text, next.attachments, await next.files);
         } finally {
           next.resolve();
         }
@@ -613,7 +637,7 @@ export class Session {
     return Number.isInteger(index) && index >= 0 && index < this.queue.length;
   }
 
-  private async runTurn(text: string, attachments: Attachment[] = []): Promise<void> {
+  private async runTurn(text: string, attachments: Attachment[] = [], files: FileMention[] = []): Promise<void> {
     const connection = this.connection;
     const agentSessionId = this.agentSessionId;
     if (!connection || !agentSessionId) {
@@ -638,9 +662,12 @@ export class Session {
     // typed; the handoff is derived from it by the function the browser uses
     // to show it.
     const handoff = this.pendingHandoff();
-    this.append(
-      attachments.length > 0 ? { type: "user_message", text, attachments } : { type: "user_message", text },
-    );
+    this.append({
+      type: "user_message",
+      text,
+      ...(attachments.length > 0 ? { attachments } : {}),
+      ...(files.length > 0 ? { files } : {}),
+    });
     this.append({ type: "turn_start" });
 
     try {
@@ -649,6 +676,11 @@ export class Session {
       for (const attachment of attachments) {
         const stored = this.store.attachment(attachment.id);
         if (stored) blocks.push({ type: "image", mimeType: stored.mime, data: stored.data });
+      }
+      // Baseline in ACP alongside text: every agent must accept a resource
+      // link, and reads it through the fs methods we advertise.
+      for (const file of files) {
+        blocks.push({ type: "resource_link", uri: pathToFileURL(file.path).href, name: file.name, size: file.size });
       }
 
       // Typed explicitly: the generic overload is used because the prompt

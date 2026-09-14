@@ -14,8 +14,8 @@ export interface KcEventBase {
 
 export type KcEvent = KcEventBase &
   (
-    /** `attachments` holds ids, not bytes — see the attachments table. */
-    | { type: "user_message"; text: string; attachments?: Attachment[] }
+    /** `attachments` holds ids, not bytes — see the attachments table. `files` are `@` mentions, sent as resource links. */
+    | { type: "user_message"; text: string; attachments?: Attachment[]; files?: FileMention[] }
     /** Coalesced agent text. Deltas are buffered before append — never one event per token. */
     | { type: "agent_text"; text: string }
     /** Any non-text ACP session update we do not model explicitly. */
@@ -220,6 +220,13 @@ export function latestUsage(events: KcEvent[]): SessionUsage | null {
 export interface Attachment {
   id: string;
   mime: string;
+}
+
+/** A file the person pointed the agent at with `@`. Absolute, inside one of the conversation's roots. */
+export interface FileMention {
+  path: string;
+  name: string;
+  size: number;
 }
 
 /**

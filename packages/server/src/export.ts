@@ -33,6 +33,7 @@ export function toMarkdown(record: SessionRecord, events: KcEvent[]): string {
     switch (event.type) {
       case "user_message":
         lines.push(`## You`, "", event.text, "");
+        if (event.files?.length) lines.push(`> Attached: ${event.files.map((f) => `\`${f.path}\``).join(", ")}`, "");
         break;
 
       case "agent_text":

@@ -8,11 +8,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-let confine, listDirectory, readText, rawFile, validateRoot, collectRoots;
+let confine, listDirectory, readText, rawFile, validateRoot, resolveMention, collectRoots;
 let base, project, elsewhere, roots;
 
 before(async () => {
-  ({ confine, listDirectory, readText, rawFile, validateRoot } = await import("../dist/files.js"));
+  ({ confine, listDirectory, readText, rawFile, validateRoot, resolveMention } = await import("../dist/files.js"));
   ({ collectRoots } = await import("@kirochrome/shared"));
   // realpath: on macOS /tmp is a symlink, and confinement compares real paths.
   base = realpathSync(mkdtempSync(join(tmpdir(), "kc-files-")));
@@ -126,5 +126,18 @@ describe("adding a root", () => {
     assert.deepEqual(collectRoots("/p", []), ["/p"]);
     assert.deepEqual(collectRoots("/p", [ev("root_added", "/a", 1), ev("root_added", "/a", 2), ev("root_added", "/p", 3)]), ["/p", "/a"]);
     assert.deepEqual(collectRoots("/p", [ev("root_added", "/a", 1), ev("root_removed", "/a", 2), ev("root_removed", "/b", 3)]), ["/p"]);
+  });
+});
+
+describe("an @ mention", () => {
+  it("resolves relative to the cwd, or absolute inside any root, and refuses the rest", async () => {
+    const both = [project, elsewhere];
+    assert.deepEqual(await resolveMention(both, project, "src/index.ts"), { path: join(project, "src", "index.ts"), name: "index.ts", size: 20 });
+    assert.equal((await resolveMention(both, project, `${elsewhere}/secret.txt`)).name, "secret.txt", "absolute, in the other root");
+    assert.equal(await code(resolveMention([project], project, `${elsewhere}/secret.txt`)), "FILE_INVALID", "absolute, outside every root");
+    assert.equal(await code(resolveMention(both, project, "escape.txt")), "FILE_INVALID", "a link out");
+    assert.equal(await code(resolveMention(both, project, "src")), "FILE_INVALID", "a directory");
+    assert.equal(await code(resolveMention(both, project, "nope.ts")), "FILE_UNKNOWN");
+    assert.equal(await code(resolveMention(both, project, "  ")), "FILE_INVALID");
   });
 });

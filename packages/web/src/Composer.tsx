@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CommandOption, ConfigOption, SessionSummary, SlashCommand } from "@kirochrome/shared";
+import type { CommandOption, ConfigOption, FileEntry, SessionSummary, SlashCommand } from "@kirochrome/shared";
+import { fetchDirectory } from "./api.js";
 import { commonPrefix, complete } from "./commands.js";
+import { completeMention, mentionAt, mentionPath, mentionedIn, splitMention } from "./mentions.js";
 import { useReadyProviders } from "./useReadyProviders.js";
 import { fileToImage, type PendingImage } from "./images.js";
 
@@ -27,15 +29,18 @@ export function Composer({
   onUnqueue,
   onEditQueued,
   onMoveQueued,
+  roots,
 }: {
   session: SessionSummary | null;
   busy: boolean;
+  /** The conversation's directories, working directory first — what `@` completes against. */
+  roots: string[];
   /** Agent-supplied argument suggestions, keyed by "command\u0000partial". */
   commandOptions: Record<string, CommandOption[]>;
   requestCommandOptions: (command: string, partial: string) => void;
-  onPrompt: (text: string, images: Array<{ mime: string; data: string }>) => void;
+  onPrompt: (text: string, images: Array<{ mime: string; data: string }>, files: string[]) => void;
   /** Like `onPrompt`, but cancels the running turn first. */
-  onInterrupt: (text: string, images: Array<{ mime: string; data: string }>) => void;
+  onInterrupt: (text: string, images: Array<{ mime: string; data: string }>, files: string[]) => void;
   onCancel: () => void;
   onSetAutoApprove: (enabled: boolean) => void;
   onSetConfigOption: (configId: string, value: string | boolean) => void;
@@ -48,6 +53,10 @@ export function Composer({
   const [images, setImages] = useState<PendingImage[]>([]);
   /** Index of the highlighted command while the slash picker is open. */
   const [commandIndex, setCommandIndex] = useState(0);
+  /** Paths picked from the `@` picker. Only these are sent as files; typed-by-hand `@` is prose. */
+  const [chosen, setChosen] = useState<Set<string>>(() => new Set());
+  /** Directory listings the picker has fetched, by "root\0dir". */
+  const [dirs, setDirs] = useState<Map<string, FileEntry[]>>(() => new Map());
 
   const queued = session?.queued ?? [];
   const canAttach = session?.supportsImages === true;
@@ -58,10 +67,36 @@ export function Composer({
     // the current turn ends — or, with "now", cuts the turn short for it.
     if (!text && images.length === 0) return;
     const send = mode === "now" ? onInterrupt : onPrompt;
-    send(text, images.map(({ mime, data }) => ({ mime, data })));
+    send(text, images.map(({ mime, data }) => ({ mime, data })), mentionedIn(text, chosen));
     setDraft("");
     setImages([]);
+    setChosen(new Set());
   };
+
+  // `@` completes against the directory the partial names: the working
+  // directory for a relative one, whichever root contains an absolute one.
+  // Listings come from the Files endpoint and are kept for the composer's life.
+  const mention = mentionAt(draft);
+  const cwd = roots[0] ?? "";
+  const listing = useMemo(() => {
+    if (!mention) return null;
+    const { dir, absolute } = splitMention(mention.typed);
+    const root = absolute ? roots.find((r) => dir === `${r}/` || dir.startsWith(`${r}/`)) : cwd;
+    if (!root) return null;
+    const rel = absolute ? dir.slice(root.length + 1) : dir;
+    return { root, path: rel.replace(/\/$/, "") };
+  }, [mention?.typed, roots, cwd]);
+  const listingKey = listing ? `${listing.root}\0${listing.path}` : null;
+  useEffect(() => {
+    if (!listing || !listingKey || !session || dirs.has(listingKey)) return;
+    let stale = false;
+    fetchDirectory(session.id, listing.root, listing.path)
+      .then((res) => !stale && setDirs((m) => new Map(m).set(listingKey, res.entries)))
+      .catch(() => !stale && setDirs((m) => new Map(m).set(listingKey, [])));
+    return () => {
+      stale = true;
+    };
+  }, [listingKey, listing, session, dirs]);
 
   // Ask the agent for real suggestions while an argument is being typed. It may
   // not support it, in which case nothing comes back and the hint-derived
@@ -74,8 +109,11 @@ export function Composer({
   // Terminal-style completion: command names first, then their arguments.
   const agentOptions = argPhase ? commandOptions[`${argPhase[1]}\u0000${argPhase[2] ?? ""}`] : undefined;
   const matches = useMemo(
-    () => complete(draft, session?.commands ?? [], agentOptions),
-    [draft, session?.commands, agentOptions],
+    () =>
+      mention
+        ? completeMention(draft, mention, listingKey ? dirs.get(listingKey) : undefined, roots.slice(1))
+        : complete(draft, session?.commands ?? [], agentOptions),
+    [draft, mention, listingKey, dirs, roots, session?.commands, agentOptions],
   );
   const picking = matches.length > 0;
   const active = matches[Math.min(commandIndex, matches.length - 1)];
@@ -83,6 +121,8 @@ export function Composer({
   const choose = (replacement: string) => {
     setDraft(replacement);
     setCommandIndex(0);
+    const path = mentionPath(replacement);
+    if (path) setChosen((prev) => new Set(prev).add(path));
   };
 
   /**
@@ -161,8 +201,8 @@ export function Composer({
           busy
             ? "Type to queue for when this turn ends…"
             : canAttach
-              ? "Send a message — paste or drop an image to attach it"
-              : "Send a message"
+              ? "Send a message — @ mentions a file, paste or drop an image"
+              : "Send a message — @ mentions a file"
         }
         onPaste={(e) => void collect(e.clipboardData?.files ?? null)}
         onDragOver={(e) => canAttach && e.preventDefault()}
@@ -222,7 +262,7 @@ export function Composer({
               command={command}
               options={commandOptions[`${command.name}\u0000`]}
               onOpen={() => requestCommandOptions(command.name, "")}
-              onChoose={(value) => onPrompt(`/${command.name} ${value}`, [])}
+              onChoose={(value) => onPrompt(`/${command.name} ${value}`, [], [])}
             />
           ))}
           {session?.configOptions.map((option) => (

@@ -26,6 +26,8 @@ export type ClientMessage =
       text: string;
       /** Pasted images, base64 encoded. */
       images?: Array<{ mime: string; data: string }>;
+      /** `@` mentions as typed: relative to the working directory, or absolute inside a root. */
+      files?: string[];
     }
   /**
    * Send now rather than after the current turn: cancel it, then prompt. The
@@ -37,6 +39,7 @@ export type ClientMessage =
       sessionId: string;
       text: string;
       images?: Array<{ mime: string; data: string }>;
+      files?: string[];
     }
   | { type: "cancel"; sessionId: string }
   | { type: "resume"; sessionId: string; sinceSeq: number }
@@ -136,6 +139,10 @@ const images: Field = {
     Array.isArray(v) &&
     v.every((img) => isRecord(img) && isImageMime(img.mime) && typeof img.data === "string"),
 };
+const strings: Field = {
+  expected: "an array of strings",
+  check: (v) => Array.isArray(v) && v.every((s) => typeof s === "string"),
+};
 const startOptions: Field = {
   expected: "an object with optional configValues (strings or booleans by id) and opening (a string)",
   check: (v) =>
@@ -173,8 +180,8 @@ const CLIENT_MESSAGE_SPECS: Record<ClientMessage["type"], MessageSpec> = {
   // directory as the agent reported it, not a choice the user is making.
   adopt: { required: { providerId: str, agentSessionId: str, cwd: str }, optional: { title: str } },
   subscribe: { required: { sessionId: str, sinceSeq: num } },
-  prompt: { required: { sessionId: str, text: str }, optional: { images } },
-  interrupt: { required: { sessionId: str, text: str }, optional: { images } },
+  prompt: { required: { sessionId: str, text: str }, optional: { images, files: strings } },
+  interrupt: { required: { sessionId: str, text: str }, optional: { images, files: strings } },
   cancel: { required: { sessionId: str } },
   resume: { required: { sessionId: str, sinceSeq: num } },
   list_workspaces: {},

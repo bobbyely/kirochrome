@@ -3,6 +3,7 @@ import type {
   ElicitationAction,
   ElicitationField,
   ElicitationValue,
+  FileMention,
   KcEvent,
   PermissionOption,
   ProviderRef,
@@ -20,7 +21,7 @@ import { updateCategory } from "@kirochrome/shared";
  * A pure function of the log, so a replay produces identical output.
  */
 export type Row =
-  | { kind: "user"; seq: number; text: string; attachments: Attachment[] }
+  | { kind: "user"; seq: number; text: string; attachments: Attachment[]; files: FileMention[] }
   | { kind: "agent"; seq: number; text: string }
   | { kind: "thought"; seq: number; text: string }
   | { kind: "tool"; seq: number; toolCallId: string; title: string; toolKind: string; status: string; details: unknown[] }
@@ -157,6 +158,7 @@ export function buildRows(events: KcEvent[]): Row[] {
           seq: event.seq,
           text: event.text,
           attachments: event.attachments ?? [],
+          files: event.files ?? [],
         });
         break;
 
@@ -262,7 +264,7 @@ export function buildRows(events: KcEvent[]): Row[] {
           if (!text) break;
           const last = rows.at(-1);
           if (last?.kind === "user") last.text += text;
-          else rows.push({ kind: "user", seq: event.seq, text, attachments: [] });
+          else rows.push({ kind: "user", seq: event.seq, text, attachments: [], files: [] });
           break;
         }
 
