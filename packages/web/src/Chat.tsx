@@ -212,7 +212,9 @@ export function Chat({
         </div>
       </div>
 
-      {changesOpen && <ChangesPane events={events} onClose={() => setChangesOpen(false)} />}
+      {changesOpen && session && (
+        <ChangesPane events={events} cwd={session.cwd} onClose={() => setChangesOpen(false)} />
+      )}
 
       {!following && (
         <button className="jump-latest" onClick={jumpToLatest}>
