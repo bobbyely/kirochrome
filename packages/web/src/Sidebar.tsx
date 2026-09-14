@@ -20,7 +20,7 @@ function loadWidth(): number {
 }
 
 /** Persistent left rail: new chat, past conversations, a way into Setup, and the games. */
-export interface SidebarApi {
+interface SidebarApi {
   focusSearch: () => void;
   step: (delta: number) => void;
 }

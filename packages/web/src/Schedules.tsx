@@ -11,11 +11,11 @@ import {
   ApiError,
   createSchedule,
   deleteSchedule,
-  fetchProviders,
   fetchSchedules,
   runSchedule,
   updateSchedule,
 } from "./api.js";
+import { useReadyProviders } from "./useReadyProviders.js";
 import { chosen, StartPickers } from "./StartPickers.js";
 import { useChat } from "./useChat.js";
 
@@ -45,16 +45,15 @@ export function Schedules({
   onOpenSchedule: (id: string) => void;
 }) {
   const [schedules, setSchedules] = useState<ScheduleView[] | null>(null);
-  const [providers, setProviders] = useState<ProviderView[] | null>(null);
+  const { providers, error: providerError } = useReadyProviders();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<ScheduleView | "new" | null>(null);
   const { connected, workspaces, listWorkspaces } = useChat();
 
   const refresh = useCallback(async () => {
     try {
-      const [s, p] = await Promise.all([fetchSchedules(), fetchProviders()]);
+      const s = await fetchSchedules();
       setSchedules(s.schedules);
-      setProviders(p.providers.filter((v) => v.lastCheck?.status === "ok"));
       setError(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.kc.message : String(err));
@@ -82,7 +81,7 @@ export function Schedules({
     }
   };
 
-  if (error && !schedules) return <div className="page"><div className="banner">{error}</div></div>;
+  if ((error && !schedules) || providerError) return <div className="page"><div className="banner">{providerError ?? error}</div></div>;
   if (!schedules || !providers) return <div className="page"><p className="muted">Loading…</p></div>;
 
   return (

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AgentSessionInfo, AgentSessionsResponse, KcError, ProviderView, StartOptions } from "@kirochrome/shared";
 import { advertisesLoadSession, advertisesSessionList } from "@kirochrome/shared";
-import { ApiError, fetchAgentSessions, fetchProviders } from "./api.js";
+import { ApiError, fetchAgentSessions } from "./api.js";
+import { useReadyProviders } from "./useReadyProviders.js";
 import { chosen, StartPickers } from "./StartPickers.js";
 import { useChat } from "./useChat.js";
 
@@ -31,20 +32,13 @@ export function NewChat({
   onOpenSession: (sessionId: string) => void;
   onNeedsSetup: () => void;
 }) {
-  const [providers, setProviders] = useState<ProviderView[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { providers: ready, error } = useReadyProviders();
   const [cwd, setCwd] = useState("");
   // Clicking a provider used to start at once; now it selects, so a model
   // can be chosen first. Start is the button below the pickers.
   const [chosenId, setChosenId] = useState<string | null>(null);
   const [start, setStart] = useState<StartOptions>({});
   const { connected, workspaces, currentWorkspace, listWorkspaces } = useChat();
-
-  useEffect(() => {
-    fetchProviders()
-      .then((r) => setProviders(r.providers))
-      .catch((err) => setError(err instanceof ApiError ? err.kc.message : String(err)));
-  }, []);
 
   useEffect(() => {
     if (connected) listWorkspaces();
@@ -54,17 +48,16 @@ export function NewChat({
     if (!cwd && currentWorkspace) setCwd(currentWorkspace);
   }, [cwd, currentWorkspace]);
 
-  const ready = useMemo(() => providers?.filter((p) => p.lastCheck?.status === "ok") ?? [], [providers]);
-  const chosenProvider = ready.find((p) => p.id === chosenId);
+  const chosenProvider = ready?.find((p) => p.id === chosenId);
   // Offered only where the agent said it can list its own sessions — the check
   // already recorded what it advertised, so nothing is assumed or hardcoded.
   const listers = useMemo(
-    () => ready.filter((p) => advertisesSessionList(p.lastCheck?.capabilities)),
+    () => (ready ?? []).filter((p) => advertisesSessionList(p.lastCheck?.capabilities)),
     [ready],
   );
 
   if (error) return <div className="page"><div className="banner">{error}</div></div>;
-  if (!providers) return <div className="page"><p className="muted">Loading…</p></div>;
+  if (!ready) return <div className="page"><p className="muted">Loading…</p></div>;
 
   if (ready.length === 0) {
     return (

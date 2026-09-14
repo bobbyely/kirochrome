@@ -351,7 +351,7 @@ export interface ToolDiff {
   newText: string;
 }
 
-export interface ToolContent {
+interface ToolContent {
   diffs: ToolDiff[];
   texts: string[];
   terminalIds: string[];

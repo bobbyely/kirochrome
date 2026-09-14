@@ -22,7 +22,7 @@ import { SessionManager } from "./sessionManager.js";
  * It views one conversation at a time. Switching is a `subscribe`, not a new
  * socket — the connection outlives the switch.
  */
-export const WS_PATH = "/ws";
+const WS_PATH = "/ws";
 
 export function attachWebSocket(
   server: Server,

@@ -335,7 +335,7 @@ function runTitle(schedule: Schedule, startedAt: number): string {
 }
 
 /** "HH:MM" → [hours, minutes], or null when it is not a clock time. */
-export function parseClock(at: string): [number, number] | null {
+function parseClock(at: string): [number, number] | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(at);
   if (!m) return null;
   const hours = Number(m[1]);
