@@ -108,6 +108,7 @@ Breaking one of these is a design regression, not a style nit.
 | `check.ts` | The seven-rung provider check ladder |
 | `agentSessions.ts` | The `session/list` probe: conversations an agent holds of its own |
 | `scheduler.ts` | Runs saved prompts on a timer, each as an ordinary session; records the runs that never became one |
+| `rooms.ts` | Agents talking in turns: a round-robin router over ordinary sessions, prompts built from the room's own log |
 | `timeout.ts` | `withTimeout` — invariant 10, in one place rather than three |
 | `config.ts` | Provider registry in `config.json` |
 | `configOptions.ts` | Merges `configOptions` with the legacy `models`/`modes` |
@@ -122,7 +123,8 @@ Breaking one of these is a design regression, not a style nit.
 **`packages/shared`** — `events.ts` (event payloads, usage derivation),
 `errors.ts` (`KcError`, the closed code enum, remediations), `providers.ts`
 (provider config, check results, HTTP payloads), `ws.ts` (socket messages),
-`schedules.ts` (schedules, their runs, the HTTP payloads).
+`schedules.ts` (schedules, their runs, the HTTP payloads), `rooms.ts` (rooms,
+participants, messages).
 
 **`packages/web`** — `App.tsx` routes; `Chat.tsx` is **the other big one**
 (transcript, scroll-following, every row renderer); `Composer.tsx` is the
@@ -130,8 +132,9 @@ message box and everything that changes per keystroke — draft, images,
 completion, the queue and the config pickers — kept out of `Chat` so typing does
 not re-render the transcript; `timeline.ts` folds events into typed rows;
 `useChat.ts` is the socket and resume-by-seq; `Setup.tsx` is the ladder UI;
-`Schedules.tsx` is the schedule list, form and run history; `StartPickers.tsx`
-is the model/mode/opening-message choice the forms share; `changes.ts` folds
+`Schedules.tsx` is the schedule list, form and run history; `Rooms.tsx` is the
+room list, form and the room itself; `StartPickers.tsx` is the
+model/mode/opening-message choice the forms share; `changes.ts` folds
 the log's reported diffs per file and `ChangesPane.tsx` is the drawer that
 shows them, with `DiffView.tsx` shared with the tool cards; then
 `Sidebar`, `NewChat`, `commands`, `diff`, `images`, `theme`, `useShortcuts`,

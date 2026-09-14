@@ -153,6 +153,8 @@ export class Session {
   private titleLocked = false;
   /** Set when a schedule started this conversation; see `tagSchedule`. */
   private scheduleId: string | null = null;
+  /** Set when this conversation is a participant in a room; see `tagRoom`. */
+  private roomId: string | null = null;
   private configOptions: ConfigOption[] = [];
   private supportsImages = false;
   private commands: SlashCommand[] = [];
@@ -215,6 +217,7 @@ export class Session {
     session.title = record.title;
     session.titleLocked = record.titleLocked;
     session.scheduleId = record.scheduleId;
+    session.roomId = record.roomId;
     session.agentSessionId = record.agentSessionId;
     session.seq = store.lastSeq(record.id);
     session.log.push(...store.eventsSince(record.id, 0));
@@ -1027,7 +1030,17 @@ export class Session {
       updatedAt: now,
       titleLocked: this.titleLocked,
       scheduleId: this.scheduleId,
+      roomId: this.roomId,
     });
+  }
+
+  /** Records which room this conversation speaks in, and names it for the sidebar. */
+  tagRoom(roomId: string, title: string): void {
+    this.roomId = roomId;
+    this.title = title;
+    this.titleLocked = true;
+    this.persistMeta();
+    this.notifyState();
   }
 
   /**
@@ -1132,6 +1145,7 @@ export class Session {
       supportsImages: this.supportsImages,
       commands: this.commands,
       scheduleId: this.scheduleId,
+      roomId: this.roomId,
     };
   }
 

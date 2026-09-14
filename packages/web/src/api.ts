@@ -3,6 +3,9 @@ import type {
   CheckResponse,
   KcError,
   ProvidersResponse,
+  Room,
+  RoomInput,
+  RoomView,
   Schedule,
   ScheduleInput,
   ScheduleRun,
@@ -71,3 +74,24 @@ export const deleteSchedule = (id: string) =>
 /** Resolves when the run has finished, however it ended. */
 export const runSchedule = (id: string) =>
   request<{ run: ScheduleRun }>(`/api/schedules/${encodeURIComponent(id)}/run`, { method: "POST" });
+
+export const fetchRooms = () => request<{ rooms: RoomView[] }>("/api/rooms");
+export const fetchRoom = (id: string) => request<{ room: RoomView }>(`/api/rooms/${encodeURIComponent(id)}`);
+
+export const createRoom = (input: RoomInput) =>
+  request<{ room: Room }>("/api/rooms", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+export const deleteRoom = (id: string) =>
+  request<{ ok: true }>(`/api/rooms/${encodeURIComponent(id)}`, { method: "DELETE" });
+
+/** The four verbs: say (optionally cutting in), hold while typing, resume a round, stop. */
+export const roomVerb = (id: string, verb: "say" | "hold" | "resume" | "stop", body: unknown = {}) =>
+  request<{ room: RoomView }>(`/api/rooms/${encodeURIComponent(id)}/${verb}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });

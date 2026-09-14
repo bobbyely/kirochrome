@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, useState, type RefObject } from "react";
-import type { ScheduleRun, ScheduleView, SessionSummary } from "@kirochrome/shared";
-import { fetchSchedules } from "./api.js";
+import type { RoomView, ScheduleRun, ScheduleView, SessionSummary } from "@kirochrome/shared";
+import { fetchRooms, fetchSchedules } from "./api.js";
 import { GamesPanel } from "./games/Games.js";
 import { useChat } from "./useChat.js";
 
@@ -22,6 +22,10 @@ export function Sidebar({
   schedulesActive,
   onOpenSchedule,
   activeScheduleId,
+  onOpenRooms,
+  roomsActive,
+  onOpenRoom,
+  activeRoomId,
 }: {
   api: RefObject<SidebarApi | null>;
   listVersion: number;
@@ -34,6 +38,10 @@ export function Sidebar({
   schedulesActive: boolean;
   onOpenSchedule: (id: string) => void;
   activeScheduleId?: string | undefined;
+  onOpenRooms: () => void;
+  roomsActive: boolean;
+  onOpenRoom: (id: string) => void;
+  activeRoomId?: string | undefined;
 }) {
   const { connected, sessions, listSessions, renameSession, archiveSession, search, searchHits } =
     useChat();
@@ -73,17 +81,21 @@ export function Sidebar({
   // A schedule's runs are one conversation each, and forty-eight a day of the
   // same prompt would bury the ones you typed. The sidebar lists the schedule
   // instead, once; its runs are on its own page.
-  const own = (sessions ?? []).filter((s) => !s.scheduleId);
+  const own = (sessions ?? []).filter((s) => !s.scheduleId && !s.roomId);
   const [schedules, setSchedules] = useState<ScheduleView[]>([]);
-  // Refetched when the session list changes, which a run ending always does.
+  const [rooms, setRooms] = useState<RoomView[]>([]);
+  // Refetched when the session list changes, which a run ending or a room
+  // turn always does.
   useEffect(() => {
     let cancelled = false;
-    fetchSchedules()
-      .then((r) => {
-        if (!cancelled) setSchedules(r.schedules);
+    Promise.all([fetchSchedules(), fetchRooms()])
+      .then(([s, r]) => {
+        if (cancelled) return;
+        setSchedules(s.schedules);
+        setRooms(r.rooms);
       })
       .catch(() => {
-        // The list is decoration here; the Schedules page reports the error.
+        // The lists are decoration here; their pages report the error.
       });
     return () => {
       cancelled = true;
@@ -176,10 +188,34 @@ export function Sidebar({
         </nav>
       ) : (
       <nav className="sidebar-list">
-        {sessions?.length === 0 && (
-          <p className="sidebar-empty">{showArchived ? "Nothing here." : "No conversations yet."}</p>
+        {/* Each kind of thing folds, so a long list of one does not push the
+            others off the bottom; the list as a whole scrolls. */}
+        <details className="sidebar-group" open>
+          <summary>Conversations ({own.length})</summary>
+          {own.length === 0 && (
+            <p className="sidebar-empty">{showArchived ? "Nothing here." : "No conversations yet."}</p>
+          )}
+          {own.map(renderItem)}
+        </details>
+        {rooms.length > 0 && (
+          <details className="sidebar-group" open>
+            <summary>Rooms ({rooms.length})</summary>
+            {rooms.map((room) => (
+              <div key={room.id} className={`sidebar-item ${room.id === activeRoomId ? "active" : ""}`}>
+                <button className="sidebar-item-main" onClick={() => onOpenRoom(room.id)} title={room.topic}>
+                  <span className="sidebar-item-title">
+                    <span
+                      className={`status ${room.status === "running" ? "status-working" : room.status === "held" ? "status-input" : "status-idle"}`}
+                      aria-label={room.status}
+                    />
+                    {room.name}
+                  </span>
+                  <span className="sidebar-item-sub">{room.participants.map((p) => p.name).join(", ")}</span>
+                </button>
+              </div>
+            ))}
+          </details>
         )}
-        {own.map(renderItem)}
         {schedules.length > 0 && (
           <details className="sidebar-group" open>
             <summary>
@@ -216,6 +252,9 @@ export function Sidebar({
         </button>
         <button className={`setup-link ${schedulesActive ? "active" : ""}`} onClick={onOpenSchedules}>
           Schedules
+        </button>
+        <button className={`setup-link ${roomsActive ? "active" : ""}`} onClick={onOpenRooms}>
+          Rooms
         </button>
         <button
           className={`setup-link ${showArchived ? "active" : ""}`}
