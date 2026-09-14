@@ -312,6 +312,14 @@ than a surprise. Each entry says what would go wrong if it is left.
 
 #### Smaller, still open
 
+- **More directories in a conversation's context.** Wanted: from inside a
+  conversation, add a second project directory the agent may read. ACP v1
+  gives a session exactly one `cwd` and no way to widen it, so this cannot be
+  a KiroChrome feature in general. What exists is per agent: Claude Code has
+  `/add-dir`, which already reaches it through the composer's slash commands;
+  Kiro and Gemini need probing. If more than one agent offers it, a picker in
+  the header that maps to whichever command the agent advertised is the shape
+  — invariant 5, branch on what was advertised, never on the provider id.
 - Verify the design pass on a real screen: the theme, the K spinner and the
   switch were all built without a browser to look at.
 - True virtualisation, if the windowed transcript proves insufficient.
