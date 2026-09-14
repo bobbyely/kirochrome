@@ -532,13 +532,7 @@ export class Session {
     this.queue.unshift(entry);
     this.append({ type: "interrupted" });
     this.notifyState();
-    if (this.connection && this.agentSessionId) {
-      try {
-        await this.connection.agent.notify("session/cancel", { sessionId: this.agentSessionId });
-      } catch (err) {
-        this.emitError(kcError("RPC_ERROR", "Could not cancel the turn.", { cause: causeOf(err) }));
-      }
-    }
+    await this.sendCancel();
     return entry.promise;
   }
 
@@ -775,7 +769,20 @@ export class Session {
       this.dropQueued(this.queue.splice(0));
       this.notifyState();
     }
-    if (!this.connection || !this.agentSessionId || !this.busy) return;
+    if (!this.busy) return;
+    await this.sendCancel();
+  }
+
+  /**
+   * The spec's cancellation contract: the client MUST answer every pending
+   * `session/request_permission` with `cancelled` when it cancels. Without
+   * this, an agent blocked on a permission prompt never sees the cancel — it
+   * is waiting on our reply, not on `session/cancel` — and the turn never
+   * ends. Elicitations are the same round trip and get the same answer.
+   */
+  private async sendCancel(): Promise<void> {
+    this.releasePending();
+    if (!this.connection || !this.agentSessionId) return;
     try {
       await this.connection.agent.notify("session/cancel", { sessionId: this.agentSessionId });
     } catch (err) {

@@ -127,6 +127,30 @@ All of these were real races, found the hard way.
   second such map after permissions, which is why `releasePending()` exists
   rather than two more loops copied into each path. A promise nobody will
   resolve turns a close into a hang.
+- **Cancelling must also answer what the agent is waiting on.** `cancel()`
+  sent `session/cancel` and nothing else, but an agent blocked on a permission
+  or elicitation request is waiting on *our reply*, not on the notification —
+  so a room that timed out a stuck participant and cancelled it still had a
+  stuck participant. The spec is explicit: on cancel the client MUST answer
+  pending `session/request_permission` with `cancelled`. `sendCancel()` drains
+  both maps first, on the Stop path and the interrupt path alike.
+- **An unattended turn gets a cap, and the loop that owns it cannot be
+  started twice.** A room turn had no timeout, so a participant asking
+  permission that nobody in a room answers held the round for ever (invariant
+  10); now `withTimeout` cuts it off, cancels the agent, and stops the room
+  with the name in the message. Separately, two room paths assumed they could
+  start the round loop afresh while it was still running — `round()` returns
+  at once on `running`, so cut-in kept the old budget and a hold released
+  before the turn ended (or during the pause after it) left the room idle
+  until Continue. Anything the user does mid-round now tells the *running*
+  loop what to do (`restart` for a fresh budget; status back to `running` for
+  a released hold) instead of starting another.
+- **A timer's due check must not `await` the work it fires.** `tick` awaited
+  each due schedule's run in series, so one long run delayed every other
+  schedule's check by up to the run cap. Fire and forget; `run` never throws
+  and registers itself synchronously, so the next tick cannot double it. The
+  same tick wrote a `skipped` row every minute a 1-minute schedule was due
+  while its run was still going — the overlap is recorded once.
 
 ## Processes
 
@@ -146,6 +170,17 @@ All of these were real races, found the hard way.
   close" in invariant 6 has to mean *every* way out, and the crash path is the
   one nobody tests by hand, because it looks fine: the conversation disappears
   from the sidebar exactly as it should.
+- **Open several, fail on one: close the ones already open.** A room spawns
+  a participant per provider before it exists in the store; when the third
+  failed, the first two were live under a room id nothing would ever look up
+  — killable at shutdown, leaked until then. Any loop that opens resources in
+  turn needs the catch that detaches what it got.
+- **Windows cannot reap, and now says so.** The ledger's identity check is a
+  `ps` start time; there is no `ps` on Windows, so every entry recorded a blank
+  and `reapOrphans` declined them all — a silent no-op that looked like it
+  worked. It logs once at startup that reaping is unsupported there instead.
+  A PowerShell `Get-Process` start time would make it work, and is a small
+  change for whoever has a Windows machine to run it on.
 - **Never log `env`** when logging a spawn.
 - **One session's crash is not a verdict on its provider.** Marking a provider
   stale removes it from the new-chat list until someone re-runs the check, so it
@@ -252,6 +287,15 @@ All of these were real races, found the hard way.
   smooth only once the reader is following live output.
 
 ## Untrusted input
+
+- **Text from one agent is untrusted input to the next.** Room prompts joined
+  messages as `[Name] text`, so a reply containing `\n\n[You] …` put words in
+  the user's mouth for every agent after it. Each message is now quoted
+  between `<message from="…">` tags the prompt says only the room writes, and
+  a `<message` or `</message` inside a reply is defanged (`&lt;`) rather than
+  dropped. This is prompting, not sandboxing: it makes impersonation
+  something the model has to be talked into, not something the prompt's own
+  format hands it.
 
 - **Validate what an agent hands the terminal.** `outputByteLimit` of `0` or a
   negative number silently emptied the buffer, which reads to the agent as a

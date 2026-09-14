@@ -26,6 +26,16 @@ const input = {
   start: {},
 };
 
+/** Polls until `fn()` is true, or gives up. */
+async function until(fn, timeoutMs = 8_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (fn()) return true;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return fn();
+}
+
 before(async () => {
   dir = mkdtempSync(join(tmpdir(), "kc-scheduler-"));
   process.env.KIROCHROME_DATA_DIR = dir;
@@ -159,6 +169,44 @@ describe("a schedule", () => {
     const daily = scheduler.create({ ...input, at: "09:00", weekdaysOnly: true });
     assert.ok(scheduler.list().find((s) => s.id === daily.id).nextRunAt > Date.now());
     assert.throws(() => scheduler.create({ ...input, at: "25:00" }), (err) => /HH:MM/.test(err.message));
+  });
+
+  it("skips a schedule due again mid-run once, not every tick", async () => {
+    // A 1-minute schedule with a long run used to write a `skipped` row each
+    // minute until the run ended. `tick` is private to TypeScript only, and
+    // takes the clock so later minutes need not be waited for.
+    const schedule = scheduler.create({ ...input, prompt: "long", everyMinutes: 1 });
+    const minutes = (n) => Date.now() + n * 60_000;
+
+    scheduler.tick(minutes(2));
+    assert.ok(await until(() => store.listRuns(schedule.id)[0]?.sessionId), "the run started");
+    scheduler.tick(minutes(4));
+    assert.equal(store.listRuns(schedule.id).length, 2, "due again while running: one skipped row");
+    assert.equal(store.listRuns(schedule.id)[0].outcome, "skipped");
+    scheduler.tick(minutes(6));
+    scheduler.tick(minutes(8));
+    assert.equal(store.listRuns(schedule.id).length, 2, "still due, still running: no more rows");
+
+    const running = store.listRuns(schedule.id).find((r) => r.outcome === "running");
+    await sessions.getLive(running.sessionId).cancel();
+    assert.ok(await until(() => store.listRuns(schedule.id).every((r) => r.outcome !== "running")), "the run ended");
+    scheduler.delete(schedule.id);
+  });
+
+  it("does not make one schedule's check wait for another's run", async () => {
+    // A long run under `await` in the tick loop delayed every schedule after
+    // it by up to the run cap.
+    const slow = scheduler.create({ ...input, name: "Slow", prompt: "long", everyMinutes: 1 });
+    const quick = scheduler.create({ ...input, name: "Quick", everyMinutes: 1 });
+
+    scheduler.tick(Date.now() + 2 * 60_000);
+    assert.ok(await until(() => store.listRuns(quick.id)[0]?.outcome === "ok"), "Quick ran to completion");
+    const slowRun = store.listRuns(slow.id)[0];
+    assert.equal(slowRun.outcome, "running", "while Slow was still going");
+
+    await sessions.getLive(slowRun.sessionId).cancel();
+    assert.ok(await until(() => store.listRuns(slow.id)[0].outcome !== "running"));
+    for (const s of [slow, quick]) scheduler.delete(s.id);
   });
 
   it("closes runs the previous server left in flight", () => {

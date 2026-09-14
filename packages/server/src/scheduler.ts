@@ -38,8 +38,11 @@ const RUN_CAP_MS = 60 * 60_000;
  */
 export class Scheduler {
   private timer: NodeJS.Timeout | null = null;
-  /** Schedules with a run in flight, so a slow run is skipped rather than doubled. */
-  private readonly running = new Set<string>();
+  /**
+   * Schedules with a run in flight, so a slow run is skipped rather than
+   * doubled. The value says whether the timer has recorded that skip yet.
+   */
+  private readonly running = new Map<string, { skipped: boolean }>();
 
   constructor(
     private readonly store: Store,
@@ -55,7 +58,7 @@ export class Scheduler {
     );
     if (orphaned > 0) console.log(`Closed ${orphaned} scheduled run(s) left over from the previous server.`);
 
-    this.timer = setInterval(() => void this.tick(), TICK_MS);
+    this.timer = setInterval(() => this.tick(), TICK_MS);
     // Never the reason the process stays up: shutdown closes sessions, not timers.
     this.timer.unref();
   }
@@ -178,12 +181,25 @@ export class Scheduler {
     return nextClockRun(schedule.at, schedule.weekdaysOnly, last);
   }
 
-  private async tick(): Promise<void> {
-    const now = Date.now();
+  /**
+   * Fires everything that is due, without waiting for any of it: a run can
+   * take up to `RUN_CAP_MS`, and the other schedules' checks must not queue
+   * behind it. `run` never throws and registers itself in `running` before
+   * its first await, so the next tick cannot start the same schedule twice.
+   *
+   * A schedule due again while its run is still going is skipped once. The
+   * skipped row's own start time pushes the next due time out, but a 1-minute
+   * schedule is due again before a long run ends, and a row per tick until
+   * then is noise rather than history.
+   */
+  private tick(now = Date.now()): void {
     for (const schedule of this.store.listSchedules()) {
       const due = this.nextRunAt(schedule);
       if (due === null || due > now) continue;
-      await this.run(schedule);
+      const inFlight = this.running.get(schedule.id);
+      if (inFlight?.skipped) continue;
+      if (inFlight) inFlight.skipped = true;
+      void this.run(schedule);
     }
   }
 
@@ -222,7 +238,7 @@ export class Scheduler {
       });
     }
 
-    this.running.add(schedule.id);
+    this.running.set(schedule.id, { skipped: false });
     this.store.upsertRun(run);
     try {
       // Auto-approve goes in with the start options: `open` fires the opening
