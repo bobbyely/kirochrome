@@ -2,6 +2,7 @@ import type { StartOptions } from "@kirochrome/shared";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Chat } from "./Chat.js";
 import { NewChat, type AdoptTarget } from "./NewChat.js";
+import { Rooms, RoomView } from "./Rooms.js";
 import { ScheduleLog, Schedules } from "./Schedules.js";
 import { Setup } from "./Setup.js";
 import { Sidebar } from "./Sidebar.js";
@@ -12,6 +13,8 @@ type View =
   | { name: "setup" }
   | { name: "schedules" }
   | { name: "schedule"; scheduleId: string }
+  | { name: "rooms" }
+  | { name: "room"; roomId: string }
   | { name: "new" }
   | {
       name: "chat";
@@ -24,6 +27,8 @@ type View =
       adopt?: AdoptTarget;
       /** Opened from a schedule's log, which is where "back" goes. */
       scheduleId?: string;
+      /** Opened from a room, likewise. */
+      roomId?: string;
     };
 
 /**
@@ -53,7 +58,13 @@ export function App() {
   );
   useShortcuts(shortcuts);
 
-  const chatBack = view.name === "chat" ? view.scheduleId : undefined;
+  // A conversation opened from a schedule's log or a room goes back there.
+  const backTo = view.name === "chat" ? { scheduleId: view.scheduleId, roomId: view.roomId } : {};
+  const chatBack = backTo.scheduleId
+    ? () => setView({ name: "schedule", scheduleId: backTo.scheduleId as string })
+    : backTo.roomId
+      ? () => setView({ name: "room", roomId: backTo.roomId as string })
+      : undefined;
 
   return (
     <div className="shell">
@@ -69,6 +80,10 @@ export function App() {
         schedulesActive={view.name === "schedules"}
         onOpenSchedule={(scheduleId) => setView({ name: "schedule", scheduleId })}
         activeScheduleId={view.name === "schedule" ? view.scheduleId : view.name === "chat" ? view.scheduleId : undefined}
+        onOpenRooms={() => setView({ name: "rooms" })}
+        roomsActive={view.name === "rooms"}
+        onOpenRoom={(roomId) => setView({ name: "room", roomId })}
+        activeRoomId={view.name === "room" ? view.roomId : view.name === "chat" ? view.roomId : undefined}
       />
 
       <main className="main">
@@ -87,6 +102,14 @@ export function App() {
           <Schedules
             onOpenSession={openSession}
             onOpenSchedule={(scheduleId) => setView({ name: "schedule", scheduleId })}
+          />
+        )}
+        {view.name === "rooms" && <Rooms onOpenRoom={(roomId) => setView({ name: "room", roomId })} />}
+        {view.name === "room" && (
+          <RoomView
+            roomId={view.roomId}
+            onOpenSession={(sessionId) => setView({ name: "chat", sessionId, roomId: view.roomId })}
+            onBack={() => setView({ name: "rooms" })}
           />
         )}
         {view.name === "schedule" && (
@@ -118,7 +141,7 @@ export function App() {
             adopt={view.adopt}
             onStarted={refreshList}
             onOpenSetup={() => setView({ name: "setup" })}
-            onBack={chatBack ? () => setView({ name: "schedule", scheduleId: chatBack }) : undefined}
+            onBack={chatBack}
           />
         )}
       </main>

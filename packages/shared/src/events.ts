@@ -104,6 +104,8 @@ export interface SessionSummary {
   commands: SlashCommand[];
   /** Set when a schedule started this conversation rather than a person. */
   scheduleId: string | null;
+  /** Set when this conversation is one participant of a room. */
+  roomId: string | null;
 }
 
 /**
@@ -291,6 +293,8 @@ export interface SessionRecord {
   titleLocked: boolean;
   /** The schedule that started it, or null for a conversation a person began. */
   scheduleId: string | null;
+  /** The room it speaks in, or null. */
+  roomId: string | null;
   createdAt: number;
   updatedAt: number;
 }

@@ -2,11 +2,19 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { isImageMime, kcError, type KcError } from "@kirochrome/shared";
-import type { AgentSessionsResponse, ProviderView, Schedule, ScheduleInput, SchedulesResponse } from "@kirochrome/shared";
+import type {
+  AgentSessionsResponse,
+  ProviderView,
+  RoomInput,
+  Schedule,
+  ScheduleInput,
+  SchedulesResponse,
+} from "@kirochrome/shared";
 import { listAgentSessions } from "./agentSessions.js";
 import { checkProvider } from "./check.js";
 import { exportFilename, toMarkdown } from "./export.js";
 import { loadConfig, updateProvider } from "./config.js";
+import { RoomManager } from "./rooms.js";
 import { Scheduler } from "./scheduler.js";
 import { SessionManager } from "./sessionManager.js";
 import { Store } from "./store.js";
@@ -50,6 +58,7 @@ export function startServer(port: number, webRoot: string | null): void {
   const sessions = new SessionManager(store);
   const scheduler = new Scheduler(store, sessions, () => loadConfig().providers);
   scheduler.start();
+  const rooms = new RoomManager(store, sessions, () => loadConfig().providers);
 
   const server = createServer(async (req, res) => {
     if (!originAllowed(req, port)) {
@@ -59,6 +68,7 @@ export function startServer(port: number, webRoot: string | null): void {
     const url = new URL(req.url ?? "/", `http://${HOST}:${port}`);
     try {
       if (url.pathname.startsWith("/api/schedules")) return await handleSchedules(req, res, url, scheduler);
+      if (url.pathname.startsWith("/api/rooms")) return await handleRooms(req, res, url, rooms);
       if (url.pathname.startsWith("/api/")) return await handleApi(req, res, url, store);
       if (webRoot) return serveStatic(res, webRoot, url.pathname);
       return sendJson(res, 404, { error: kcError("INTERNAL", "No web build. Run `npm run build`.") });
@@ -242,6 +252,49 @@ async function handleSchedules(
   }
 
   sendError(res, 404, kcError("INTERNAL", `No route for ${req.method} ${url.pathname}.`));
+}
+
+/** Rooms: CRUD plus the four verbs — say, hold, resume, stop. The page polls while a round runs. */
+async function handleRooms(req: IncomingMessage, res: ServerResponse, url: URL, rooms: RoomManager): Promise<void> {
+  if (url.pathname === "/api/rooms" && req.method === "GET") return sendJson(res, 200, { rooms: rooms.list() });
+  if (url.pathname === "/api/rooms" && req.method === "POST") {
+    const room = await rooms.create((await readJson(req)) as RoomInput);
+    return sendJson(res, 201, { room });
+  }
+
+  const one = /^\/api\/rooms\/([^/]+)(?:\/([a-z]+))?$/.exec(url.pathname);
+  if (!one) return sendError(res, 404, kcError("INTERNAL", `No route for ${req.method} ${url.pathname}.`));
+  const id = decodeURIComponent(one[1]!);
+  const verb = one[2];
+
+  if (!verb && req.method === "GET") return sendJson(res, 200, { room: rooms.get(id) });
+  if (!verb && req.method === "DELETE") {
+    rooms.delete(id);
+    return sendJson(res, 200, { ok: true });
+  }
+  if (req.method !== "POST") return sendError(res, 404, kcError("INTERNAL", `No route for ${req.method} ${url.pathname}.`));
+
+  switch (verb) {
+    case "say": {
+      const body = (await readJson(req)) as { text?: unknown; cutIn?: unknown };
+      await rooms.say(id, typeof body.text === "string" ? body.text : "", body.cutIn === true);
+      break;
+    }
+    case "hold": {
+      const body = (await readJson(req)) as { held?: unknown };
+      rooms.hold(id, body.held === true);
+      break;
+    }
+    case "resume":
+      rooms.resume(id);
+      break;
+    case "stop":
+      rooms.stop(id);
+      break;
+    default:
+      return sendError(res, 404, kcError("INTERNAL", `No route for ${req.method} ${url.pathname}.`));
+  }
+  return sendJson(res, 200, { room: rooms.get(id) });
 }
 
 function hostPlatform(): "darwin" | "linux" | "win32" | "other" {

@@ -188,6 +188,7 @@ export class SessionManager {
       supportsImages: false,
       commands: [],
       scheduleId: record.scheduleId,
+      roomId: record.roomId,
     };
   }
 

@@ -327,6 +327,29 @@ than a surprise. Each entry says what would go wrong if it is left.
 
 ### Done since the roadmap was written
 
+**Rooms shipped**, and turned out to fit the architecture rather than fight
+it: each participant is an ordinary session, and the room is a router over
+them (`rooms.ts`). A round — set off by the user speaking, or Continue —
+prompts each participant in turn with a preamble (who it is, who else is
+there, the topic, the rules) and everything said since its last turn, records
+the reply in the room's own append-only log, and moves on until the turn
+budget is spent, everyone passes, or the credit cap is hit. Prompts are the
+only mechanism, because ACP has no way for agents to address each other and no
+way to inject into a running turn. What was decided in the building:
+
+- **Typing holds the room.** The first keystroke sends `hold`; the turn in
+  flight finishes and nobody else is prompted until the box is sent or
+  emptied. Cutting in is deliberate — Cmd/Ctrl+Enter, or the button — because
+  it cancels real work; a stray key must not.
+- **Every agent turn re-reads the delta**, so the turn budget is also the cost
+  budget. The form says so.
+- **A participant that cannot answer stops the room**, with a message saying
+  who and why, rather than being skipped in silence round after round.
+- **The room page polls** rather than extending the socket protocol: a room's
+  clock is agent turns, seconds apart.
+- The sidebar folds each kind of thing — conversations, rooms, schedules — so
+  a long list of one does not push the others off the bottom.
+
 **Interrupt and send shipped** as designed: an `interrupt` client message,
 `Session.interrupt` puts the message at the front of the queue and sends
 `session/cancel`, and the drain loop that owns the turn picks it up when the

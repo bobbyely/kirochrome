@@ -19,6 +19,8 @@ export const KC_ERROR_CODES = [
   "PROVIDER_UNKNOWN",
   "SCHEDULE_UNKNOWN",
   "SCHEDULE_INVALID",
+  "ROOM_UNKNOWN",
+  "ROOM_INVALID",
   "CONFIG_INVALID",
   "MESSAGE_INVALID",
   "INTERNAL",
@@ -82,6 +84,8 @@ export const REMEDIATION: Record<KcErrorCode, string> = {
   PROVIDER_UNKNOWN: "No provider is configured with that id. Check your config file.",
   SCHEDULE_UNKNOWN: "That schedule no longer exists.",
   SCHEDULE_INVALID: "Check the schedule's fields: a name, a verified provider, a directory, a prompt and an interval in minutes.",
+  ROOM_UNKNOWN: "That room no longer exists.",
+  ROOM_INVALID: "Check the room's fields: a name, a directory, a topic, and two to six participants each with a name and a verified provider.",
   CONFIG_INVALID: "The configuration file could not be read. Fix or delete it to regenerate defaults.",
   MESSAGE_INVALID:
     "The browser sent a message this server does not understand. Reload the page; if it keeps happening, the page and the server are different versions.",

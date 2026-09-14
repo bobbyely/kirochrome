@@ -153,6 +153,15 @@ const app = agent({ name: "mock-agent" })
       return { stopReason: "end_turn" };
     }
 
+    // A room prompt: answer as whoever it says we are, so the room test can
+    // see who spoke. "please pass" anywhere in it yields the turn.
+    const roomIntro = /^You are ([^—]+) —/.exec(params.prompt?.[0]?.text ?? "");
+    if (roomIntro) {
+      const text = /please pass/i.test(params.prompt[0].text) ? "PASS" : `Hello from ${roomIntro[1].trim()}`;
+      await notify({ sessionUpdate: "agent_message_chunk", content: { type: "text", text } });
+      return { stopReason: "end_turn" };
+    }
+
     // Kiro's own usage notification, which is not a session/update at all.
     if (params.prompt?.[0]?.text === "kiro-usage") {
       await notify({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "ok" } });

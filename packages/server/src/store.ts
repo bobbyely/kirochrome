@@ -4,6 +4,9 @@ import type {
   KcError,
   KcEvent,
   ProviderCheckResult,
+  Room,
+  RoomMessage,
+  RoomParticipant,
   Schedule,
   ScheduleRun,
   SearchHit,
@@ -126,6 +129,34 @@ export class Store {
         unread      INTEGER NOT NULL DEFAULT 1
       );
       CREATE INDEX IF NOT EXISTS idx_runs_schedule ON schedule_runs(schedule_id, started_at DESC);
+
+      -- Rooms: agents talking in turns. Participants are a JSON list; the
+      -- room's transcript is its own append-only log, separate from each
+      -- participant's session log, which holds the prompts it was actually sent.
+      CREATE TABLE IF NOT EXISTS rooms (
+        id                  TEXT PRIMARY KEY,
+        name                TEXT NOT NULL,
+        cwd                 TEXT NOT NULL,
+        topic               TEXT NOT NULL,
+        participants        TEXT NOT NULL,   -- JSON RoomParticipant[]
+        max_turns_per_round INTEGER NOT NULL,
+        pause_seconds       INTEGER NOT NULL,
+        credit_cap          REAL,
+        status              TEXT NOT NULL,
+        credits_used        REAL NOT NULL DEFAULT 0,
+        created_at          INTEGER NOT NULL,
+        updated_at          INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS room_messages (
+        id      TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL,
+        seq     INTEGER NOT NULL,
+        ts      INTEGER NOT NULL,
+        speaker TEXT NOT NULL,
+        name    TEXT NOT NULL,
+        text    TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_room_messages ON room_messages(room_id, seq);
     `);
 
     this.migrate();
@@ -195,6 +226,9 @@ export class Store {
     if (!columns.includes("schedule_id")) {
       this.db.exec(`ALTER TABLE sessions ADD COLUMN schedule_id TEXT`);
     }
+    if (!columns.includes("room_id")) {
+      this.db.exec(`ALTER TABLE sessions ADD COLUMN room_id TEXT`);
+    }
     const scheduleColumns = (this.db.prepare(`PRAGMA table_info(schedules)`).all() as Array<{ name: string }>).map(
       (c) => c.name,
     );
@@ -224,15 +258,16 @@ export class Store {
   upsertSession(record: SessionRecord): void {
     this.db
       .prepare(
-        `INSERT INTO sessions (id, agent_session_id, provider_id, provider_name, cwd, title, status, created_at, updated_at, title_locked, schedule_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO sessions (id, agent_session_id, provider_id, provider_name, cwd, title, status, created_at, updated_at, title_locked, schedule_id, room_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            agent_session_id = excluded.agent_session_id,
            title = excluded.title,
            status = excluded.status,
            updated_at = excluded.updated_at,
            title_locked = excluded.title_locked,
-           schedule_id = excluded.schedule_id`,
+           schedule_id = excluded.schedule_id,
+           room_id = excluded.room_id`,
       )
       .run(
         record.id,
@@ -246,6 +281,7 @@ export class Store {
         record.updatedAt,
         record.titleLocked ? 1 : 0,
         record.scheduleId ?? null,
+        record.roomId ?? null,
       );
   }
 
@@ -405,6 +441,83 @@ export class Store {
     return Number(result.changes);
   }
 
+  // ---------- rooms ----------
+
+  upsertRoom(room: Room): void {
+    this.db
+      .prepare(
+        `INSERT INTO rooms (id, name, cwd, topic, participants, max_turns_per_round, pause_seconds, credit_cap, status, credits_used, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           name = excluded.name, cwd = excluded.cwd, topic = excluded.topic,
+           participants = excluded.participants, max_turns_per_round = excluded.max_turns_per_round,
+           pause_seconds = excluded.pause_seconds, credit_cap = excluded.credit_cap,
+           status = excluded.status, credits_used = excluded.credits_used, updated_at = excluded.updated_at`,
+      )
+      .run(
+        room.id,
+        room.name,
+        room.cwd,
+        room.topic,
+        JSON.stringify(room.participants),
+        room.maxTurnsPerRound,
+        room.pauseSeconds,
+        room.creditCap,
+        room.status,
+        room.creditsUsed,
+        room.createdAt,
+        room.updatedAt,
+      );
+  }
+
+  getRoom(id: string): Room | null {
+    const row = this.db.prepare(`SELECT * FROM rooms WHERE id = ?`).get(id) as
+      | Record<string, string | number | null>
+      | undefined;
+    return row ? toRoom(row) : null;
+  }
+
+  listRooms(): Room[] {
+    const rows = this.db.prepare(`SELECT * FROM rooms ORDER BY updated_at DESC`).all() as Array<
+      Record<string, string | number | null>
+    >;
+    return rows.map(toRoom);
+  }
+
+  /** Removes the room and its transcript. The participants' conversations stay. */
+  deleteRoom(id: string): void {
+    this.db.prepare(`DELETE FROM room_messages WHERE room_id = ?`).run(id);
+    this.db.prepare(`DELETE FROM rooms WHERE id = ?`).run(id);
+  }
+
+  appendRoomMessage(message: RoomMessage): void {
+    this.db
+      .prepare(`INSERT INTO room_messages (id, room_id, seq, ts, speaker, name, text) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run(message.id, message.roomId, message.seq, message.ts, message.speaker, message.name, message.text);
+  }
+
+  roomMessages(roomId: string, sinceSeq = 0): RoomMessage[] {
+    const rows = this.db
+      .prepare(`SELECT * FROM room_messages WHERE room_id = ? AND seq > ? ORDER BY seq`)
+      .all(roomId, sinceSeq) as Array<Record<string, string | number | null>>;
+    return rows.map((row) => ({
+      id: String(row["id"]),
+      roomId: String(row["room_id"]),
+      seq: Number(row["seq"]),
+      ts: Number(row["ts"]),
+      speaker: String(row["speaker"]),
+      name: String(row["name"]),
+      text: String(row["text"]),
+    }));
+  }
+
+  lastRoomSeq(roomId: string): number {
+    const row = this.db.prepare(`SELECT MAX(seq) AS seq FROM room_messages WHERE room_id = ?`).get(roomId) as
+      | { seq: number | null }
+      | undefined;
+    return row?.seq ?? 0;
+  }
+
   // ---------- attachments ----------
 
   addAttachment(id: string, sessionId: string, mime: string, base64: string): void {
@@ -555,6 +668,23 @@ export class Store {
   }
 }
 
+function toRoom(row: Record<string, string | number | null>): Room {
+  return {
+    id: String(row["id"]),
+    name: String(row["name"]),
+    cwd: String(row["cwd"]),
+    topic: String(row["topic"]),
+    participants: JSON.parse(String(row["participants"])) as RoomParticipant[],
+    maxTurnsPerRound: Number(row["max_turns_per_round"]),
+    pauseSeconds: Number(row["pause_seconds"]),
+    creditCap: (row["credit_cap"] as number | null) ?? null,
+    status: String(row["status"]) as Room["status"],
+    creditsUsed: Number(row["credits_used"]),
+    createdAt: Number(row["created_at"]),
+    updatedAt: Number(row["updated_at"]),
+  };
+}
+
 function toSchedule(row: Record<string, string | number | null>): Schedule {
   return {
     id: String(row["id"]),
@@ -600,6 +730,7 @@ function toRecord(row: Record<string, string | number | null>): SessionRecord {
     status: String(row["status"]) as SessionRecord["status"],
     titleLocked: Boolean(row["title_locked"]),
     scheduleId: (row["schedule_id"] as string | null) ?? null,
+    roomId: (row["room_id"] as string | null) ?? null,
     createdAt: Number(row["created_at"]),
     updatedAt: Number(row["updated_at"]),
   };
