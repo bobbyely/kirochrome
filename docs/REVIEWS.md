@@ -9,6 +9,7 @@ a useful fact, and an absent row is indistinguishable from a skipped review.
 
 | Date | Reviewed through | Range since previous | Findings | Notes |
 |---|---|---|---|---|
+| 2026-09-14 | `dedc8bc` | `cd32fd1..dedc8bc` (33 commits) | 14 bugs — one serious (a scheduled run with an opening message records *ok* having done nothing), one widening a pre-existing hole (no `Host` check) | Two passes by sub-agents over the rooms, schedules, start options, command pickers, Changes pane and games: one adversarial, one against PLAN.md and the definition of done. All seven bugs from the first review confirmed still open (line refs drifted). Everything recorded under *Bugs to fix* and *Smaller, still open* in [PLAN.md](PLAN.md); nothing fixed here. Checked and clean: SQL parameterisation in the new tables, `DiffView`'s escaping, localStorage handling, body validation on the new routes, process lifetime for runs and participants, Origin coverage of the new routes. |
 | 2026-09-10 | `cd32fd1` | `f7274a5..cd32fd1` (82 commits) | 10 — one serious, two breaking an invariant | Security-focused pass over `packages/`. Three fixed here; the rest are recorded under *Bugs to fix* in [PLAN.md](PLAN.md) rather than left in a review comment. Checked and clean: static-file path traversal, the export filename, FTS5 quoting, markdown sanitisation. |
 
 ## How to record one
