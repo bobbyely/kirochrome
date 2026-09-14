@@ -1063,7 +1063,8 @@ kbd {
 .chat-row { display: flex; height: 100%; min-width: 0; }
 .chat-row > .chat { flex: 1; }
 .changes {
-  flex: 0 0 min(560px, 45%);
+  position: relative;
+  flex: 0 0 560px; /* overridden inline by the remembered width */
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -1071,6 +1072,16 @@ kbd {
   border-left: 1px solid var(--border-strong);
   outline: none;
 }
+.changes-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 1;
+}
+.changes-resize:hover, .changes-resize:active { background: var(--accent-dim); }
 .changes-head {
   display: flex;
   align-items: center;
