@@ -90,7 +90,9 @@ const app = agent({ name: "mock-agent" })
     return {
       options: all
         .filter((v) => v.startsWith(params.partial ?? ""))
-        .map((v) => ({ value: v, label: v.toUpperCase(), current: v === "medium" })),
+        // "high" is marked the way Kiro does it, in the label; "medium" the
+        // way the shape allows. The client must read both.
+        .map((v) => ({ value: v, label: v === "high" ? "high  [active]" : v.toUpperCase(), current: v === "medium" })),
     };
   })
   .onRequest("session/set_config_option", ({ params }) => ({
@@ -159,6 +161,20 @@ const app = agent({ name: "mock-agent" })
     if (roomIntro) {
       const text = /please pass/i.test(params.prompt[0].text) ? "PASS" : `Hello from ${roomIntro[1].trim()}`;
       await notify({ sessionUpdate: "agent_message_chunk", content: { type: "text", text } });
+      return { stopReason: "end_turn" };
+    }
+
+    // Kiro's command catalogue, which arrives on its own method with slashes
+    // on the names and a meta saying how the argument is entered.
+    if (params.prompt?.[0]?.text === "kiro-commands") {
+      client.notify("_kiro.dev/commands/available", {
+        sessionId: params.sessionId,
+        commands: [
+          { name: "/effort", description: "Set thinking effort", meta: { inputType: "selection" } },
+          { name: "/clear", description: "Clear the conversation" },
+        ],
+      });
+      await notify({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "ok" } });
       return { stopReason: "end_turn" };
     }
 

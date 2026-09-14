@@ -93,6 +93,12 @@ export interface ExitReason {
  */
 /** Kiro's per-turn metadata: `contextUsagePercentage`, credits, turn duration. */
 const KIRO_METADATA = "_kiro.dev/metadata";
+/**
+ * Kiro's command catalogue. Kiro 2.21 sends this instead of ACP's
+ * `available_commands_update`, with names carrying their slash and a `meta`
+ * saying how the argument is entered.
+ */
+const KIRO_COMMANDS = "_kiro.dev/commands/available";
 
 const asRecord = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -296,6 +302,10 @@ export class Session {
       // `usage_update`. Logged as an update under that method name — raw, like
       // any update we do not otherwise recognise — so the meter can derive
       // from it and the log says exactly what arrived.
+      .onNotification(KIRO_COMMANDS, asRecord, ({ params }) => {
+        if (this.replaying) return;
+        this.setCommands(params["commands"]);
+      })
       .onNotification(KIRO_METADATA, asRecord, ({ params }) => {
         if (this.replaying) return;
         this.flushText();
@@ -737,11 +747,7 @@ export class Session {
     // Agents advertise their slash commands, and may revise the list mid
     // session as context changes.
     if (t.sessionUpdate === "available_commands_update") {
-      const list = (update as { availableCommands?: unknown }).availableCommands;
-      if (Array.isArray(list)) {
-        this.commands = (list as SlashCommand[]).filter((c) => typeof c?.name === "string");
-        this.notifyState();
-      }
+      this.setCommands((update as { availableCommands?: unknown }).availableCommands);
     }
 
     // Agents name their own sessions. Prefer that over our first-message
@@ -916,6 +922,29 @@ export class Session {
   }
 
   /**
+   * One shape for the command catalogue, whichever way it arrived: names
+   * without their slash, and `selection` when the agent said the argument is
+   * picked from a list it will enumerate.
+   */
+  private setCommands(list: unknown): void {
+    if (!Array.isArray(list)) return;
+    this.commands = (list as Array<Record<string, unknown>>)
+      .filter((c) => typeof c?.["name"] === "string")
+      .map((c) => {
+        const meta = asRecord(c["meta"]);
+        const input = c["input"];
+        const command: SlashCommand = {
+          name: String(c["name"]).replace(/^\//, ""),
+          description: typeof c["description"] === "string" ? c["description"] : "",
+          ...(typeof input === "object" && input !== null ? { input: input as SlashCommand["input"] } : {}),
+          ...(meta["inputType"] === "selection" ? { selection: true, input: { hint: "" } } : {}),
+        };
+        return command;
+      });
+    this.notifyState();
+  }
+
+  /**
    * Argument suggestions for a partially typed command.
    *
    * Uses Kiro's `_kiro.dev/commands/options` extension where the agent
@@ -937,7 +966,8 @@ export class Session {
       const res = (await withTimeout(
         connection.agent.request("_kiro.dev/commands/options", {
           sessionId: agentSessionId,
-          command,
+          // Named without its slash, which is also how the catalogue is kept.
+          command: command.replace(/^\//, ""),
           partial,
         }),
         COMPLETION_TIMEOUT_MS,
@@ -946,7 +976,14 @@ export class Session {
             detail: { timeoutMs: COMPLETION_TIMEOUT_MS, command },
           }),
       )) as { options?: CommandOption[] };
-      return Array.isArray(res?.options) ? res.options.filter((o) => typeof o?.value === "string") : [];
+      if (!Array.isArray(res?.options)) return [];
+      // Kiro marks the value in effect by appending "[active]" to its label.
+      return res.options
+        .filter((o) => typeof o?.value === "string")
+        .map((o) => {
+          const active = /\s*\[active\]\s*$/.test(o.label ?? "");
+          return { ...o, label: (o.label ?? o.value).replace(/\s*\[active\]\s*$/, ""), ...(active ? { current: true } : {}) };
+        });
     } catch {
       this.commandOptionsUnsupported = true;
       return [];

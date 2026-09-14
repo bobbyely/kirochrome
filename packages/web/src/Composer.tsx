@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import type { CommandOption, ConfigOption, SessionSummary } from "@kirochrome/shared";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CommandOption, ConfigOption, SessionSummary, SlashCommand } from "@kirochrome/shared";
 import { commonPrefix, complete } from "./commands.js";
 import { fileToImage, type PendingImage } from "./images.js";
 
@@ -212,6 +212,15 @@ export function Composer({
               Auto-approve
             </label>
           )}
+          {session && pickableCommands(session).map((command) => (
+            <CommandPicker
+              key={command.name}
+              command={command}
+              options={commandOptions[`${command.name}\u0000`]}
+              onOpen={() => requestCommandOptions(command.name, "")}
+              onChoose={(value) => onPrompt(`/${command.name} ${value}`, [])}
+            />
+          ))}
           {session?.configOptions.map((option) => (
             <ConfigPicker
               key={option.id}
@@ -310,6 +319,73 @@ function QueuedItem({
         ×
       </button>
     </div>
+  );
+}
+
+/**
+ * Commands whose argument the agent enumerates, offered as pickers beside the
+ * settings — but not where a setting already covers the same thing, which
+ * would put two controls for one knob on the row. Matched by name against
+ * option ids and categories; `agent` is what some CLIs call ACP's mode.
+ */
+function pickableCommands(session: SessionSummary): SlashCommand[] {
+  const covered = new Set<string>();
+  for (const option of session.configOptions) {
+    covered.add(option.id);
+    if (option.category) covered.add(option.category);
+  }
+  if (covered.has("mode")) covered.add("agent");
+  return session.commands.filter((c) => c.selection && !covered.has(c.name));
+}
+
+/**
+ * A command run as a picker: choosing a value sends `/name value` as an
+ * ordinary prompt, which is how every command runs. Values are fetched from
+ * the agent when the picker mounts and again when it is opened; the one the
+ * agent marks current is shown selected, so the row reads like a setting.
+ */
+function CommandPicker({
+  command,
+  options,
+  onOpen,
+  onChoose,
+}: {
+  command: SlashCommand;
+  options: CommandOption[] | undefined;
+  onOpen: () => void;
+  onChoose: (value: string) => void;
+}) {
+  const asked = useRef(false);
+  useEffect(() => {
+    if (options || asked.current) return;
+    asked.current = true;
+    onOpen();
+  }, [options, onOpen]);
+  // The agent's answer lags the click by a turn; show the choice at once.
+  const [chosen, setChosen] = useState<string | null>(null);
+  const current = chosen ?? options?.find((o) => o.current)?.value ?? "";
+  return (
+    <label className="config-field" title={`${command.description} (/${command.name})`}>
+      <span className="config-label">{command.name}</span>
+      <select
+        className="config-select"
+        value={current}
+        onFocus={onOpen}
+        onChange={(e) => {
+          if (!e.target.value) return;
+          setChosen(e.target.value);
+          onChoose(e.target.value);
+        }}
+      >
+        {!options && <option value="">…</option>}
+        {options && !current && <option value="">choose…</option>}
+        {options?.map((o) => (
+          <option key={o.value} value={o.value} title={o.description}>
+            {o.label || o.value}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
