@@ -6,6 +6,7 @@ one click away.
 | Document | What it is for |
 |---|---|
 | [AGENTS.local.md](AGENTS.local.md) | **Your** preferences, layered over this file |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Running from a checkout, worktrees, config, diagnostics |
 | [docs/DESIGN.md](docs/DESIGN.md) | Why the architecture is the way it is |
 | [docs/PLAN.md](docs/PLAN.md) | What to build next, and recorded debt |
 | [docs/PROTOCOL.md](docs/PROTOCOL.md) | What we implement of ACP, and how it actually behaves |
@@ -156,7 +157,8 @@ Before you call anything finished:
    | Scope, roadmap, or debt | `docs/PLAN.md` |
    | Anything about how ACP behaves | `docs/PROTOCOL.md` |
    | A provider, or what has been run against | `docs/PROVIDERS.md` |
-   | Anything user-visible: flags, env vars, setup | `README.md` |
+   | A feature someone would choose it for | `README.md` — the landing page, features not mechanics |
+   | Flags, env vars, setup, running from a checkout | `docs/DEVELOPMENT.md` |
 
    Docs drift silently and are found much later. `README.md` claimed
    "implementation not started" through six shipped phases.
