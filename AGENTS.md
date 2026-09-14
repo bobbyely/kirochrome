@@ -90,6 +90,12 @@ Breaking one of these is a design regression, not a style nit.
 - **Ask before adding a dependency.** No native modules without discussion —
   `node:sqlite` is built in, and avoiding a build toolchain is a portability
   requirement, not a preference.
+- **Nothing personal in the tree.** The repo is public. No real names, email
+  addresses, business names, addresses or personal circumstances in any
+  committed file, docs and plans included. People are roles — the owner, the
+  user, a contributor — and a doc that needs to say who decided something says
+  which role did. A sibling project once had to rewrite its history to take a
+  name and a business out; `git grep` for your own before you push.
 
 ## Where things live
 
