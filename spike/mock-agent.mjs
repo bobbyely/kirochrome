@@ -179,6 +179,19 @@ const app = agent({ name: "mock-agent" })
       return { stopReason: "end_turn" };
     }
 
+    // A handoff from another provider: say what arrived, so the switch test
+    // can see the transcript came through in front of the person's message.
+    const text0 = params.prompt?.[0]?.text ?? "";
+    if (text0.startsWith("You are continuing a conversation that began with another assistant")) {
+      const people = (text0.match(/^Person:$/gm) ?? []).length;
+      const asked = text0.split("The person now says:\n\n")[1] ?? "";
+      await notify({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: `[handoff: ${people} person message(s); now: ${asked}]` },
+      });
+      return { stopReason: "end_turn" };
+    }
+
     // A room prompt: answer as whoever it says we are, so the room test can
     // see who spoke. "please pass" anywhere in it yields the turn; "please
     // ask" raises a permission prompt first, which nobody in a room answers;

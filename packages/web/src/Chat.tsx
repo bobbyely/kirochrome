@@ -1,9 +1,11 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { isProviderFault, latestUsage } from "@kirochrome/shared";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { handoffText, isProviderFault, latestUsage } from "@kirochrome/shared";
 import type {
   ElicitationAction,
   ElicitationField,
   ElicitationValue,
+  Handoff,
+  ProviderRef,
   SessionUsage,
   StartOptions,
 } from "@kirochrome/shared";
@@ -54,6 +56,7 @@ export function Chat({
     attachSession,
     resumeSession,
     setConfigOption,
+    switchProvider,
     answerPermission,
     answerElicitation,
     setAutoApprove,
@@ -66,6 +69,17 @@ export function Chat({
     interrupt,
     cancel,
   } = useChat();
+
+  // The switch divider shows the handoff on demand. Read through a ref so the
+  // callback is stable and the memoized rows do not re-render on every event.
+  const eventsRef = useRef(events);
+  eventsRef.current = events;
+  const cwdRef = useRef(session?.cwd ?? "");
+  cwdRef.current = session?.cwd ?? "";
+  const handoffFor = useCallback(
+    (throughSeq: number, from: ProviderRef) => handoffText(eventsRef.current, throughSeq, from, cwdRef.current),
+    [],
+  );
 
   /** Whether the view is following new output, or the reader has scrolled away. */
   const [following, setFollowing] = useState(true);
@@ -220,6 +234,7 @@ export function Chat({
                 row={row}
                 onPermission={answerPermission}
                 onElicitation={answerElicitation}
+                handoffFor={handoffFor}
               />
             ))}
             {busy && (
@@ -273,6 +288,7 @@ export function Chat({
             onCancel={cancel}
             onSetAutoApprove={setAutoApprove}
             onSetConfigOption={setConfigOption}
+            onSwitchProvider={switchProvider}
             onUnqueue={unqueue}
             onEditQueued={editQueued}
             onMoveQueued={moveQueued}
@@ -314,10 +330,12 @@ const Message = memo(function Message({
   row,
   onPermission,
   onElicitation,
+  handoffFor,
 }: {
   row: Row;
   onPermission: (requestId: string, optionId: string | null) => void;
   onElicitation: AnswerElicitation;
+  handoffFor: HandoffFor;
 }) {
   switch (row.kind) {
     case "user":
@@ -353,8 +371,10 @@ const Message = memo(function Message({
       return <CompactionRow row={row} />;
     case "adopted":
       return <AdoptedRow row={row} />;
+    case "switched":
+      return <SwitchedRow row={row} handoffFor={handoffFor} />;
     case "work":
-      return <WorkGroup row={row} onPermission={onPermission} onElicitation={onElicitation} />;
+      return <WorkGroup row={row} onPermission={onPermission} onElicitation={onElicitation} handoffFor={handoffFor} />;
     case "divider":
       return <hr className="turn-divider" />;
     case "error":
@@ -380,10 +400,12 @@ function WorkGroup({
   row,
   onPermission,
   onElicitation,
+  handoffFor,
 }: {
   row: Extract<Row, { kind: "work" }>;
   onPermission: (requestId: string, optionId: string | null) => void;
   onElicitation: AnswerElicitation;
+  handoffFor: HandoffFor;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -413,6 +435,7 @@ function WorkGroup({
             row={child}
             onPermission={onPermission}
             onElicitation={onElicitation}
+            handoffFor={handoffFor}
           />
         ))}
       </div>
@@ -565,6 +588,41 @@ function CompactionRow({ row }: { row: Extract<Row, { kind: "compaction" }> }) {
  * chose to replay and KiroChrome never saw it happen — it may be shorter than
  * the real conversation, and it holds no tool output we recorded ourselves.
  */
+type HandoffFor = (throughSeq: number, from: ProviderRef) => Handoff;
+
+/**
+ * The seam where the conversation moved to another provider. What the new
+ * agent was given is not in the log — it is derived from it — so the row
+ * derives it the same way, on demand, and shows it verbatim: a prompt the
+ * reader cannot see is a conversation nobody can debug.
+ */
+function SwitchedRow({ row, handoffFor }: { row: Extract<Row, { kind: "switched" }>; handoffFor: HandoffFor }) {
+  const [open, setOpen] = useState(false);
+  const handoff = open ? handoffFor(row.throughSeq, row.from) : null;
+  return (
+    <div className="compaction compaction-adopted">
+      <span className="compaction-rule" />
+      <details className="compaction-body" onToggle={(e) => setOpen(e.currentTarget.open)}>
+        <summary>Continued with {row.to.name}</summary>
+        <p className="remediation">
+          {row.from.name} left the conversation here. {row.to.name} was started fresh in the same directory and is given the
+          transcript above as text with the next message sent — ACP has no way to hand a session from one agent to another.
+        </p>
+        {handoff && (
+          <>
+            <p className="remediation">
+              {handoff.messages} message{handoff.messages === 1 ? "" : "s"}
+              {handoff.omitted > 0 && `, the oldest ${handoff.omitted} dropped to fit`}. Sent as:
+            </p>
+            <pre className="handoff-text">{handoff.text}</pre>
+          </>
+        )}
+      </details>
+      <span className="compaction-rule" />
+    </div>
+  );
+}
+
 function AdoptedRow({ row }: { row: Extract<Row, { kind: "adopted" }> }) {
   return (
     <div className="compaction compaction-adopted">

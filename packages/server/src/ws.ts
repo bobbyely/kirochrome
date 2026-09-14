@@ -240,6 +240,14 @@ async function dispatch(
       return;
     }
 
+    case "switch_provider": {
+      const provider = loadConfig().providers.find((p) => p.id === msg.providerId);
+      if (!provider) throw kcError("PROVIDER_UNKNOWN", `No provider configured with id '${msg.providerId}'.`);
+      const session = await sessions.switchProvider(msg.sessionId, provider);
+      send({ type: "session_state", session: session.summary() });
+      return;
+    }
+
     case "permission_response": {
       sessions.requireLive(msg.sessionId).resolvePermission(msg.requestId, msg.optionId);
       return;

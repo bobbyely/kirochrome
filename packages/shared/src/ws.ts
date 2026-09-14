@@ -42,6 +42,8 @@ export type ClientMessage =
   | { type: "resume"; sessionId: string; sinceSeq: number }
   | { type: "list_workspaces" }
   | { type: "set_config_option"; sessionId: string; configId: string; value: string | boolean }
+  /** Move the conversation to another provider; see `provider_switched`. */
+  | { type: "switch_provider"; sessionId: string; providerId: string }
   | { type: "permission_response"; sessionId: string; requestId: string; optionId: string | null }
   | {
       type: "elicitation_response";
@@ -177,6 +179,7 @@ const CLIENT_MESSAGE_SPECS: Record<ClientMessage["type"], MessageSpec> = {
   resume: { required: { sessionId: str, sinceSeq: num } },
   list_workspaces: {},
   set_config_option: { required: { sessionId: str, configId: str, value: strOrBool } },
+  switch_provider: { required: { sessionId: str, providerId: str } },
   permission_response: { required: { sessionId: str, requestId: str, optionId: nullableStr } },
   elicitation_response: {
     required: { sessionId: str, requestId: str, action: elicitationAction },

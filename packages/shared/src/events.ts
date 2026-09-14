@@ -65,12 +65,27 @@ export type KcEvent = KcEventBase &
      */
     | { type: "root_added"; path: string }
     | { type: "root_removed"; path: string }
+    /**
+     * The conversation moved to another provider. A KiroChrome handoff, not
+     * an ACP transfer — one agent cannot load another's session — so the new
+     * agent is given the transcript up to `throughSeq` as context with the
+     * next message. The text is not stored: it is derived from the log by
+     * `handoffText`, so the browser can show exactly what was sent and the
+     * log stays the one source (invariant 3).
+     */
+    | { type: "provider_switched"; from: ProviderRef; to: ProviderRef; throughSeq: number }
     | { type: "turn_end"; stopReason: string }
     | { type: "error"; error: KcError }
     | { type: "agent_exited"; code: number | null; signal: string | null }
   );
 
 export type KcEventType = KcEvent["type"];
+
+/** Enough of a provider to name it in the log after it has been reconfigured or removed. */
+export interface ProviderRef {
+  id: string;
+  name: string;
+}
 
 /**
  * A new event before the log assigns it `seq`/`ts`.

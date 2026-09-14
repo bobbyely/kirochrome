@@ -63,12 +63,18 @@ it from running away.
 and what the conversation has cost where the agent reports it.
 
 **Any ACP agent.** Adding one is a config entry, not code. A setup page checks
-**Any ACP agent.** Adding one is a config entry, not code. A setup page checks
 each agent before you rely on it and names exactly what is wrong when it
 fails — and remembers what it offers, so you pick the model before a chat,
 schedule or room starts, and can open with a command like `/effort high`.
 Settings an agent exposes only as a command, like Kiro's `/effort`, sit beside
 the model picker anyway.
+
+**Switch agents mid-conversation.** A provider picker sits first in that row.
+Choose another and the same conversation carries on with it: the new agent
+starts in the same directory and is given the transcript so far with your
+next message. A divider in the transcript marks the seam and shows exactly
+what was sent. Models, modes and effort change the same way, whenever the
+agent advertises them.
 
 **Something to do while you wait.** Two word games in the corner. A game in
 progress survives switching conversations.

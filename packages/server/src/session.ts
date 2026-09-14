@@ -4,6 +4,9 @@ import {
   advertisesLoadSession,
   causeOf,
   collectRoots,
+  handoffText,
+  withHandoff,
+  type Handoff,
   isKcError,
   kcError,
   type KcError,
@@ -201,13 +204,17 @@ export class Session {
    */
   private commandOptionsUnsupported = false;
 
+  /** Mutable for one reason: `switchProvider`. Everything else reads it. */
+  provider: ProviderConfig;
+
   private constructor(
     id: string,
-    readonly provider: ProviderConfig,
+    provider: ProviderConfig,
     readonly cwd: string,
     private readonly store: Store,
   ) {
     this.id = id;
+    this.provider = provider;
   }
 
   /** Spawns the agent, completes the ACP handshake and records the session. */
@@ -318,6 +325,10 @@ export class Session {
 
     // A dead agent must become a visible event, never a silent spinner.
     void proc.exited.then(({ code, signal }) => {
+      // Unless it is an agent this session has already moved on from: the one
+      // `switchProvider` retired exits *after* its replacement is up, and its
+      // exit is not the session's.
+      if (this.proc !== proc) return;
       this.flushText();
       this.append({ type: "agent_exited", code, signal });
       this.busy = false;
@@ -621,13 +632,20 @@ export class Session {
         this.persistMeta();
       }
     }
+    // After a switch, the first message carries the transcript in front of
+    // it. Decided before this message joins the log — it is the "nothing
+    // sent since" that the check looks for. The log holds what the person
+    // typed; the handoff is derived from it by the function the browser uses
+    // to show it.
+    const handoff = this.pendingHandoff();
     this.append(
       attachments.length > 0 ? { type: "user_message", text, attachments } : { type: "user_message", text },
     );
     this.append({ type: "turn_start" });
 
     try {
-      const blocks: Array<Record<string, unknown>> = [{ type: "text", text }];
+      const sent = handoff ? withHandoff(handoff, text) : text;
+      const blocks: Array<Record<string, unknown>> = [{ type: "text", text: sent }];
       for (const attachment of attachments) {
         const stored = this.store.attachment(attachment.id);
         if (stored) blocks.push({ type: "image", mimeType: stored.mime, data: stored.data });
@@ -1152,6 +1170,74 @@ export class Session {
     const current = collectRoots(this.cwd, this.log).includes(path);
     if (current === present) return;
     this.append(present ? { type: "root_added", path } : { type: "root_removed", path });
+  }
+
+  /**
+   * Moves the conversation to another provider without leaving it.
+   *
+   * Not an ACP transfer — there is none; one agent cannot load another's
+   * session — but a fresh `session/new` in the same directory, with the
+   * transcript handed over as text on the next message. The replacement is
+   * brought all the way up before the old agent is touched, so a provider
+   * that will not start leaves the conversation exactly as it was.
+   */
+  async switchProvider(next: ProviderConfig): Promise<void> {
+    if (next.id === this.provider.id) return;
+    if (this.busy || this.queue.length > 0 || this.pendingPermissions.size > 0 || this.pendingElicitations.size > 0) {
+      throw kcError("SESSION_BUSY", "The conversation is mid-turn; a switch would lose it.");
+    }
+    if (this.exited) {
+      throw kcError("SESSION_NOT_LIVE", "The agent has exited; resume the conversation before switching.");
+    }
+
+    const previous = {
+      provider: this.provider,
+      proc: this.proc,
+      connection: this.connection,
+      agentSessionId: this.agentSessionId,
+      configOptions: this.configOptions,
+      commands: this.commands,
+      commandOptionsUnsupported: this.commandOptionsUnsupported,
+      supportsImages: this.supportsImages,
+    };
+    this.provider = next;
+    this.commands = [];
+    this.commandOptionsUnsupported = false;
+    try {
+      await this.connect();
+    } catch (err) {
+      // `connect` had already claimed `proc` and `connection`; put the old
+      // agent back and end the one that failed. Its exit is ignored by the
+      // handler above because `proc` no longer points at it.
+      const failed = this.proc;
+      Object.assign(this, previous);
+      failed?.kill();
+      this.notifyState();
+      throw err;
+    }
+
+    // The old agent goes only now. Its terminals have no one to report to.
+    previous.connection?.close();
+    previous.proc?.kill();
+    this.terminals.releaseAll();
+    this.append({
+      type: "provider_switched",
+      from: { id: previous.provider.id, name: previous.provider.name },
+      to: { id: next.id, name: next.name },
+      throughSeq: this.seq,
+    });
+    this.persistMeta();
+    this.notifyState();
+  }
+
+  /** The handoff owed to the current agent: a switch with nothing sent since. */
+  private pendingHandoff(): Handoff | null {
+    for (let i = this.log.length - 1; i >= 0; i--) {
+      const event = this.log[i]!;
+      if (event.type === "user_message") return null;
+      if (event.type === "provider_switched") return handoffText(this.log, event.throughSeq, event.from, this.cwd);
+    }
+    return null;
   }
 
   /** Records which room this conversation speaks in, and names it for the sidebar. */

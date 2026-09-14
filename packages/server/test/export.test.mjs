@@ -20,6 +20,17 @@ describe("toMarkdown", () => {
     assert.match(md, /## Kiro CLI\n\nBecause of a typo\./);
   });
 
+  it("names each reply's provider across a switch, not the record's current one", () => {
+    const md = toMarkdown({ ...record, providerId: "c", providerName: "Claude Code" }, [
+      { seq: 1, ts: 0, type: "agent_text", text: "Before." },
+      { seq: 2, ts: 0, type: "provider_switched", from: { id: "p", name: "Kiro CLI" }, to: { id: "c", name: "Claude Code" }, throughSeq: 1 },
+      { seq: 3, ts: 0, type: "agent_text", text: "After." },
+    ]);
+    assert.match(md, /## Kiro CLI\n\nBefore\./);
+    assert.match(md, /> Continued with Claude Code/);
+    assert.match(md, /## Claude Code\n\nAfter\./);
+  });
+
   it("renders edits as fenced diff blocks", () => {
     const md = toMarkdown(record, [
       { seq: 1, ts: 0, type: "tool_call", toolCallId: "t", title: "Edit", kind: "edit", status: "in_progress", raw: {} },

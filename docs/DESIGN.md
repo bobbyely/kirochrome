@@ -137,6 +137,31 @@ reasoning level — same UI code, no per-agent branching.
 *Provider* is the exception: it is which binary to spawn, which is our config,
 not the protocol's.
 
+## Key decision 4 — a provider switch is a handoff, in place
+
+There is no ACP session transfer, so moving a conversation to another
+provider means a new agent with the transcript as context. Two choices fell
+out of the invariants:
+
+- **The `Session` object survives; the agent under it changes.** Sockets and
+  the room and schedule code subscribe to the object, so replacing it would
+  leave every watcher on a corpse. `switchProvider` brings the replacement
+  all the way up — spawn, `initialize`, `session/new` — before the old agent
+  is touched, and puts the old one back if that fails. The retired process
+  exits *after* the switch, so the exit handler must check the process is
+  still the session's.
+- **The handoff text is derived, not stored.** The log holds a
+  `provider_switched { from, to, throughSeq }`; `handoffText` in `shared`
+  turns the events up to `throughSeq` into the prose sent, and the browser
+  runs the same function to show it under the divider. Storing the text would
+  be a second copy of the transcript; hiding it would be a prompt nobody can
+  debug. It goes with the person's next message rather than as a turn of its
+  own, which would cost a reply of filler.
+
+The budget is a character count with the oldest messages dropped whole and
+said so. KiroChrome has no model of its own to summarise with, and a hidden
+summary would be the browser-state mistake in another form.
+
 ## Session lifecycle
 
 Only providers that passed their setup check (below) are offered.

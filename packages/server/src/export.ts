@@ -23,6 +23,9 @@ export function toMarkdown(record: SessionRecord, events: KcEvent[]): string {
   const toolTitles = new Map<string, string>();
   /** Set while the last event was a replayed user chunk, so the next extends it. */
   let afterUserChunk = false;
+  // The record names the provider the conversation is on *now*; replies
+  // before a switch were another's. Start from the first switch's `from`.
+  let speaker = events.find((e) => e.type === "provider_switched")?.from.name ?? record.providerName;
 
   for (const event of events) {
     const continuing = afterUserChunk;
@@ -33,7 +36,12 @@ export function toMarkdown(record: SessionRecord, events: KcEvent[]): string {
         break;
 
       case "agent_text":
-        lines.push(`## ${record.providerName}`, "", event.text, "");
+        lines.push(`## ${speaker}`, "", event.text, "");
+        break;
+
+      case "provider_switched":
+        speaker = event.to.name;
+        lines.push(`> Continued with ${event.to.name}; ${event.from.name} left the conversation here.`, "");
         break;
 
       case "tool_call":

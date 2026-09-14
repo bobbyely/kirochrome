@@ -83,38 +83,15 @@ writing the same file.
 
 #### 2. Switch provider without leaving the conversation
 
-Put **Provider** first in the composer's config row, before the model and the
-rest of the options advertised by that agent. It lists providers whose setup
-check passed, using their configured names (for example Anthropic, OpenAI and
-Kiro). Choosing one keeps the same window, URL, sidebar entry and transcript.
-
-This is a KiroChrome handoff, not an ACP session transfer: one provider cannot
-load another provider's session id. Wait for the current turn to finish, start
-a fresh ACP session for the target provider in the same working directory, and
-give it the conversation so far as context. The working tree already carries
-the file changes; the handoff context carries what was said and the useful
-outcomes of tool calls, without protocol bookkeeping, usage updates or raw
-command noise.
-
-The event log remains the one conversation. Append a `provider_switched` event
-that records the old and new provider and the last sequence included in the
-handoff, and render it as a divider such as "Continued with OpenAI · Codex".
-That makes the context boundary durable and visible rather than hiding an
-injected prompt in browser state. Once the new agent is ready, its advertised
-models, modes, effort and other `configOptions` replace the old controls in
-place. Switching again repeats the same process with another fresh agent
-session and the complete transcript through the new boundary.
-
-Do not tear down the current agent until the replacement has completed its
-handshake and `session/new`; a failed switch must leave the conversation usable.
-Only checked providers are offered. A switch waits while a turn, permission,
-elicitation or queued message is outstanding, so ownership never moves while
-work is in flight.
-
-Context size needs an honest first version. Serialize user and agent prose plus
-concise tool outcomes. If it does not fit the target agent, require compaction
-first or send a clearly marked recent tail; KiroChrome has no model of its own
-with which to invent a hidden summary.
+**Shipped.** See *Done since the roadmap was written* and DESIGN.md's key
+decision 4. As planned: Provider first in the composer's config row, listing
+checked providers by their configured names; a fresh `session/new` in the
+same directory; the transcript as context; a `provider_switched` event
+recording both providers and the last seq handed over; the old agent kept
+until the new one is up; refused while anything is in flight. Two calls made
+while building it: the handoff goes with the person's *next* message rather
+than as a turn of its own, and the context budget is a character count that
+drops the oldest messages whole and says how many — no hidden summary.
 
 #### 3. `session/fork` — branch a conversation
 
@@ -284,9 +261,9 @@ than a surprise. Each entry says what would go wrong if it is left.
   (it uses local `setHours`/`setDate`); the Changes pane with `oldText`
   omitted versus empty. (The two room cases it asked for landed with the
   rooms fixes.)
-- **One `useReadyProviders()` hook.** `Rooms.tsx`, `Schedules.tsx` and
-  `NewChat.tsx` each fetch and filter providers by `lastCheck.status === "ok"`
-  with two different error idioms.
+- **Finish the `useReadyProviders()` move.** The hook exists and the
+  composer uses it; `Rooms.tsx`, `Schedules.tsx` and `NewChat.tsx` still
+  fetch and filter for themselves, with two different error idioms.
 - **Dead exports**: `parseClock`, `looksAbsolute`, `WS_PATH`, `systemTheme`,
   `SidebarApi`, `ToolContent`, `DiffLine` — exported, used nowhere else.
 - `.kiro/settings/lsp.json` is untracked and not ignored; decide which.
@@ -296,6 +273,17 @@ than a surprise. Each entry says what would go wrong if it is left.
 - Whatever the work machine turns up once Kiro is actually driving it.
 
 ### Done since the roadmap was written
+
+**Provider switching shipped.** `Session.switchProvider` replaces the agent
+under a live session in place: spawn, `initialize`, `session/new` for the new
+provider, then retire the old process — or put it back if the new one fails,
+marking the provider that failed stale rather than the conversation's. The
+seam is a `provider_switched` event; `handoffText` in `shared` derives the
+prose from the log up to it, and `withHandoff` puts it in front of the next
+message sent. The browser derives the same text to show under the divider,
+so nothing hidden was ever sent. The export attributes replies across
+switches too. `useReadyProviders()` exists now, used by the composer's
+picker; the other two callers still filter for themselves.
 
 **The Files tab shipped**, beside Changes in one drawer (`SidePane.tsx`). A
 lazy tree over the conversation's directories — the working directory plus
