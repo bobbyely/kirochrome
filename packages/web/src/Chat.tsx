@@ -739,7 +739,7 @@ function ContextMeter({ usage }: { usage: SessionUsage | null }) {
   const money =
     cost &&
     new Intl.NumberFormat(undefined, { style: "currency", currency: cost.currency }).format(cost.amount);
-  const spend = money ?? (credits !== undefined ? `${credits.toFixed(2)} credits this turn` : "");
+  const spend = money ?? (credits !== undefined ? `${credits.toFixed(2)} credits so far` : "");
 
   // One decimal in the tooltip: a short turn moves a 200k window by a tenth
   // of a percent, and the rounded figure would look stuck.
@@ -756,6 +756,7 @@ function ContextMeter({ usage }: { usage: SessionUsage | null }) {
         <div className={`context-fill ${usedPct >= 85 ? "high" : ""}`} style={{ width: `${usedPct}%` }} />
       </div>
       <span className={`context-pct ${leftPct <= 15 ? "low" : ""}`}>{leftPct}% left</span>
+      {credits !== undefined && <span className="context-spend">{credits.toFixed(2)} cr</span>}
     </div>
   );
 }

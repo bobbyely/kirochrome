@@ -162,6 +162,17 @@ describe("latestUsage", () => {
     assert.deepEqual(usage, { used: 3.2, size: 100, percentOnly: true, credits: 0.22 });
   });
 
+  it("sums Kiro's credits across turns, and keeps them on a mid-turn frame", () => {
+    const meta = (extra: Record<string, unknown>, seq: number) =>
+      ev({ type: "agent_update", update: { sessionUpdate: "_kiro.dev/metadata", ...extra } } as never, seq);
+    const usage = latestUsage([
+      meta({ contextUsagePercentage: 1, meteringUsage: [{ value: 0.2, unit: "credit" }] }, 1),
+      meta({ contextUsagePercentage: 2, meteringUsage: [{ value: 0.3, unit: "credit" }] }, 2),
+      meta({ contextUsagePercentage: 2.5 }, 3),
+    ]);
+    assert.deepEqual(usage, { used: 2.5, size: 100, percentOnly: true, credits: 0.5 });
+  });
+
   it("reads the most recent usage update from the log", () => {
     const usage = latestUsage([
       ev({ type: "agent_update", update: { sessionUpdate: "usage_update", used: 10, size: 100 } } as never, 1),

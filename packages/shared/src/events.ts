@@ -146,12 +146,24 @@ export interface SessionUsage {
   percentOnly?: boolean;
   /** ACP requires both fields on Cost, so never assume a currency. */
   cost?: { amount: number; currency: string };
-  /** Kiro meters in credits, which are not a currency. */
+  /** Kiro meters in credits, which are not a currency: the conversation's total so far. */
   credits?: number;
 }
 
 /** Reads the latest usage out of the event log. The browser derives state; it never stores it. */
 export function latestUsage(events: KcEvent[]): SessionUsage | null {
+  // Kiro sends metering only on the frame that ends a turn, and the context
+  // figure on every frame, so credits are summed over the whole log rather
+  // than read off the latest frame — which mid-turn has none.
+  let credits: number | null = null;
+  for (const event of events) {
+    if (event.type !== "agent_update") continue;
+    const u = event.update as { sessionUpdate?: string; meteringUsage?: Array<{ value?: number; unit?: string }> };
+    if (u.sessionUpdate !== "_kiro.dev/metadata") continue;
+    const value = u.meteringUsage?.find((m) => m.unit === "credit")?.value;
+    if (typeof value === "number") credits = (credits ?? 0) + value;
+  }
+
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i];
     if (event?.type !== "agent_update") continue;
@@ -169,12 +181,11 @@ export function latestUsage(events: KcEvent[]): SessionUsage | null {
     }
     if (u.sessionUpdate === "_kiro.dev/metadata") {
       if (typeof u.contextUsagePercentage !== "number") continue;
-      const credits = u.meteringUsage?.find((m) => m.unit === "credit")?.value;
       return {
         used: u.contextUsagePercentage,
         size: 100,
         percentOnly: true,
-        ...(typeof credits === "number" ? { credits } : {}),
+        ...(credits !== null ? { credits } : {}),
       };
     }
   }
