@@ -3,6 +3,7 @@ import {
   kcError,
   latestUsage,
   ROOM_DEFAULT_PAUSE,
+  ROOM_DEFAULT_RULES,
   ROOM_DEFAULT_TURNS,
   ROOM_MAX_PARTICIPANTS,
   ROOM_MAX_TURNS,
@@ -19,6 +20,7 @@ import {
 } from "@kirochrome/shared";
 import type { Session } from "./session.js";
 import type { SessionManager } from "./sessionManager.js";
+import { cleanStart } from "./startOptions.js";
 import type { Store } from "./store.js";
 
 /** What a room is doing right now. Not persisted: a restart ends any round. */
@@ -98,6 +100,16 @@ export class RoomManager {
     }
     this.store.upsertRoom(room);
     return room;
+  }
+
+  /** Changes what the room is for and how to behave. Takes effect on the next prompt. */
+  steer(id: string, patch: { topic?: unknown; rules?: unknown }): Room {
+    const room = this.require(id);
+    const topic = typeof patch.topic === "string" && patch.topic.trim() ? patch.topic.trim() : room.topic;
+    const rules = typeof patch.rules === "string" ? patch.rules.trim() || ROOM_DEFAULT_RULES : room.rules;
+    const next = { ...room, topic, rules, updatedAt: Date.now() };
+    this.store.upsertRoom(next);
+    return next;
   }
 
   /** Ends any round, detaches the agents, and removes the room. Their conversations stay. */
@@ -280,7 +292,7 @@ export class RoomManager {
     return [
       `You are ${me.name} — ${me.role}. You are in a room called "${room.name}" with ${others.join(", ")} and the user (the person running this).`,
       `Topic: ${room.topic}`,
-      `Rules: reply as ${me.name} only, in a few short paragraphs at most. Never write lines for anyone else. Build on or challenge what has been said; do not restate it. If you have nothing to add, reply with exactly ${ROOM_PASS}. Use tools only when the room needs something from the project that you cannot know otherwise.`,
+      `Rules: ${room.rules || ROOM_DEFAULT_RULES}`,
       `Said since your last turn:\n\n${transcript}`,
       `Your reply:`,
     ].join("\n\n");
@@ -312,7 +324,7 @@ export class RoomManager {
   }
 
   private async openFor(room: Room, participant: RoomParticipant): Promise<Session> {
-    const session = await this.sessions.open(this.provider(participant.providerId), room.cwd);
+    const session = await this.sessions.open(this.provider(participant.providerId), room.cwd, participant.start);
     session.tagRoom(room.id, `${room.name} · ${participant.name}`);
     return session;
   }
@@ -392,6 +404,7 @@ export class RoomManager {
     const name = str(input.name);
     const cwd = str(input.cwd);
     const topic = str(input.topic);
+    const rules = str(input.rules) || ROOM_DEFAULT_RULES;
     const maxTurnsPerRound = Number(input.maxTurnsPerRound ?? ROOM_DEFAULT_TURNS);
     const pauseSeconds = Number(input.pauseSeconds ?? ROOM_DEFAULT_PAUSE);
     const creditCap = input.creditCap === null || input.creditCap === undefined ? null : Number(input.creditCap);
@@ -406,7 +419,12 @@ export class RoomManager {
     if (creditCap !== null && (!Number.isFinite(creditCap) || creditCap <= 0)) problems.push("the credit cap must be a positive number, or empty");
 
     const raw = Array.isArray(input.participants) ? input.participants : [];
-    const participants = raw.map((p) => ({ name: str(p?.name), providerId: str(p?.providerId), role: str(p?.role) }));
+    const participants = raw.map((p) => ({
+      name: str(p?.name),
+      providerId: str(p?.providerId),
+      role: str(p?.role),
+      start: cleanStart(p?.start),
+    }));
     if (participants.length < ROOM_MIN_PARTICIPANTS || participants.length > ROOM_MAX_PARTICIPANTS) {
       problems.push(`${ROOM_MIN_PARTICIPANTS} to ${ROOM_MAX_PARTICIPANTS} participants`);
     }
@@ -422,7 +440,7 @@ export class RoomManager {
     }
 
     if (problems.length > 0) throw kcError("ROOM_INVALID", `The room is not valid: ${problems.join("; ")}.`);
-    return { name, cwd, topic, maxTurnsPerRound, pauseSeconds, creditCap, participants };
+    return { name, cwd, topic, rules, maxTurnsPerRound, pauseSeconds, creditCap, participants };
   }
 }
 

@@ -20,8 +20,8 @@ const input = {
   pauseSeconds: 0,
   creditCap: null,
   participants: [
-    { name: "Planner", providerId: "mock", role: "lays out the steps" },
-    { name: "Critic", providerId: "mock", role: "finds the holes" },
+    { name: "Planner", providerId: "mock", role: "lays out the steps", start: { configValues: { model: "mock-small" } } },
+    { name: "Critic", providerId: "mock", role: "finds the holes", start: {} },
   ],
 };
 
@@ -60,9 +60,11 @@ describe("a room", () => {
     );
   });
 
-  it("opens a tagged session per participant", async () => {
+  it("opens a tagged session per participant, with its chosen settings", async () => {
     const room = await rooms.create(input);
     assert.equal(room.participants.length, 2);
+    const planner = sessions.getLive(room.participants[0].sessionId);
+    assert.equal(planner.summary().configOptions.find((o) => o.id === "model")?.currentValue, "mock-small");
     for (const p of room.participants) {
       const record = store.getSession(p.sessionId);
       assert.equal(record.roomId, room.id);
@@ -89,6 +91,17 @@ describe("a room", () => {
     assert.match(prompts[0], /\[You\] Let's start\./);
     assert.match(prompts[1], /\[Critic\] Hello from Critic/);
     assert.doesNotMatch(prompts[1], /Let's start/, "already shown");
+    rooms.delete(room.id);
+  });
+
+  it("can be steered: new topic and rules reach the next prompt", async () => {
+    const room = await rooms.create({ ...input, maxTurnsPerRound: 1 });
+    rooms.steer(room.id, { topic: "Something else entirely", rules: "Answer in haiku." });
+    await rooms.say(room.id, "Go.");
+    assert.ok(await until(() => rooms.get(room.id).status === "idle"));
+    const prompt = store.eventsSince(rooms.get(room.id).participants[0].sessionId, 0).find((e) => e.type === "user_message").text;
+    assert.match(prompt, /Topic: Something else entirely/);
+    assert.match(prompt, /Rules: Answer in haiku\./);
     rooms.delete(room.id);
   });
 

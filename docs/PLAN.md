@@ -347,6 +347,9 @@ way to inject into a running turn. What was decided in the building:
   who and why, rather than being skipped in silence round after round.
 - **The room page polls** rather than extending the socket protocol: a room's
   clock is agent turns, seconds apart.
+- **The rules are a field, not a constant.** They started as a string in the
+  prompt builder; steering a room mid-conversation is editing that string,
+  so it lives on the room, with the topic, and the next prompt carries both.
 - The sidebar folds each kind of thing — conversations, rooms, schedules — so
   a long list of one does not push the others off the bottom.
 

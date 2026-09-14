@@ -138,6 +138,7 @@ export class Store {
         name                TEXT NOT NULL,
         cwd                 TEXT NOT NULL,
         topic               TEXT NOT NULL,
+        rules               TEXT NOT NULL DEFAULT '',
         participants        TEXT NOT NULL,   -- JSON RoomParticipant[]
         max_turns_per_round INTEGER NOT NULL,
         pause_seconds       INTEGER NOT NULL,
@@ -446,10 +447,10 @@ export class Store {
   upsertRoom(room: Room): void {
     this.db
       .prepare(
-        `INSERT INTO rooms (id, name, cwd, topic, participants, max_turns_per_round, pause_seconds, credit_cap, status, credits_used, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO rooms (id, name, cwd, topic, rules, participants, max_turns_per_round, pause_seconds, credit_cap, status, credits_used, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
-           name = excluded.name, cwd = excluded.cwd, topic = excluded.topic,
+           name = excluded.name, cwd = excluded.cwd, topic = excluded.topic, rules = excluded.rules,
            participants = excluded.participants, max_turns_per_round = excluded.max_turns_per_round,
            pause_seconds = excluded.pause_seconds, credit_cap = excluded.credit_cap,
            status = excluded.status, credits_used = excluded.credits_used, updated_at = excluded.updated_at`,
@@ -459,6 +460,7 @@ export class Store {
         room.name,
         room.cwd,
         room.topic,
+        room.rules,
         JSON.stringify(room.participants),
         room.maxTurnsPerRound,
         room.pauseSeconds,
@@ -682,7 +684,9 @@ function toRoom(row: Record<string, string | number | null>): Room {
     name: String(row["name"]),
     cwd: String(row["cwd"]),
     topic: String(row["topic"]),
-    participants: JSON.parse(String(row["participants"])) as RoomParticipant[],
+    rules: String(row["rules"] ?? ""),
+    // Rows from before participants had start options.
+    participants: (JSON.parse(String(row["participants"])) as RoomParticipant[]).map((p) => ({ ...p, start: p.start ?? {} })),
     maxTurnsPerRound: Number(row["max_turns_per_round"]),
     pauseSeconds: Number(row["pause_seconds"]),
     creditCap: (row["credit_cap"] as number | null) ?? null,

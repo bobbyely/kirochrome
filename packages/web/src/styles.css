@@ -1173,6 +1173,11 @@ kbd {
 .start-pickers.compact .start-picker { min-width: 120px; }
 .provider-choice.chosen { border-color: var(--accent); box-shadow: var(--glow); }
 .room-participant button { padding: 0 var(--sp-2); }
+.room-participant-block { margin-bottom: var(--sp-3); padding-bottom: var(--sp-2); border-bottom: 1px solid var(--border); }
+.room-participant-block .room-participant { margin-bottom: var(--sp-2); }
+.room-steer { padding: 0 var(--sp-4) var(--sp-3); border-bottom: 1px solid var(--border); }
+.room-steer .field { margin: var(--sp-3) 0 0; }
+.room-steer .schedule-actions { margin-top: var(--sp-3); }
 .room-numbers { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-3); }
 .room-numbers .field { margin-top: var(--sp-3); }
 .room-meter { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); white-space: nowrap; }

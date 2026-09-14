@@ -6,6 +6,8 @@
  * each other, so "what they are shown" is a prompt: a preamble naming the
  * room, then everything said since that agent last spoke.
  */
+import type { StartOptions } from "./events.js";
+
 export interface RoomParticipant {
   id: string;
   /** How the others address it: "Planner", "Critic". */
@@ -13,6 +15,8 @@ export interface RoomParticipant {
   providerId: string;
   /** One line of persona, put in front of every prompt it gets. */
   role: string;
+  /** Model, mode and an opening message for its session. */
+  start: StartOptions;
   /** The conversation it speaks from, once its agent is up. */
   sessionId: string | null;
   /** The room seq it has been shown up to; its next prompt starts after this. */
@@ -35,6 +39,8 @@ export interface Room {
   cwd: string;
   /** What the room is for; every agent sees it. */
   topic: string;
+  /** How to behave, put in every prompt after the topic. Editable; starts as ROOM_DEFAULT_RULES. */
+  rules: string;
   participants: RoomParticipant[];
   /** Agent turns per round — a round is what one message from the user sets off. */
   maxTurnsPerRound: number;
@@ -49,9 +55,15 @@ export interface Room {
   updatedAt: number;
 }
 
-export type RoomInput = Pick<Room, "name" | "cwd" | "topic" | "maxTurnsPerRound" | "pauseSeconds" | "creditCap"> & {
-  participants: Array<Pick<RoomParticipant, "name" | "providerId" | "role">>;
+export type RoomInput = Pick<Room, "name" | "cwd" | "topic" | "rules" | "maxTurnsPerRound" | "pauseSeconds" | "creditCap"> & {
+  participants: Array<Pick<RoomParticipant, "name" | "providerId" | "role" | "start">>;
 };
+
+/** What every participant is told about how to behave, unless the room says otherwise. */
+export const ROOM_DEFAULT_RULES =
+  "Reply as yourself only, in a few short paragraphs at most. Never write lines for anyone else. " +
+  "Build on or challenge what has been said; do not restate it. If you have nothing to add, reply with exactly PASS. " +
+  "Use tools only when the room needs something from the project that you cannot know otherwise.";
 
 /** One thing said in the room, by an agent or the user. Append-only, like every log here. */
 export interface RoomMessage {
