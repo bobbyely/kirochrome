@@ -75,6 +75,7 @@ export function Rooms({ onOpenRoom }: { onOpenRoom: (id: string) => void }) {
           providers={providers}
           workspaces={workspaces ?? []}
           pending={pending}
+          error={error}
           onCancel={() => setCreating(false)}
           onSave={async (input) => {
             // Creating spawns an agent per participant, which takes seconds;
@@ -137,12 +138,15 @@ function RoomForm({
   providers,
   workspaces,
   pending,
+  error,
   onSave,
   onCancel,
 }: {
   providers: ProviderView[];
   workspaces: string[];
   pending: boolean;
+  /** The last failure to save, shown beside the button where the click was. */
+  error: string | null;
   onSave: (input: RoomInput) => void;
   onCancel: () => void;
 }) {
@@ -287,6 +291,7 @@ function RoomForm({
       </p>
       </section>
 
+      {error && <div className="banner">{error}</div>}
       <div className="schedule-actions">
         <button type="submit" className="primary" disabled={pending}>
           {pending ? "Starting the agents…" : "Create and open"}

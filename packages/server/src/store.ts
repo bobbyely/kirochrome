@@ -246,6 +246,12 @@ export class Store {
     if (!scheduleColumns.includes("start")) {
       this.db.exec(`ALTER TABLE schedules ADD COLUMN start TEXT NOT NULL DEFAULT '{}'`);
     }
+    const roomColumns = (this.db.prepare(`PRAGMA table_info(rooms)`).all() as Array<{ name: string }>).map(
+      (c) => c.name,
+    );
+    if (roomColumns.length > 0 && !roomColumns.includes("rules")) {
+      this.db.exec(`ALTER TABLE rooms ADD COLUMN rules TEXT NOT NULL DEFAULT ''`);
+    }
     const runColumns = (this.db.prepare(`PRAGMA table_info(schedule_runs)`).all() as Array<{ name: string }>).map(
       (c) => c.name,
     );
