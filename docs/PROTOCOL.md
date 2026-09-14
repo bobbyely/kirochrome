@@ -160,6 +160,14 @@ A turn streams `session/update` notifications and terminates with a
 `tool_call`, `tool_call_update`, `session_info_update` — plus
 `available_commands_update`, which updates the command catalogue.
 
+ACP's `stopReason`s are `end_turn`, `max_tokens`, `max_turn_requests`,
+`refusal` and `cancelled`. Our log has two more, for turns the agent never
+ended: **`error`**, when the request failed (the agent died mid-turn, say —
+the `error` event just before it says why), and **`closed`**, when we shut the
+session with a turn in flight. Every `turn_start` therefore has a `turn_end`;
+but a reader deciding whether a turn *succeeded* must not treat those two as
+success, which is what the scheduler's failure check does.
+
 **Everything else is appended raw as `agent_update`.** That is deliberate: an
 update kind we do not recognise is still recorded, so the log stays complete and
 a later reader can derive from it. `usage_update` works exactly this way — the

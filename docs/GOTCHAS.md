@@ -81,6 +81,22 @@ bug from the next person, who has no reason to know.
 
 All of these were real races, found the hard way.
 
+- **A queued message's promise belongs to that message.** `prompt()` used to
+  return at once whenever a turn was already running. A caller awaiting it —
+  the scheduler, a room — took that as "sent and finished": a scheduled run
+  with an opening message recorded *ok* having sent nothing, and a room read
+  the *running* turn's text as the reply. Each queue entry now resolves when
+  its own turn ends, and the drain loop is single-flight, because `busy` drops
+  to false between turns and a `prompt()` landing in that gap started a second
+  loop.
+- **A turn the agent did not end must still end.** A crash mid-turn, or a
+  `close()` during one, left the transcript stopped mid-answer with an
+  unmatched `turn_start` — and anything reading the log for "did it finish"
+  got no answer. `runTurn`'s catch appends a `turn_end` with a reason of our
+  own (`error`), and `close()` writes one (`closed`) *before* shutting the log,
+  since the catch fires only after. Readers must not treat every `turn_end`
+  as success: the scheduler keeps scanning past those two reasons for the
+  error before them.
 - **Single-flight anything that awaits before registering itself.** `resume`
   awaits a handshake, so two calls arriving in that window each built a Session
   for the same conversation — both appending from the same seq, and each with
@@ -142,6 +158,14 @@ All of these were real races, found the hard way.
 
 ## Security
 
+- **Check `Host`, not only `Origin`.** Same-origin GETs send no `Origin`, so a
+  page on a DNS-rebound name that resolves to `127.0.0.1` passed the check by
+  omission and could read every GET route — transcripts, schedule prompts and
+  cwds, exports. The `Host` header is what such a page cannot make look like
+  ours; it has to be `localhost` or `127.0.0.1` on our port.
+- **Auto-approve takes `allow_once`, never `allow_always`.** Picking the first
+  option whose kind started with `allow` let an unattended run grant the agent
+  a standing, agent-side permission that outlives the run and that nobody saw.
 - **A convenience entry in the Origin allowlist is a permanent hole.**
   `http://localhost:5173` was in the list unconditionally so the Vite dev server
   could talk to us — but 5173 is Vite's *default*, so in a built install that
@@ -160,6 +184,19 @@ All of these were real races, found the hard way.
 
 ## Storage
 
+- **A lenient read is only safe while nothing writes back from it.**
+  `loadConfig` skips a malformed provider so the setup page still loads;
+  `updateProvider` then wrote the validated list back, so correcting one
+  provider's path silently deleted a hand-edited neighbour that had a typo in
+  it. Saves patch the file *as written*, invalid entries included.
+- **A metadata write must not decide status.** `persistMeta` hardcoded
+  `status: "active"`, so an agent-sent title — or any other metadata update —
+  put an archived conversation back in the sidebar. It preserves whatever the
+  row has.
+- **A file stream needs an `error` listener.** `createReadStream(...).pipe(res)`
+  with none is fatal to the process on any read error, and a static asset that
+  vanishes between `existsSync` and the read is enough to take every running
+  turn down.
 - **Do not write a database row per streamed token.** Coalesce deltas on a
   ~250ms flush.
 - **`node:sqlite` warns on Node 22**, stable on 24. Pin via `.nvmrc`. Do not
@@ -172,6 +209,10 @@ All of these were real races, found the hard way.
 
 ## Browser
 
+- **An omitted `oldText` is not an empty one.** ACP's diff `oldText` is
+  optional; coercing absence to `""` made the Changes pane label every write
+  whose before-text the agent left out as a *new* file. Absent stays `null`:
+  nothing to diff against, and the file keeps "modified".
 - **`white-space: pre-wrap` must not reach markdown rows.** It renders the
   newlines between block elements literally, double-spacing every paragraph.
 - **A failed re-check request is not a passing check.** The setup card kept its
@@ -212,6 +253,13 @@ All of these were real races, found the hard way.
 
 ## Untrusted input
 
+- **Validate what an agent hands the terminal.** `outputByteLimit` of `0` or a
+  negative number silently emptied the buffer, which reads to the agent as a
+  command with no output; the value was wrong and nothing said so. Refuse it
+  with a typed error, the only answer that lets the agent fix its request.
+  The same goes for a status literal on `PATCH /api/schedules/:id` — any string
+  used to be stored — and for an agent-supplied diff path dropped into the
+  export's HTML.
 - **`typeof x === "number"` is not "a number you can use".** `JSON.parse`
   happily turns `1e999` into `Infinity`, and both it and `NaN` survive
   arithmetic, so `{"type":"move_queued","from":1e999}` passes a naive check and

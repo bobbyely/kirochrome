@@ -456,6 +456,7 @@ function diffSummary(diffs: ToolDiff[]): string {
   let added = 0;
   let removed = 0;
   for (const diff of diffs) {
+    if (diff.oldText === null) continue; // the agent sent no before-text to count against
     const lines = lineDiff(diff.oldText, diff.newText);
     if (!lines) continue;
     const counts = countChanges(lines);

@@ -44,7 +44,8 @@ export function toMarkdown(record: SessionRecord, events: KcEvent[]): string {
       case "tool_call_update": {
         const diffs = collectDiffs(event.raw);
         for (const diff of diffs) {
-          lines.push(`<details><summary>${diff.path}</summary>`, "", "```diff", diff.body, "```", "", "</details>", "");
+          // The path comes from the agent and lands inside an HTML element.
+          lines.push(`<details><summary>${escapeHtml(diff.path)}</summary>`, "", "```diff", diff.body, "```", "", "</details>", "");
         }
         break;
       }
@@ -130,4 +131,8 @@ export function exportFilename(record: SessionRecord): string {
     .slice(0, 60);
   const date = new Date(record.createdAt).toISOString().slice(0, 10);
   return `${date}-${base || "conversation"}.md`;
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

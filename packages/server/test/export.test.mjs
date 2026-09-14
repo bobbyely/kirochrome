@@ -34,6 +34,18 @@ describe("toMarkdown", () => {
     assert.match(md, /a\.ts/);
   });
 
+  it("escapes an agent-supplied path before putting it inside HTML", () => {
+    const md = toMarkdown(record, [
+      { seq: 1, ts: 0, type: "tool_call", toolCallId: "t", title: "Edit", kind: "edit", status: "in_progress", raw: {} },
+      {
+        seq: 2, ts: 0, type: "tool_call_update", toolCallId: "t", status: "completed",
+        raw: { content: [{ type: "diff", path: "<b>&x.ts", oldText: "a", newText: "b" }] },
+      },
+    ]);
+    assert.match(md, /<summary>&lt;b&gt;&amp;x\.ts<\/summary>/);
+    assert.doesNotMatch(md, /<summary><b>/);
+  });
+
   it("records errors and permission decisions", () => {
     const md = toMarkdown(record, [
       { seq: 1, ts: 0, type: "permission_request", requestId: "r", title: "Delete files?", options: [] },

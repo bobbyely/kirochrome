@@ -102,6 +102,21 @@ describe("a partially valid config file", () => {
     assert.match(config.problems[2], /providers\[3\].*'env' must be an object of strings/);
   });
 
+  it("keeps a dropped entry in the file when another provider is saved from the UI", () => {
+    // A lenient read is only safe while nothing writes back from it: saving the
+    // validated list made the omission permanent, so correcting one provider's
+    // path deleted a hand-edited neighbour that merely had a typo.
+    const broken = { id: "typo", name: "Typo", command: "/bin/true", args: "not-an-array" };
+    write({ providers: [ok, broken] });
+    load();
+    updateProvider("good", { command: "/bin/false" });
+
+    const onDisk = JSON.parse(readFileSync(join(dir, "config.json"), "utf8")).providers;
+    assert.deepEqual(onDisk.map((p) => p.id), ["good", "typo"], "the broken entry is still there to fix");
+    assert.equal(onDisk[0].command, "/bin/false", "and the edit landed");
+    assert.equal(onDisk[1].args, "not-an-array", "verbatim, so the user can see what was wrong");
+  });
+
   it("drops a duplicate id, which would otherwise be unreachable dead weight", () => {
     write({ providers: [ok, { ...ok, name: "Shadowed", command: "/bin/false" }] });
     const config = load();
@@ -158,8 +173,9 @@ describe("seeding and writing", () => {
     const onDisk = JSON.parse(readFileSync(join(dir, "config.json"), "utf8"));
     assert.deepEqual(Object.keys(onDisk), ["providers"]);
     assert.equal(onDisk.providers[0].command, "/bin/echo");
-    // A rewrite persists what loaded, so the dropped entry is now gone from
-    // disk. Deliberate, and the reason the drop is warned about.
-    assert.equal(onDisk.providers.length, 1);
+    // The entry loadConfig dropped is still on disk: a save patches the file
+    // as written, not the validated list, so a lenient read cannot erase what
+    // it skipped. (This assertion used to be the opposite, and was the bug.)
+    assert.equal(onDisk.providers.length, 2);
   });
 });

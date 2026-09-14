@@ -40,6 +40,29 @@ const LEGACY_SETTERS: Record<string, { method: string; param: string }> = {
   mode: { method: "session/set_mode", param: "modeId" },
 };
 
+/**
+ * `stopReason`s of our own, for turns the agent did not end. ACP's are
+ * `end_turn`, `max_tokens`, `max_turn_requests`, `refusal` and `cancelled`.
+ */
+export const TURN_FAILED = "error";
+export const TURN_CLOSED = "closed";
+
+interface QueueEntry {
+  text: string;
+  attachments: Attachment[];
+  promise: Promise<void>;
+  resolve: () => void;
+}
+
+/** A promise and its resolver, for a queue entry to hand its sender. */
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
 /** Deltas are buffered this long before becoming one event. See docs/DESIGN.md. */
 const TEXT_FLUSH_MS = 250;
 const HANDSHAKE_TIMEOUT_MS = 60_000;
@@ -133,7 +156,13 @@ export class Session {
    * user message, so it is authoritative state (invariant 3). It therefore
    * survives a disconnect and is visible to every connected tab.
    */
-  private readonly queue: Array<{ text: string; attachments: Attachment[] }> = [];
+  private readonly queue: QueueEntry[] = [];
+  /**
+   * The drain loop is single-flight. `busy` is a UI fact — a turn is in flight —
+   * and drops to false between turns, so a `prompt()` arriving in that gap
+   * would otherwise start a second loop and run two turns at once.
+   */
+  private draining = false;
 
   private textBuffer = "";
   private flushTimer: NodeJS.Timeout | null = null;
@@ -195,6 +224,8 @@ export class Session {
     // phantom conversation in the sidebar whenever a provider failed to start.
     await session.connectOrClose();
     await session.applyValues(start.configValues ?? {});
+    // Before the opening turn, or its permission prompts are not covered.
+    if (start.autoApprove !== undefined) session.setAutoApprove(start.autoApprove);
     session.persistMeta();
     // The opening message is an ordinary first turn — a slash command for a
     // setting the agent exposes no other way — and is in the transcript like
@@ -290,6 +321,7 @@ export class Session {
       this.append({ type: "agent_exited", code, signal });
       this.busy = false;
       this.exited = true;
+      this.dropQueued(this.queue.splice(0));
       // Release anything blocked on a human; nothing is listening any more.
       this.releasePending();
       this.notifyState();
@@ -478,10 +510,14 @@ export class Session {
    * and are sent in order as each turn finishes.
    */
   async prompt(text: string, images: Array<{ mime: string; data: string }> = []): Promise<void> {
-    this.queue.push({ text, attachments: this.storeImages(images) });
+    // Resolves when *this* message's turn ends, not when the queue happens to
+    // be idle. Returning early while busy let a scheduled run record success
+    // having done nothing, and a room read another turn's text as the reply.
+    const entry: QueueEntry = { text, attachments: this.storeImages(images), ...deferred() };
+    this.queue.push(entry);
     this.notifyState();
-    if (this.busy) return;
-    await this.drain();
+    void this.drain();
+    return entry.promise;
   }
 
   /**
@@ -492,15 +528,18 @@ export class Session {
    */
   async interrupt(text: string, images: Array<{ mime: string; data: string }> = []): Promise<void> {
     if (!this.busy) return this.prompt(text, images);
-    this.queue.unshift({ text, attachments: this.storeImages(images) });
+    const entry: QueueEntry = { text, attachments: this.storeImages(images), ...deferred() };
+    this.queue.unshift(entry);
     this.append({ type: "interrupted" });
     this.notifyState();
-    if (!this.connection || !this.agentSessionId) return;
-    try {
-      await this.connection.agent.notify("session/cancel", { sessionId: this.agentSessionId });
-    } catch (err) {
-      this.emitError(kcError("RPC_ERROR", "Could not cancel the turn.", { cause: causeOf(err) }));
+    if (this.connection && this.agentSessionId) {
+      try {
+        await this.connection.agent.notify("session/cancel", { sessionId: this.agentSessionId });
+      } catch (err) {
+        this.emitError(kcError("RPC_ERROR", "Could not cancel the turn.", { cause: causeOf(err) }));
+      }
     }
+    return entry.promise;
   }
 
   /** Images are stored now and referenced by id, so the queue and the log never carry base64. */
@@ -516,18 +555,33 @@ export class Session {
   }
 
   private async drain(): Promise<void> {
-    while (this.queue.length > 0) {
-      const next = this.queue.shift();
-      if (next === undefined) return;
-      this.notifyState();
-      await this.runTurn(next.text, next.attachments);
+    if (this.draining) return;
+    this.draining = true;
+    try {
+      while (this.queue.length > 0) {
+        const next = this.queue.shift();
+        if (next === undefined) return;
+        this.notifyState();
+        try {
+          await this.runTurn(next.text, next.attachments);
+        } finally {
+          next.resolve();
+        }
+      }
+    } finally {
+      this.draining = false;
     }
+  }
+
+  /** Releases whoever was waiting on messages that will now never be sent. */
+  private dropQueued(entries: QueueEntry[]): void {
+    for (const entry of entries) entry.resolve();
   }
 
   /** Removes a message that has not been sent yet. */
   unqueue(index: number): void {
     if (!this.inQueue(index)) return;
-    this.queue.splice(index, 1);
+    this.dropQueued(this.queue.splice(index, 1));
     this.notifyState();
   }
 
@@ -602,6 +656,11 @@ export class Session {
           detail: { stderr: this.proc?.stderr.tail() },
         }),
       );
+      // The turn is over even though the agent did not end it. Without this the
+      // transcript stops mid-answer with an unmatched `turn_start`, and anything
+      // reading the log for "did this turn finish" gets no answer. A no-op if
+      // `close()` already wrote the closing `turn_end` and shut the log.
+      this.append({ type: "turn_end", stopReason: TURN_FAILED });
     } finally {
       this.busy = false;
       this.notifyState();
@@ -713,7 +772,7 @@ export class Session {
     // Stop means stop: drop anything waiting, or the queue would immediately
     // start a new turn and look like the button did nothing.
     if (this.queue.length > 0) {
-      this.queue.length = 0;
+      this.dropQueued(this.queue.splice(0));
       this.notifyState();
     }
     if (!this.connection || !this.agentSessionId || !this.busy) return;
@@ -803,7 +862,9 @@ export class Session {
     const title = params.toolCall?.title ?? "Allow this action?";
 
     if (this.autoApprove) {
-      const allow = options.find((o) => o.kind.startsWith("allow"));
+      // `allow_once` over `allow_always`: an unattended run must not grant an
+      // agent-side permission that outlives it and that nobody saw.
+      const allow = options.find((o) => o.kind === "allow_once") ?? options.find((o) => o.kind.startsWith("allow"));
       if (allow) return { outcome: { outcome: "selected" as const, optionId: allow.optionId } };
     }
 
@@ -1062,7 +1123,9 @@ export class Session {
       providerName: this.provider.name,
       cwd: this.cwd,
       title: this.title,
-      status: "active",
+      // Preserve whatever status the row has: this is a metadata write, and
+      // hardcoding "active" here put a renamed conversation back in the sidebar.
+      status: this.store.getSession(this.id)?.status ?? "active",
       createdAt: now,
       updatedAt: now,
       titleLocked: this.titleLocked,
@@ -1188,9 +1251,13 @@ export class Session {
 
   close(): void {
     // Buffered text is the session's last words: flush it while the log still
-    // accepts writes, because `closing` stops `append` for good.
+    // accepts writes, because `closing` stops `append` for good. Likewise a
+    // turn in flight: end it here, since the catch in `runTurn` will fire only
+    // after `closing` has shut the log.
     this.flushText();
+    if (this.busy) this.append({ type: "turn_end", stopReason: TURN_CLOSED });
     this.closing = true;
+    this.dropQueued(this.queue.splice(0));
     // Release anything blocked on a human; the agent is going away regardless.
     this.releasePending();
     this.terminals.releaseAll();

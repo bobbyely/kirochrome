@@ -35,9 +35,17 @@ const VITE_PORT = 5173;
  * spawn, so that was a page on one origin choosing what runs on the machine.
  */
 export function originAllowed(req: IncomingMessage, port: number): boolean {
+  // Same-origin GETs send no Origin, so a page on a DNS-rebound name that
+  // resolves to 127.0.0.1 would pass the Origin check by omission. The Host
+  // header is what such a page cannot fake: require it to be us, on our port.
+  if (!hostAllowed(req.headers.host, port)) return false;
   const origin = req.headers.origin;
   if (origin === undefined) return true; // same-origin fetch or curl
   return allowedOrigins(port).has(origin);
+}
+
+function hostAllowed(host: string | undefined, port: number): boolean {
+  return host === `localhost:${port}` || host === `127.0.0.1:${port}` || host === `[::1]:${port}`;
 }
 
 function allowedOrigins(port: number): Set<string> {
@@ -56,9 +64,13 @@ function allowedOrigins(port: number): Set<string> {
  */
 export function originRejection(req: IncomingMessage, port: number): KcError {
   const origin = req.headers.origin ?? "(none)";
+  const host = req.headers.host ?? "(none)";
   const allowed = [...allowedOrigins(port)];
-  return kcError("ORIGIN_REJECTED", `Requests from ${origin} are not accepted.`, {
-    detail: { origin, allowed, devMode: process.env.KIROCHROME_DEV === "1" },
+  const message = hostAllowed(host, port)
+    ? `Requests from ${origin} are not accepted.`
+    : `Requests addressed to ${host} are not accepted; this server answers only as localhost or 127.0.0.1.`;
+  return kcError("ORIGIN_REJECTED", message, {
+    detail: { origin, host, allowed, devMode: process.env.KIROCHROME_DEV === "1" },
   });
 }
 
@@ -351,7 +363,15 @@ function serveStatic(res: ServerResponse, root: string, pathname: string): void 
     file = join(root, "index.html"); // SPA fallback
   }
   res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
-  createReadStream(file).pipe(res);
+  // A stream with no error listener throws on the event loop, and that is
+  // fatal for the whole process — every running turn included. A file that
+  // vanishes between the existsSync above and the read is enough.
+  createReadStream(file)
+    .on("error", () => {
+      if (!res.headersSent) res.writeHead(500);
+      res.end();
+    })
+    .pipe(res);
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {

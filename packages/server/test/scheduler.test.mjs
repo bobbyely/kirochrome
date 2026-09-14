@@ -85,6 +85,32 @@ describe("a schedule", () => {
     assert.equal(view.nextRunAt, run.startedAt + 30 * 60_000, "the next run counts from this one");
   });
 
+  it("runs its prompt even when the schedule has an opening message", async () => {
+    // The opening turn set `busy`, `prompt()` returned at once, the agent was
+    // detached mid-opening, and the run was recorded ok having sent nothing.
+    const schedule = scheduler.create({ ...input, prompt: "the real work", start: { opening: "warm up" } });
+    const run = await scheduler.runNow(schedule.id);
+
+    assert.equal(run.outcome, "ok");
+    const said = store.eventsSince(run.sessionId, 0).filter((e) => e.type === "user_message").map((e) => e.text);
+    assert.deepEqual(said, ["warm up", "the real work"], "both turns were sent, in order");
+  });
+
+  it("records a run whose turn died as failed, not ok", async () => {
+    // A failed turn still ends the turn — with a reason — and the run must
+    // read the error that sits before it rather than stopping at the turn_end.
+    const schedule = scheduler.create({ ...input, prompt: "die-mid-turn" });
+    const run = await scheduler.runNow(schedule.id);
+    assert.equal(run.outcome, "failed");
+    assert.equal(run.error.code, "RPC_ERROR");
+  });
+
+  it("refuses a status that is not one of the two it knows", () => {
+    const schedule = scheduler.create(input);
+    assert.throws(() => scheduler.update(schedule.id, { status: "archived" }), (e) => e.code === "SCHEDULE_INVALID");
+    assert.equal(scheduler.update(schedule.id, { status: "paused" }).status, "paused");
+  });
+
   it("records a run that could not start, with the error", async () => {
     const schedule = scheduler.create({ ...input, providerId: "mock" });
     store.markStale("mock");

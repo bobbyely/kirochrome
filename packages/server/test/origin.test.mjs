@@ -7,7 +7,11 @@ import { afterEach, describe, it } from "node:test";
 import { originAllowed, originRejection } from "../dist/http.js";
 
 const PORT = 4711;
-const from = (origin) => originAllowed({ headers: origin === null ? {} : { origin } }, PORT);
+const HOST = `127.0.0.1:${PORT}`;
+// `host: null` means no Host header at all — a default parameter would turn an
+// explicit undefined back into ours.
+const from = (origin, host = HOST) =>
+  originAllowed({ headers: { ...(host === null ? {} : { host }), ...(origin === null ? {} : { origin }) } }, PORT);
 
 afterEach(() => {
   delete process.env.KIROCHROME_DEV;
@@ -42,11 +46,23 @@ describe("the Origin allowlist", () => {
     assert.equal(from("http://localhost:5174"), false);
   });
 
+  it("requires the Host to be us, so a rebound name cannot read GET routes by omitting Origin", () => {
+    // Same-origin GETs carry no Origin. A page on a DNS name that resolves to
+    // 127.0.0.1 sends none either — and would have passed. Its Host header is
+    // the one thing it cannot make look like ours.
+    assert.equal(from(null, `evil.example:${PORT}`), false);
+    assert.equal(from(null, "127.0.0.1:9999"), false);
+    assert.equal(from(null, null), false);
+    assert.equal(from(null, `localhost:${PORT}`), true);
+    // A right Origin does not rescue a wrong Host.
+    assert.equal(from(`http://127.0.0.1:${PORT}`, `evil.example:${PORT}`), false);
+  });
+
   it("says which origin it rejected and what it would have accepted", () => {
     // Vite drifts to 5174 when 5173 is busy, and the page then fails on every
     // request. A bare "not allowed" gave nothing to compare against.
     process.env.KIROCHROME_DEV = "1";
-    const error = originRejection({ headers: { origin: "http://127.0.0.1:5174" } }, PORT);
+    const error = originRejection({ headers: { host: HOST, origin: "http://127.0.0.1:5174" } }, PORT);
     assert.equal(error.code, "ORIGIN_REJECTED");
     assert.match(error.message, /5174/);
     assert.ok(error.detail.allowed.includes("http://127.0.0.1:5173"));
