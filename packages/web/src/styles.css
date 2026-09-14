@@ -158,16 +158,28 @@ input, textarea, select { font-family: var(--mono); }
 .muted { color: var(--muted); }
 
 /* ---------- app shell ---------- */
-.shell { display: grid; grid-template-columns: 264px 1fr; height: 100vh; }
+.shell { display: grid; grid-template-columns: var(--sidebar-width, 264px) 1fr; height: 100vh; }
 .main { min-width: 0; overflow-y: auto; background: var(--bg); }
 
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);
 }
+.sidebar-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 1;
+}
+.sidebar-resize:hover, .sidebar-resize:active { background: var(--accent-dim); }
 .sidebar-head { padding: var(--sp-4) var(--sp-4) var(--sp-3); }
 .brand {
   font-size: var(--fs-sm);
@@ -267,14 +279,16 @@ input, textarea, select { font-family: var(--mono); }
   padding: var(--sp-3) var(--sp-4);
   border-top: 1px solid var(--border);
 }
+/* Boxed, so three of them read as three buttons and not a sentence. */
 .setup-link {
-  border: none;
-  padding: 2px 0;
-  font-size: var(--fs-sm);
-  letter-spacing: 0.06em;
+  padding: 3px var(--sp-2);
+  font-size: var(--fs-2xs);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  border: 1px solid var(--border);
+  color: var(--muted);
 }
-.setup-link:hover, .setup-link.active { color: var(--accent); border: none; }
+.setup-link:hover, .setup-link.active { color: var(--accent); border-color: var(--accent); }
 .dot { width: 6px; height: 6px; border-radius: 50%; margin-left: auto; flex-shrink: 0; }
 .dot-ok { background: var(--accent); box-shadow: var(--glow); }
 .dot-off { background: var(--muted); opacity: 0.5; }

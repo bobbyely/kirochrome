@@ -1,8 +1,23 @@
-import { useEffect, useImperativeHandle, useRef, useState, type RefObject } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type PointerEvent, type RefObject } from "react";
 import type { RoomView, ScheduleRun, ScheduleView, SessionSummary } from "@kirochrome/shared";
 import { fetchRooms, fetchSchedules } from "./api.js";
 import { GamesPanel } from "./games/Games.js";
 import { useChat } from "./useChat.js";
+
+const WIDTH_KEY = "kc.sidebar.width";
+const MIN_WIDTH = 200;
+const MAX_WIDTH = 520;
+const DEFAULT_WIDTH = 264;
+const clampWidth = (w: number) => Math.round(Math.min(Math.max(w, MIN_WIDTH), MAX_WIDTH));
+
+function loadWidth(): number {
+  try {
+    const stored = Number(localStorage.getItem(WIDTH_KEY));
+    return clampWidth(stored > 0 ? stored : DEFAULT_WIDTH);
+  } catch {
+    return DEFAULT_WIDTH;
+  }
+}
 
 /** Persistent left rail: new chat, past conversations, a way into Setup, and the games. */
 export interface SidebarApi {
@@ -50,6 +65,33 @@ export function Sidebar({
   // screen, and it already knows which conversation is waiting on the user.
   // They are positioned fixed, so where they render makes no visual difference.
   const [playing, setPlaying] = useState(false);
+
+  // Drag the right edge to resize. The width is a per-browser convenience,
+  // like the theme, and the shell reads it from a CSS variable.
+  const [width, setWidth] = useState(loadWidth);
+  useEffect(() => {
+    document.documentElement.style.setProperty("--sidebar-width", `${width}px`);
+  }, [width]);
+  const startResize = (e: PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const onMove = (ev: globalThis.PointerEvent) => setWidth(clampWidth(ev.clientX));
+    const onUp = () => {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      setWidth((w) => {
+        try {
+          localStorage.setItem(WIDTH_KEY, String(w));
+        } catch {
+          // Then it is simply not remembered.
+        }
+        return w;
+      });
+    };
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+  };
   const [showArchived, setShowArchived] = useState(false);
   const [query, setQuery] = useState("");
   const searchInput = useRef<HTMLInputElement>(null);
@@ -153,6 +195,7 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
+      <div className="sidebar-resize" onPointerDown={startResize} title="Drag to resize" />
       <div className="sidebar-head">
         <span className="brand">KiroChrome</span>
       </div>
