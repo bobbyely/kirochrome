@@ -150,7 +150,7 @@ KiroChrome.
 #### Periodic code review
 
 Review after each roadmap item lands, not at some distant tidy-up. This
-codebase has produced 25 recorded gotchas across 56 commits, and they cluster —
+codebase has produced some seventy recorded gotchas across 125 commits, and they cluster —
 so a review here should look for the shapes that have actually bitten, rather
 than generic style points:
 
@@ -170,7 +170,7 @@ than generic style points:
   <https://agentclientprotocol.com>, not against what seems reasonable.
 
 Two files have grown past comfortable and are the obvious first targets:
-`session.ts` (799 lines) and `Chat.tsx` (770). Both do several jobs now —
+`session.ts` (1417 lines) and `Chat.tsx` (865). Both do several jobs now —
 `Session` owns process lifecycle, protocol handlers, the queue, permissions and
 persistence, and `Chat` owns transport wiring, completion, and every row
 renderer. Neither is urgent, but they are where the next subtle bug will hide.
@@ -231,10 +231,11 @@ than a surprise. Each entry says what would go wrong if it is left.
 - **`packages/web/src` is flat** — twenty-seven files, no directories, and the
   side pane has now landed on top. Still navigable; a `pane/` folder for the
   drawer and its two tabs would be the first cut.
-- **`session.ts` (971) does several jobs.** Covered by the review section above;
-  listed here so the debt is in one place. `Chat.tsx` has come down from 992 to
-  711 with the composer split out, but it still owns the transcript, the scroll
-  behaviour and every row renderer.
+- **`session.ts` (1417) does several jobs.** Covered by the review section above;
+  listed here so the debt is in one place. `Chat.tsx` came down from 992 to
+  711 with the composer split out and has crept back to 865 with the switch
+  divider and the pane; it still owns the transcript, the scroll behaviour and
+  every row renderer.
 - **`buildRows` allocates fresh row objects on every event.** Harmless while
   typing, since the memo is keyed on an unchanged `events` array — but during a
   turn every delta rebuilds every row, so the `Message` memo bails out for none
@@ -256,24 +257,6 @@ than a surprise. Each entry says what would go wrong if it is left.
   advertised, never on the provider id. `@` mentions complete across every
   root now, which is the other half: a file in an added directory can be
   handed to the agent even though the directory itself cannot.
-- **Docs the second review found behind the code.** [DESIGN.md](DESIGN.md)
-  says nothing about schedules (a timer running sessions unattended) or rooms
-  (a router over sessions), the two largest additions since it was written.
-  [GOTCHAS.md](GOTCHAS.md) has no entry for the rooms-without-rules migration
-  or the CSS rule a rebase left unclosed, both fixed bugs. The counts in this
-  file's review section are stale, and the AGENTS.md code map omits
-  `startOptions.ts` and describes the web side in prose where the server side
-  has a table.
-- **Tests the second review asked for.** `nextClockRun` across a DST boundary
-  (it uses local `setHours`/`setDate`); the Changes pane with `oldText`
-  omitted versus empty. (The two room cases it asked for landed with the
-  rooms fixes.)
-- **Finish the `useReadyProviders()` move.** The hook exists and the
-  composer uses it; `Rooms.tsx`, `Schedules.tsx` and `NewChat.tsx` still
-  fetch and filter for themselves, with two different error idioms.
-- **Dead exports**: `parseClock`, `looksAbsolute`, `WS_PATH`, `systemTheme`,
-  `SidebarApi`, `ToolContent`, `DiffLine` — exported, used nowhere else.
-- `.kiro/settings/lsp.json` is untracked and not ignored; decide which.
 - Verify the design pass on a real screen: the theme, the K spinner and the
   switch were all built without a browser to look at.
 - True virtualisation, if the windowed transcript proves insufficient.

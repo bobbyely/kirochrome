@@ -8,7 +8,8 @@ import {
   ROOM_USER,
 } from "@kirochrome/shared";
 import type { ProviderView, RoomInput, RoomView } from "@kirochrome/shared";
-import { ApiError, createRoom, deleteRoom, fetchProviders, fetchRoom, fetchRooms, roomVerb } from "./api.js";
+import { ApiError, createRoom, deleteRoom, fetchRoom, fetchRooms, roomVerb } from "./api.js";
+import { useReadyProviders } from "./useReadyProviders.js";
 import { KSpinner } from "./KSpinner.js";
 import { MarkdownBody } from "./Markdown.js";
 import { chosen, StartPickers } from "./StartPickers.js";
@@ -33,7 +34,7 @@ const describe = (err: unknown) => (err instanceof ApiError ? err.kc.message : S
 /** The list of rooms, and the form for a new one. */
 export function Rooms({ onOpenRoom }: { onOpenRoom: (id: string) => void }) {
   const [rooms, setRooms] = useState<RoomView[] | null>(null);
-  const [providers, setProviders] = useState<ProviderView[] | null>(null);
+  const { providers, error: providerError } = useReadyProviders();
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [pending, setPending] = useState(false);
@@ -41,9 +42,8 @@ export function Rooms({ onOpenRoom }: { onOpenRoom: (id: string) => void }) {
 
   const refresh = useCallback(async () => {
     try {
-      const [r, p] = await Promise.all([fetchRooms(), fetchProviders()]);
+      const r = await fetchRooms();
       setRooms(r.rooms);
-      setProviders(p.providers.filter((v) => v.lastCheck?.status === "ok"));
       setError(null);
     } catch (err) {
       setError(describe(err));
@@ -56,7 +56,7 @@ export function Rooms({ onOpenRoom }: { onOpenRoom: (id: string) => void }) {
     if (connected) listWorkspaces();
   }, [connected, listWorkspaces]);
 
-  if (error && !rooms) return <div className="page"><div className="banner">{error}</div></div>;
+  if ((error && !rooms) || providerError) return <div className="page"><div className="banner">{providerError ?? error}</div></div>;
   if (!rooms || !providers) return <div className="page"><p className="muted">Loading…</p></div>;
 
   return (

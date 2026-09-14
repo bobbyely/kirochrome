@@ -17,7 +17,7 @@ export function loadTheme(): Theme {
 }
 
 /** What the browser would pick with no explicit choice. */
-export function systemTheme(): "light" | "dark" {
+function systemTheme(): "light" | "dark" {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 

@@ -1,5 +1,5 @@
 import { accessSync, constants, statSync } from "node:fs";
-import { delimiter, isAbsolute, join } from "node:path";
+import { delimiter, join } from "node:path";
 
 /**
  * Resolves a command to an executable path, the way a shell would.
@@ -39,4 +39,3 @@ function isExecutable(candidate: string): boolean {
   }
 }
 
-export const looksAbsolute = (command: string) => isAbsolute(command);

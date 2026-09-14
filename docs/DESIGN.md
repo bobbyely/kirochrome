@@ -196,6 +196,59 @@ cannot be populated before a session exists. Hence **draft sessions** — pickin
 a provider creates one immediately so the pickers can populate; it is promoted
 to `active` on first message, and drafts are garbage-collected on startup.
 
+## Schedules: a timer over ordinary sessions
+
+A schedule is a saved prompt, a provider, a directory and an interval (or a
+clock time, optionally weekdays only). Nothing about it is a new kind of
+conversation: a run is `open` → `prompt` → wait for the turn → `detach`, the
+same calls the socket makes on a person's behalf, and the transcript is an
+ordinary session tagged with the schedule's id so the sidebar can group it.
+That follows from invariant 4 — the server owns turns, so nothing here needs
+a browser — and it means every feature a conversation has (resume, export,
+search, the Changes pane) works on a run for free.
+
+What the scheduler adds is the **record of what happened when a run could not
+become a conversation.** A provider that failed its check, a spawn that
+failed, a run skipped because the previous one was still going: none of those
+has a transcript to be found in, so `schedule_runs` holds one row per firing
+with an outcome and a typed error. Runs are unattended, so they auto-approve
+tool calls — `allow_once` never `allow_always`, since nobody saw the grant —
+and are capped at an hour, after which the turn is cancelled and the run
+recorded as timed out (invariant 10).
+
+The timer is a one-minute tick that fires whatever is due without awaiting it
+and records an overlap once. It lives in the process and nowhere else: a
+restart recomputes the next run from the last row, and a run that was in
+flight is closed as failed with a reason, since its agent died with the
+server.
+
+## Rooms: a round-robin router over sessions
+
+A room is two to six participants, each an ordinary session on its own
+provider with its own model and opening command, plus the person. There is no
+protocol for agents addressing each other, and no way to inject into a running
+turn, so a room is exactly what that leaves: **prompts built from a transcript,
+and `session/cancel` to cut in.** The room keeps its own append-only message
+log; a round prompts each participant in turn with a preamble (who it is, who
+else is there, the topic, the rules) and everything said since its last turn,
+records the reply, and moves on until the turn budget is spent, everyone
+passes, or the credit cap is hit.
+
+The person's keystrokes hold the room — the turn in flight finishes, nobody
+else is prompted — and sending or clearing the box releases it; Cmd+Enter
+cancels whoever is speaking and drops what they were saying. Both act on the
+*running* round loop rather than starting another: `round()` is single-flight,
+and the two bugs in this area were both a second caller assuming it could
+start one.
+
+What an agent hears is untrusted input to the next agent. Messages are
+quoted between tags the prompt says only the room writes, so a reply cannot
+put words in the person's mouth; this is prompting, not sandboxing, and is
+labelled as such. A turn is capped like a scheduled run — a participant
+raising a permission prompt in a room has nobody to answer it, and the view
+says so while it waits — and a participant that cannot answer stops the room
+with its name in the message rather than being skipped in silence.
+
 ## Robustness: hanging processes
 
 Because we advertise `terminal: true`, the agent delegates command execution to

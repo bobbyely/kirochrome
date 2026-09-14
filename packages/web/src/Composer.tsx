@@ -453,7 +453,7 @@ function ProviderPicker({
   busy: boolean;
   onSwitch: (providerId: string) => void;
 }) {
-  const ready = useReadyProviders();
+  const ready = useReadyProviders().providers ?? [];
   const choices = ready.some((p) => p.id === session.providerId)
     ? ready
     : [{ id: session.providerId, name: session.providerName }, ...ready];

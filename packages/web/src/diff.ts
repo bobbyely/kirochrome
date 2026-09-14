@@ -1,4 +1,4 @@
-export type DiffLine = { kind: "add" | "del" | "ctx"; text: string };
+type DiffLine = { kind: "add" | "del" | "ctx"; text: string };
 
 /** Beyond this the quadratic LCS is not worth it; we show the new text instead. */
 const MAX_LINES = 1500;

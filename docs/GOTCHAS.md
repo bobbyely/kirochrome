@@ -236,6 +236,14 @@ All of these were real races, found the hard way.
 
 ## Storage
 
+- **A column added to a `CREATE TABLE IF NOT EXISTS` is not added to the
+  table that exists.** Rooms gained `rules`; the create statement was updated
+  and every database made before it kept the old shape, so opening one failed
+  on the first `SELECT rules`. Each new column needs its own
+  `PRAGMA table_info` check and `ALTER TABLE ADD COLUMN` beside the others
+  in `Store`'s constructor — that is the migration mechanism, and there is no
+  other.
+
 - **`ON CONFLICT DO UPDATE` lists its columns; a new mutable field is not in
   it.** `upsertSession` updated title and status but not `provider_id`, so a
   switched conversation reopened on its old provider after a restart. When a
@@ -352,6 +360,19 @@ All of these were real races, found the hard way.
   in silence.
 
 ## Working on the repo
+
+- **A test file has a 45-second cap, and the mock's "long" turn is ten of
+  them.** `session.test.mjs` grew past the cap as features were added, and
+  failed only under the full run — alone it was borderline, so it passed
+  locally and on a fast CI runner. Split a suite when it nears thirty seconds
+  rather than raising the cap: `queue.test.mjs` holds the ones that ride that
+  turn, `sessionFeatures.test.mjs` the newer behaviours.
+- **A rebase can leave a CSS rule unclosed and nothing will tell you.** Two
+  branches added rules at the same spot in `styles.css`; the merge kept one
+  opening brace and the other's body, and the stylesheet parsed with every
+  rule after that point silently swallowed. There is no CSS typecheck. After
+  a rebase that touched `styles.css`, look at the merged region, or open the
+  page.
 
 - **A tested web module names its sibling imports `.ts`, not `.js`.** The
   unit suite runs `src/*.ts` under Node's type stripping, which does not
