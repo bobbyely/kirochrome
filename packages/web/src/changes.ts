@@ -81,8 +81,11 @@ function collect(events: readonly KcEvent[]): FileChange[] {
 
   const changes = [...byPath.values()];
   for (const change of changes) {
+    // Only an *empty* before-text means a new file. An omitted one means the
+    // agent did not say, so the file keeps the default of "modified".
     if (change.net.oldText === "") change.status = "new";
     else if (change.net.newText === "") change.status = "deleted";
+    if (change.net.oldText === null) continue; // nothing to diff against
     const lines = lineDiff(change.net.oldText, change.net.newText);
     if (!lines) continue;
     const { added, removed } = countChanges(lines);

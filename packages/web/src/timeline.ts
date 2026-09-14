@@ -327,7 +327,12 @@ export function toolSubtitle(details: unknown[]): string | null {
 
 export interface ToolDiff {
   path: string;
-  oldText: string;
+  /**
+   * `null` when the agent sent no `oldText` at all. ACP makes it optional, and
+   * absent is not the same as empty: an edit to an existing file whose before
+   * text the agent did not include is not a newly created file.
+   */
+  oldText: string | null;
   newText: string;
 }
 
@@ -356,7 +361,7 @@ export function toolContent(details: unknown[]): ToolContent {
         const path = typeof entry["path"] === "string" ? entry["path"] : "";
         result.diffs.push({
           path,
-          oldText: typeof entry["oldText"] === "string" ? entry["oldText"] : "",
+          oldText: typeof entry["oldText"] === "string" ? entry["oldText"] : null,
           newText: typeof entry["newText"] === "string" ? entry["newText"] : "",
         });
       } else if (entry["type"] === "terminal") {

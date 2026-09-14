@@ -339,6 +339,8 @@ export interface ConfigOption {
 export interface StartOptions {
   configValues?: Record<string, string | boolean>;
   opening?: string;
+  /** Set before the opening turn runs, so its permission prompts are covered too. */
+  autoApprove?: boolean;
 }
 
 /** One conversation matching a search, with its best snippet. */

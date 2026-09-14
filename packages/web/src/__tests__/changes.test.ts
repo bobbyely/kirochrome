@@ -4,7 +4,7 @@ import type { KcEvent } from "@kirochrome/shared";
 import { collectChanges, relativeTo } from "../changes.ts";
 
 let seq = 0;
-const call = (id: string, diffs: Array<{ path: string; oldText: string; newText: string }>): KcEvent[] => [
+const call = (id: string, diffs: Array<{ path: string; oldText?: string; newText: string }>): KcEvent[] => [
   { seq: ++seq, ts: 0, type: "tool_call", toolCallId: id, title: "edit", kind: "edit", status: "in_progress", raw: {} },
   {
     seq: ++seq,
@@ -63,4 +63,16 @@ test("ignores tool calls that reported no diff, and updates for calls it never s
     { seq: 2, ts: 0, type: "tool_call_update", toolCallId: "ghost", raw: { content: [{ type: "diff", path: "a", oldText: "", newText: "x" }] } },
   ];
   assert.deepEqual(collectChanges(events), []);
+});
+
+test("an omitted oldText is an edit to an existing file, not a new file", () => {
+  // ACP makes oldText optional. Coercing absence to "" made every write whose
+  // before-text the agent left out look like a file creation.
+  const events = [...call("a", [{ path: "src/existing.ts", newText: "changed" }])];
+  const [change] = collectChanges(events);
+  assert.equal(change!.status, "modified");
+  assert.equal(change!.added, null, "nothing to count against");
+  // An explicit empty before-text still means a new file.
+  const [created] = collectChanges([...call("b", [{ path: "src/new.ts", oldText: "", newText: "fresh" }])]);
+  assert.equal(created!.status, "new");
 });

@@ -21,12 +21,14 @@ const escapeHtml = (text: string) =>
 
 /** A file edit, rendered as a diff rather than two blobs of JSON. */
 export function DiffView({ diff }: { diff: ToolDiff }) {
-  const lines = lineDiff(diff.oldText, diff.newText);
+  // No before-text (the agent omitted it), or too large for the quadratic LCS:
+  // either way show the result rather than nothing, and say which it was.
+  const lines = diff.oldText === null ? null : lineDiff(diff.oldText, diff.newText);
   if (!lines) {
-    // Too large for the quadratic LCS; show the result rather than nothing.
+    const why = diff.oldText === null ? "no before-text reported" : "too large to diff";
     return (
       <div className="diff">
-        <div className="diff-head">{diff.path} <span className="muted">(too large to diff)</span></div>
+        <div className="diff-head">{diff.path} <span className="muted">({why})</span></div>
         <CodeBlock text={diff.newText} language={languageFor(diff.path)} />
       </div>
     );

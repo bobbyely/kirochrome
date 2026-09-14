@@ -91,16 +91,46 @@ export interface AppConfig {
 /** Persists an edit to one provider, leaving the rest of the file alone. */
 export function updateProvider(id: string, patch: Partial<ProviderConfig>): AppConfig {
   const config = loadConfig();
-  const provider = config.providers.find((p) => p.id === id);
-  if (!provider) throw kcError("PROVIDER_UNKNOWN", `No provider configured with id '${id}'.`);
+  if (!config.providers.some((p) => p.id === id)) {
+    throw kcError("PROVIDER_UNKNOWN", `No provider configured with id '${id}'.`);
+  }
 
-  Object.assign(provider, patch);
+  // Patch the file as written, not the validated list. `loadConfig` skips a
+  // malformed entry so the setup page still loads; writing that list back
+  // would make the omission permanent, and a hand-edited provider with a typo
+  // would vanish because the user corrected a *different* one's path.
+  const raw = readRawProviders();
+  const entry = raw.find((p) => isRecord(p) && p["id"] === id);
+  if (!isRecord(entry)) throw kcError("PROVIDER_UNKNOWN", `No provider configured with id '${id}'.`);
+  Object.assign(entry, patch);
   try {
-    writeConfig(config);
+    writeRawProviders(raw);
   } catch (err) {
     throw kcError("CONFIG_INVALID", `Could not write ${configPath()}.`, { cause: causeOf(err) });
   }
-  return config;
+  return loadConfig();
+}
+
+/** The `providers` array exactly as the file holds it, invalid entries included. */
+function readRawProviders(): unknown[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(configPath(), "utf8"));
+  } catch (err) {
+    throw kcError("CONFIG_INVALID", `Could not read ${configPath()}.`, { cause: causeOf(err) });
+  }
+  const providers = isRecord(parsed) ? parsed["providers"] : undefined;
+  return Array.isArray(providers) ? providers : [];
+}
+
+function writeRawProviders(providers: unknown[]): void {
+  const path = configPath();
+  writeFileSync(path, `${JSON.stringify({ providers }, null, 2)}\n`, { mode: 0o600 });
+  try {
+    chmodSync(path, 0o600);
+  } catch {
+    // Best effort; Windows and some filesystems have no equivalent.
+  }
 }
 
 /**

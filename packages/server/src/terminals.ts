@@ -1,11 +1,27 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { RequestError } from "@agentclientprotocol/sdk";
 import { killTree } from "./agentProcess.js";
 import { recordProcess } from "./processLedger.js";
 
 /** Backstop cap. Agents implement their own timeouts; this catches the ones that do not. */
 const DEFAULT_TIMEOUT_MS = 10 * 60_000;
 const DEFAULT_OUTPUT_LIMIT = 1_000_000;
+
+/**
+ * The agent's requested cap, or a typed refusal.
+ *
+ * `0` or a negative number used to empty the buffer silently and hand the
+ * agent nothing, which reads as a command with no output. Telling it the value
+ * is wrong is the only answer that lets it fix the request.
+ */
+function outputLimit(requested: number | null | undefined): number {
+  if (requested == null) return DEFAULT_OUTPUT_LIMIT;
+  if (!Number.isInteger(requested) || requested <= 0) {
+    throw RequestError.invalidParams({ outputByteLimit: requested }, "outputByteLimit must be a positive integer");
+  }
+  return requested;
+}
 
 interface Terminal {
   id: string;
@@ -57,7 +73,7 @@ export class TerminalRegistry {
       child,
       output: "",
       truncated: false,
-      limit: params.outputByteLimit ?? DEFAULT_OUTPUT_LIMIT,
+      limit: outputLimit(params.outputByteLimit),
       exit: null,
       timedOut: false,
       waiters: [],

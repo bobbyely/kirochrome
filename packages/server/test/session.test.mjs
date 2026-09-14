@@ -175,10 +175,13 @@ describe("the queue", () => {
     const running = session.prompt("long");
     await new Promise((r) => setTimeout(r, 150));
     void session.prompt("later");
-    await session.interrupt("now");
+    // Like `prompt`, `interrupt` resolves when its own turn ends — so look at
+    // the queue before waiting on it.
+    const interrupted = session.interrupt("now");
     assert.deepEqual(session.summary().queued, ["now", "later"], "the interruption jumps the queue");
 
     await running;
+    await interrupted;
     await new Promise((r) => setTimeout(r, 800));
     off();
 
@@ -196,6 +199,100 @@ describe("the queue", () => {
     session.editQueued(-1, "x");
     session.unqueue(99);
     assert.deepEqual(session.summary().queued, []);
+    session.close();
+  });
+});
+
+describe("a prompt's promise", () => {
+  it("resolves when that message's turn ends, not when the queue happens to be idle", async () => {
+    // `prompt()` used to return at once while a turn was running. A scheduled
+    // run then recorded success having sent nothing, and a room read the
+    // *running* turn's text as this message's reply.
+    const session = await sessions.open(provider, "/tmp");
+    const off = autoApprove(session);
+    void session.prompt("long"); // the mock's slow path
+    await new Promise((r) => setTimeout(r, 150));
+
+    await session.prompt("second");
+    const log = session.eventsSince(0);
+    const sent = log.findIndex((e) => e.type === "user_message" && e.text === "second");
+    assert.ok(sent > 0, "the second message was sent");
+    assert.ok(
+      log.slice(sent).some((e) => e.type === "turn_end"),
+      "and its own turn had ended by the time the promise resolved",
+    );
+    off();
+    session.close();
+  });
+
+  it("queues behind an opening message rather than skipping it", async () => {
+    const session = await sessions.open(provider, "/tmp", { opening: "opening line" });
+    const off = autoApprove(session);
+    await session.prompt("after");
+    const said = session.eventsSince(0).filter((e) => e.type === "user_message").map((e) => e.text);
+    assert.deepEqual(said, ["opening line", "after"]);
+    off();
+    session.close();
+  });
+
+  it("is released, not left hanging, when its message is dropped", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    const off = autoApprove(session);
+    void session.prompt("long");
+    await new Promise((r) => setTimeout(r, 150));
+    const waiting = session.prompt("never sent");
+    session.unqueue(0);
+    await Promise.race([waiting, new Promise((_, rej) => setTimeout(() => rej(new Error("hung")), 2_000))]);
+    await session.cancel();
+    off();
+    session.close();
+  });
+});
+
+describe("a turn the agent did not finish", () => {
+  it("still ends, with a reason of its own, so the log is not left open", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    await session.prompt("die-mid-turn");
+    const log = session.eventsSince(0);
+    const starts = log.filter((e) => e.type === "turn_start").length;
+    const ends = log.filter((e) => e.type === "turn_end");
+    assert.equal(ends.length, starts, "every turn_start has its turn_end");
+    assert.equal(ends.at(-1).stopReason, "error");
+    assert.ok(log.some((e) => e.type === "error"), "and the error that explains it is there too");
+    assert.equal(session.summary().busy, false);
+  });
+
+  it("is ended by close(), which cannot wait for the catch that runs after it", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    void session.prompt("long");
+    await new Promise((r) => setTimeout(r, 150));
+    session.close();
+    const ends = store.eventsSince(session.id, 0).filter((e) => e.type === "turn_end");
+    assert.equal(ends.length, 1, "the closing turn_end reached the durable log");
+    assert.equal(ends[0].stopReason, "closed");
+  });
+});
+
+describe("auto-approve", () => {
+  it("grants a single use, never a standing permission", async () => {
+    // An unattended run must not hand the agent an allow_always nobody saw.
+    const session = await sessions.open(provider, "/tmp");
+    session.setAutoApprove(true);
+    await session.prompt("ask-always-first");
+    // Auto-approve answers without a prompt event, so ask the agent what it got.
+    const echoed = session.eventsSince(0).filter((e) => e.type === "agent_text").map((e) => e.text).join("");
+    assert.match(echoed, /\[granted: once\]/);
+    session.close();
+  });
+});
+
+describe("metadata writes", () => {
+  it("do not un-archive a conversation", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    store.setArchived(session.id, true);
+    // Any metadata write — an agent-sent title, say — used to hardcode "active".
+    session.persistMeta();
+    assert.equal(store.getSession(session.id).status, "archived");
     session.close();
   });
 });

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  causeOf,
   kcError,
   latestUsage,
   ROOM_DEFAULT_PAUSE,
@@ -307,8 +308,11 @@ export class RoomManager {
       if (live) return live;
       try {
         return await this.sessions.resume(participant.sessionId, provider);
-      } catch {
+      } catch (err) {
         // The agent cannot reload it: start fresh and show it the whole room.
+        // Say so, with the cause — a silent fallback hides an agent that has
+        // started refusing every load.
+        console.warn(`[room ${room.id}] could not resume ${participant.name}; starting fresh:`, causeOf(err));
       }
     }
     const session = await this.openFor(room, participant);

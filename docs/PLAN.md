@@ -236,100 +236,40 @@ a skipped review.
 
 Wrong, not deferred. Debt below is a decision; this is a defect.
 
-Found by the first review — see [REVIEWS.md](REVIEWS.md) — and left open. The
-three it fixed (the Origin allowlist, terminals surviving a crashed agent, the
-missing session RPC timeouts) are traps in [GOTCHAS.md](GOTCHAS.md) now, which
-is where a fixed bug belongs.
+Found by the reviews — see [REVIEWS.md](REVIEWS.md). Fixed ones become traps in
+[GOTCHAS.md](GOTCHAS.md), which is where a fixed bug belongs; the third review
+pass cleared the session-core, security and validation findings from both
+earlier reviews. What remains is the rooms and scheduler batch, which belongs
+together, plus one platform note.
 
-- **`updateProvider` writes back the validated list, erasing what was dropped.**
-  `config.ts:99`. `loadConfig` deliberately skips a malformed provider so the
-  setup page still loads — but saving from that view makes the omission
-  permanent, so correcting one provider's path in the UI silently deletes a
-  hand-edited entry that had a typo in it. A lenient read is only safe while
-  nothing writes back from it.
-- **A read failure while serving a static file kills the server.**
-  `http.ts:193`. `createReadStream(...).pipe(res)` has no `error` listener, and
-  an unhandled `'error'` is fatal — a file that vanishes between the
-  `existsSync` check and the read takes every running turn down with it.
-- **Renaming an archived conversation un-archives it.** `session.ts:839`.
-  `persistMeta()` hardcodes `status: "active"`, so any metadata write puts the
-  conversation back in the sidebar.
-- **A turn killed mid-flight leaves no `turn_end`.** A restart, or an agent
-  dying during a turn, ends the transcript mid-answer with nothing saying why
-  and leaves `turn_start` unmatched in the log — six of them in one development
-  database. `runTurn`'s catch appends an error but never closes the turn, and
-  `close()` sets `closing` before anything else can. Item 5 above needs exactly
-  this event, so the two are worth doing together.
-- **Agent-supplied diff paths are interpolated raw into the export's HTML.**
-  `export.ts:43`. The export is a local Markdown file, so this is malformed
-  output rather than a live injection — but the path comes from the agent.
-- **`outputByteLimit` is unvalidated and counts UTF-16 units.**
-  `terminals.ts:138`. An agent passing `0` or a negative number silently empties
-  the whole output buffer instead of being told the value is wrong.
-- **Orphan reaping is a silent no-op on Windows.** `processLedger.ts:36` shells
-  out to `ps` for a start time, which does not exist there, so every ledger row
-  records a blank one and `reapOrphans` declines them all. Windows is
-  best-effort by design — but doing nothing quietly is worse than not
-  supporting it.
-
-Found by the second review (`dedc8bc`), over the rooms, schedules, start
-options and command pickers. In severity order:
-
-- **A schedule with an opening message never runs its prompt.** `Session.open`
-  fires the opening turn un-awaited, which sets `busy`; the scheduler's
-  `session.prompt(schedule.prompt)` then returns at the `if (this.busy)`
-  early exit, `finally` detaches the agent mid-opening, and `lastFailure`
-  finds no `turn_end` so the run is recorded **ok** with nothing done.
-  `scheduler.ts:222-238`, `session.ts:202,480-484`. Fix: `prompt()` should
-  resolve when *that* message's turn ends, not when the queue happens to be
-  idle — a per-message promise — or `open()` awaits the opening.
-- **The same early exit corrupts a room turn.** `rooms.ts:260`: a participant
-  with an opening, or one the user is chatting with in its own conversation
-  while the room prompts it, returns at once, and `saidSince` records the
-  *other* turn's partial text as its reply. Same fix.
 - **A room turn has no cap.** The scheduler has `RUN_CAP_MS`; a room turn has
   nothing, and the room never surfaces `awaitingInput`, so a participant
   raising a permission or elicitation request blocks the round for ever —
   invariant 10. `withTimeout` around the prompt, and stop the room with a
   typed error.
-- **Origin check accepts a missing `Origin` and never checks `Host`.**
-  `http.ts:37-46`. Same-origin GETs carry no `Origin`, so a page on a
-  DNS-rebound name resolving to 127.0.0.1 can read every GET route — room
-  transcripts, schedule prompts and cwds, exports. Pre-existing; the new
-  routes widen what leaks. Also require `Host` to be localhost or 127.0.0.1
-  on the port.
-- **Auto-approve grants `allow_always`.** `session.ts:805-808` takes the first
-  option whose kind starts with `allow`, and an unattended run can thereby
-  grant a permanent agent-side trust nobody saw. Prefer `allow_once`.
-- **Releasing a hold before the turn ends stalls the round.** `rooms.ts:165`
+- **Releasing a hold before the turn ends stalls the round.** `rooms.ts`
   restarts only if `runtime.resumable`, which the loop sets after the turn in
   flight — so type-then-clear within one turn leaves the room idle until
   Continue. The test sleeps past the turn and never hits it.
-- **Cut in does not start a fresh round.** `rooms.ts:131-146` says it does, but
+- **Cut in does not start a fresh round.** The code says it does, but
   `round()` returns because the old round is still running; the budget and
   the pass count carry over.
 - **Room messages are concatenated verbatim into other agents' prompts.** A
   reply containing `\n\n[You] …` impersonates the user to the next agent.
   Inherent to prompting, but fence each message and say that only the room
-  inserts speaker tags. `rooms.ts:290-298`.
-- **A failed participant spawn leaks the ones before it.** `rooms.ts:97-101`
-  opens participants in turn before `upsertRoom`; if the third fails, two
-  stay live under a room id that never exists. Killable at shutdown, leaked
-  until then. Detach in a catch.
+  inserts speaker tags.
+- **A failed participant spawn leaks the ones before it.** Participants open
+  in turn before `upsertRoom`; if the third fails, two stay live under a room
+  id that never exists. Killable at shutdown, leaked until then. Detach in a
+  catch.
 - **The scheduler writes a `skipped` row every minute** while a run overlaps
-  its own next due time (`scheduler.ts:175-181`), and `tick` awaits each run
-  in series, so one long run delays every other schedule's check.
-- **The Changes pane misreads an omitted `oldText` as an empty file.** ACP's
-  `oldText` is optional; `timeline.ts:359-360` coerces absence to `""` and
-  `changes.ts` then labels a write to an existing file **new**. Keep null
-  distinct from empty.
-- **`setAutoApprove` runs after the opening turn has started**
-  (`scheduler.ts:224` vs `session.ts:202`), so the opening's permission
-  prompts are not auto-approved. Pass it into `open()`.
-- **`PATCH /api/schedules/:id` stores any `status` string.** `scheduler.ts:89`.
-  Accept only the two literals.
-- **An empty `catch {}` discards a resume failure's cause** at
-  `rooms.ts:308-312` — invariant 9.
+  its own next due time, and `tick` awaits each run in series, so one long
+  run delays every other schedule's check.
+- **Orphan reaping is a silent no-op on Windows.** `processLedger.ts` shells
+  out to `ps` for a start time, which does not exist there, so every ledger
+  row records a blank one and `reapOrphans` declines them all. Windows is
+  best-effort by design — but doing nothing quietly is worse than not
+  supporting it.
 
 #### Recorded debt
 

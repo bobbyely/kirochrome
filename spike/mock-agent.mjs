@@ -142,6 +142,30 @@ const app = agent({ name: "mock-agent" })
     // references that process group afterwards, so if the client does not
     // release it on the way out, it survives the session and the server both.
     // The command records its own pid, since only the client knows it.
+    // Dies with the turn still open: the client must end the turn itself.
+    if (params.prompt?.[0]?.text === "die-mid-turn") {
+      await notify({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "half an ans" } });
+      process.exit(1);
+    }
+
+    // Offers a standing grant first, so auto-approve is tempted to take it.
+    if (params.prompt?.[0]?.text === "ask-always-first") {
+      const decision = await client.request("session/request_permission", {
+        sessionId: params.sessionId,
+        toolCall: { toolCallId: "tool-3", title: "Edit files from now on?" },
+        options: [
+          { optionId: "always", name: "Always allow", kind: "allow_always" },
+          { optionId: "once", name: "Allow once", kind: "allow_once" },
+          { optionId: "no", name: "Deny", kind: "reject_once" },
+        ],
+      });
+      await notify({
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: `[granted: ${decision.outcome.optionId ?? decision.outcome.outcome}]` },
+      });
+      return { stopReason: "end_turn" };
+    }
+
     if (params.prompt?.[0]?.text === "leak-then-die") {
       const dir = process.env.KIROCHROME_DATA_DIR ?? "/tmp";
       await client.request("terminal/create", {

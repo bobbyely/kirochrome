@@ -12,6 +12,7 @@ import {
   type ScheduleRun,
   type ScheduleView,
 } from "@kirochrome/shared";
+import { TURN_CLOSED, TURN_FAILED } from "./session.js";
 import type { SessionManager } from "./sessionManager.js";
 import { cleanStart } from "./startOptions.js";
 import type { Store } from "./store.js";
@@ -89,6 +90,11 @@ export class Scheduler {
   update(id: string, patch: Partial<ScheduleInput> & { status?: Schedule["status"] }): Schedule {
     const existing = this.require(id);
     const { status, ...fields } = patch;
+    // The body is JSON from the browser: any string arrives here, and "paused"
+    // is the only value besides "active" that the rest of the code knows.
+    if (status !== undefined && status !== "active" && status !== "paused") {
+      throw kcError("SCHEDULE_INVALID", `status must be "active" or "paused", not ${JSON.stringify(status)}.`);
+    }
     const schedule: Schedule = {
       ...existing,
       ...this.validate({ ...existing, ...fields }),
@@ -219,9 +225,14 @@ export class Scheduler {
     this.running.add(schedule.id);
     this.store.upsertRun(run);
     try {
-      const session = await this.sessions.open(provider, schedule.cwd, schedule.start);
+      // Auto-approve goes in with the start options: `open` fires the opening
+      // turn before it returns, so setting it afterwards left that turn's
+      // permission prompts unanswered.
+      const session = await this.sessions.open(provider, schedule.cwd, {
+        ...schedule.start,
+        autoApprove: schedule.autoApprove,
+      });
       session.tagSchedule(schedule.id, runTitle(schedule, run.startedAt));
-      session.setAutoApprove(schedule.autoApprove);
       run.sessionId = session.id;
       this.store.upsertRun(run);
 
@@ -279,11 +290,18 @@ export class Scheduler {
 }
 
 /** The error that ended the last turn, if the turn did not end cleanly. */
-function lastFailure(events: ReadonlyArray<{ type: string; error?: KcError }>): KcError | null {
+function lastFailure(
+  events: ReadonlyArray<{ type: string; error?: KcError; stopReason?: string }>,
+): KcError | null {
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i];
     if (!event) continue;
-    if (event.type === "turn_end") return null;
+    // A turn that failed still ends — with a reason of our own — and the error
+    // that explains it sits just before. Only a turn the agent ended cleanly
+    // means the run is fine.
+    if (event.type === "turn_end" && event.stopReason !== TURN_FAILED && event.stopReason !== TURN_CLOSED) {
+      return null;
+    }
     if (event.type === "error" && event.error) return event.error;
   }
   return null;
