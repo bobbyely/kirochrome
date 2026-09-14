@@ -60,6 +60,16 @@ export class RoomManager {
     private readonly providers: () => ProviderConfig[],
   ) {}
 
+  /**
+   * A round lives in this process; a restart ends it. Rooms that say
+   * otherwise are put back to idle, and their agents re-attach on the next
+   * turn — see `ensureLive`.
+   */
+  start(): void {
+    const settled = this.store.settleRooms();
+    if (settled > 0) console.log(`Settled ${settled} room(s) the previous server left mid-round.`);
+  }
+
   list(): RoomView[] {
     return this.store.listRooms().map((room) => this.view(room));
   }

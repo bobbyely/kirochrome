@@ -484,6 +484,14 @@ export class Store {
     return rows.map(toRoom);
   }
 
+  /** Rooms the previous server left mid-round: their runtime died with it. */
+  settleRooms(): number {
+    const result = this.db
+      .prepare(`UPDATE rooms SET status = 'idle' WHERE status IN ('running', 'held')`)
+      .run();
+    return Number(result.changes);
+  }
+
   /** Removes the room and its transcript. The participants' conversations stay. */
   deleteRoom(id: string): void {
     this.db.prepare(`DELETE FROM room_messages WHERE room_id = ?`).run(id);
