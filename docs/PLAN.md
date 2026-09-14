@@ -168,31 +168,6 @@ Type `@` to complete against the working directory and attach file contents as
 `resource_link` blocks. The completion machinery built for slash commands
 generalises to this, and `fs` is now implemented.
 
-#### 5. Interrupt and send
-
-Today a message typed during a turn queues and goes when the turn ends. The
-other useful thing to do with it is send it *now*.
-
-**ACP v1 cannot inject into a running turn.** There is no method for it: the
-only mid-turn traffic is permission responses and `session/cancel`, and a turn
-ends on a `stopReason`. So this is `session/cancel` → await the `cancelled`
-stopReason → `session/prompt` with the new text. The agent keeps everything
-already streamed in its context, but in-flight tool calls are abandoned and the
-spec requires they be marked `cancelled`.
-
-Call it **Interrupt and send**, not Steer. Steering implies the agent absorbs
-the message mid-flight, which is not what happens; the first person to use it
-during a long tool call and watch the work vanish should not be surprised.
-
-The shape: a per-queued-message flag, a client message, the cancel-then-prompt
-sequence in `Session`, and **an event recording the interruption** so the
-transcript shows why a turn ended early — invariant 3, this cannot be UI state.
-The queue, turn ownership and the message editing are all already there.
-
-Real steering arrives with **ACP v2**, which decouples the prompt response from
-the work lifecycle precisely so queueing and steering are expressible. It is
-Draft; see [PROTOCOL.md](PROTOCOL.md#steering-and-acp-v2).
-
 #### 6. Instructions of your own, across every agent
 
 Agents already read their own user-level instruction files, and the session's
@@ -345,6 +320,14 @@ than a surprise. Each entry says what would go wrong if it is left.
 - Whatever the work machine turns up once Kiro is actually driving it.
 
 ### Done since the roadmap was written
+
+**Interrupt and send shipped** as designed: an `interrupt` client message,
+`Session.interrupt` puts the message at the front of the queue and sends
+`session/cancel`, and the drain loop that owns the turn picks it up when the
+cancelled `session/prompt` returns. An `interrupted` event lands before that
+turn's `turn_end`, so the transcript says why an answer stops mid-sentence
+rather than looking like Stop. In the composer it is a second button while the
+agent works, and Cmd/Ctrl+Enter. Still not steering, and still named so.
 
 **Tool-call groups stay collapsed while the turn runs.** `WorkGroup` no
 longer follows `row.active`; the summary line carries the count, the mark and

@@ -115,6 +115,28 @@ describe("the queue", () => {
     session.close();
   });
 
+  it("interrupt sends now: the running turn is cancelled and the queue waits behind it", async () => {
+    const session = await sessions.open(provider, "/tmp");
+    const off = autoApprove(session);
+
+    const running = session.prompt("long");
+    await new Promise((r) => setTimeout(r, 150));
+    void session.prompt("later");
+    await session.interrupt("now");
+    assert.deepEqual(session.summary().queued, ["now", "later"], "the interruption jumps the queue");
+
+    await running;
+    await new Promise((r) => setTimeout(r, 800));
+    off();
+
+    const events = session.eventsSince(0);
+    const shape = events
+      .filter((e) => ["user_message", "interrupted", "turn_end"].includes(e.type))
+      .map((e) => (e.type === "user_message" ? e.text : e.type === "turn_end" ? `end:${e.stopReason}` : e.type));
+    assert.deepEqual(shape, ["long", "interrupted", "end:cancelled", "now", "end:end_turn", "later", "end:end_turn"]);
+    session.close();
+  });
+
   it("ignores out-of-range edits rather than corrupting itself", async () => {
     const session = await sessions.open(provider, "/tmp");
     session.moveQueued(5, 0);

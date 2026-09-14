@@ -443,8 +443,33 @@ export class Session {
    * and are sent in order as each turn finishes.
    */
   async prompt(text: string, images: Array<{ mime: string; data: string }> = []): Promise<void> {
-    // Images are stored now and referenced by id, so the queue and the log
-    // never carry base64.
+    this.queue.push({ text, attachments: this.storeImages(images) });
+    this.notifyState();
+    if (this.busy) return;
+    await this.drain();
+  }
+
+  /**
+   * Sends now instead of after the current turn: the message goes to the
+   * front of the queue and the turn is cancelled, so the drain loop that owns
+   * it picks this up next. Not steering — ACP v1 cannot inject into a running
+   * turn, so whatever the agent was doing is abandoned, and the log says so.
+   */
+  async interrupt(text: string, images: Array<{ mime: string; data: string }> = []): Promise<void> {
+    if (!this.busy) return this.prompt(text, images);
+    this.queue.unshift({ text, attachments: this.storeImages(images) });
+    this.append({ type: "interrupted" });
+    this.notifyState();
+    if (!this.connection || !this.agentSessionId) return;
+    try {
+      await this.connection.agent.notify("session/cancel", { sessionId: this.agentSessionId });
+    } catch (err) {
+      this.emitError(kcError("RPC_ERROR", "Could not cancel the turn.", { cause: causeOf(err) }));
+    }
+  }
+
+  /** Images are stored now and referenced by id, so the queue and the log never carry base64. */
+  private storeImages(images: Array<{ mime: string; data: string }>): Attachment[] {
     const attachments: Attachment[] = [];
     for (const image of images) {
       if (!this.supportsImages) break;
@@ -452,11 +477,7 @@ export class Session {
       this.store.addAttachment(id, this.id, image.mime, image.data);
       attachments.push({ id, mime: image.mime });
     }
-
-    this.queue.push({ text, attachments });
-    this.notifyState();
-    if (this.busy) return;
-    await this.drain();
+    return attachments;
   }
 
   private async drain(): Promise<void> {

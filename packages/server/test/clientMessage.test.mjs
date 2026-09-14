@@ -118,6 +118,7 @@ describe("inbound frame validation", () => {
       { type: "subscribe", sessionId: "s1", sinceSeq: 0 },
       { type: "prompt", sessionId: "s1", text: "hi" },
       { type: "prompt", sessionId: "s1", text: "hi", images: [{ mime: "image/png", data: "aa" }] },
+      { type: "interrupt", sessionId: "s1", text: "now" },
       { type: "cancel", sessionId: "s1" },
       { type: "resume", sessionId: "s1", sinceSeq: 12 },
       { type: "list_workspaces" },

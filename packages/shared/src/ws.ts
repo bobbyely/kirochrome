@@ -26,6 +26,17 @@ export type ClientMessage =
       /** Pasted images, base64 encoded. */
       images?: Array<{ mime: string; data: string }>;
     }
+  /**
+   * Send now rather than after the current turn: cancel it, then prompt. The
+   * agent keeps what it already streamed, but in-flight tool calls are
+   * abandoned — ACP v1 has no way to inject into a running turn.
+   */
+  | {
+      type: "interrupt";
+      sessionId: string;
+      text: string;
+      images?: Array<{ mime: string; data: string }>;
+    }
   | { type: "cancel"; sessionId: string }
   | { type: "resume"; sessionId: string; sinceSeq: number }
   | { type: "list_workspaces" }
@@ -151,6 +162,7 @@ const CLIENT_MESSAGE_SPECS: Record<ClientMessage["type"], MessageSpec> = {
   adopt: { required: { providerId: str, agentSessionId: str, cwd: str }, optional: { title: str } },
   subscribe: { required: { sessionId: str, sinceSeq: num } },
   prompt: { required: { sessionId: str, text: str }, optional: { images } },
+  interrupt: { required: { sessionId: str, text: str }, optional: { images } },
   cancel: { required: { sessionId: str } },
   resume: { required: { sessionId: str, sinceSeq: num } },
   list_workspaces: {},

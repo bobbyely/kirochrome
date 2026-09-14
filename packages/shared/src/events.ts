@@ -51,6 +51,12 @@ export type KcEvent = KcEventBase &
      * a restart — invariant 3.
      */
     | { type: "adopted"; agentSessionId: string; providerName: string }
+    /**
+     * The user cut the running turn short to send the next message now. Comes
+     * before that turn's `turn_end` (stopReason `cancelled`), which on its own
+     * looks the same as Stop — this says why the answer ends mid-sentence.
+     */
+    | { type: "interrupted" }
     | { type: "turn_end"; stopReason: string }
     | { type: "error"; error: KcError }
     | { type: "agent_exited"; code: number | null; signal: string | null }

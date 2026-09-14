@@ -55,6 +55,7 @@ export function Chat({
     editQueued,
     moveQueued,
     prompt,
+    interrupt,
     cancel,
   } = useChat();
 
@@ -236,6 +237,7 @@ export function Chat({
           commandOptions={commandOptions}
           requestCommandOptions={requestCommandOptions}
           onPrompt={prompt}
+          onInterrupt={interrupt}
           onCancel={cancel}
           onSetAutoApprove={setAutoApprove}
           onSetConfigOption={setConfigOption}
