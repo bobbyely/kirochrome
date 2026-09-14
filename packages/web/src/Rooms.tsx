@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 import { ROOM_DEFAULT_PAUSE, ROOM_DEFAULT_TURNS, ROOM_MAX_PARTICIPANTS, ROOM_MAX_TURNS, ROOM_USER } from "@kirochrome/shared";
 import type { ProviderView, RoomInput, RoomView } from "@kirochrome/shared";
 import { ApiError, createRoom, deleteRoom, fetchProviders, fetchRoom, fetchRooms, roomVerb } from "./api.js";
+import { KSpinner } from "./KSpinner.js";
 import { MarkdownBody } from "./Markdown.js";
 import { useChat } from "./useChat.js";
 
@@ -296,7 +297,7 @@ export function RoomView({
   }, [refresh, room?.status]);
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
-  }, [room?.messages.length]);
+  }, [room?.messages.length, room?.speakingText.length]);
 
   const verb = async (name: "say" | "hold" | "resume" | "stop", body?: unknown) => {
     try {
@@ -390,7 +391,15 @@ export function RoomView({
           {speaking && (
             <div className="room-msg">
               <span className="room-msg-name">{speaking.name}</span>
-              <div className="msg msg-agent muted">…</div>
+              {room.speakingText ? (
+                <div className="msg msg-agent">
+                  <MarkdownBody>{room.speakingText}</MarkdownBody>
+                </div>
+              ) : (
+                <div className="thinking">
+                  <KSpinner label={`${speaking.name} is thinking`} />
+                </div>
+              )}
             </div>
           )}
           <div ref={bottom} />

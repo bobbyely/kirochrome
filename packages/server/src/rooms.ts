@@ -25,6 +25,8 @@ import type { Store } from "./store.js";
 interface Runtime {
   running: boolean;
   speaking: string | null;
+  /** The speaker's session seq when its turn began, so its partial reply can be read. */
+  speakingFrom: number;
   turnsThisRound: number;
   /** Index into participants of who speaks next. */
   next: number;
@@ -223,6 +225,7 @@ export class RoomManager {
     const shown = this.store.lastRoomSeq(room.id);
     const prompt = this.promptFor(room, participant);
     const before = session.summary().lastSeq;
+    runtime.speakingFrom = before;
     const creditsBefore = latestUsage(session.eventsSince(0))?.credits ?? 0;
 
     try {
@@ -233,11 +236,7 @@ export class RoomManager {
 
     // What it said is the text it streamed this turn; tool chatter is in its
     // own transcript, not the room's.
-    const reply = session
-      .eventsSince(before)
-      .flatMap((e) => (e.type === "agent_text" ? [e.text] : []))
-      .join("")
-      .trim();
+    const reply = saidSince(session, before);
     const spent = (latestUsage(session.eventsSince(0))?.credits ?? 0) - creditsBefore;
 
     const fresh = this.require(room.id);
@@ -335,10 +334,12 @@ export class RoomManager {
 
   private view(room: Room): RoomView {
     const runtime = this.runtime(room.id);
+    const speaker = runtime.speaking ? this.sessionOf(room, runtime.speaking) : null;
     return {
       ...room,
       messages: this.store.roomMessages(room.id),
       speaking: runtime.speaking,
+      speakingText: speaker ? saidSince(speaker, runtime.speakingFrom) : "",
       turnsThisRound: runtime.turnsThisRound,
     };
   }
@@ -346,7 +347,16 @@ export class RoomManager {
   private runtime(id: string): Runtime {
     let runtime = this.runtimes.get(id);
     if (!runtime) {
-      runtime = { running: false, speaking: null, turnsThisRound: 0, next: 0, resumable: false, cancelled: false, passes: 0 };
+      runtime = {
+        running: false,
+        speaking: null,
+        speakingFrom: 0,
+        turnsThisRound: 0,
+        next: 0,
+        resumable: false,
+        cancelled: false,
+        passes: 0,
+      };
       this.runtimes.set(id, runtime);
     }
     return runtime;
@@ -398,6 +408,14 @@ export class RoomManager {
     return { name, cwd, topic, maxTurnsPerRound, pauseSeconds, creditCap, participants };
   }
 }
+
+/** The text an agent has streamed since a point in its log. */
+const saidSince = (session: Session, since: number): string =>
+  session
+    .eventsSince(since)
+    .flatMap((e) => (e.type === "agent_text" ? [e.text] : []))
+    .join("")
+    .trim();
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
