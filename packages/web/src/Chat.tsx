@@ -741,8 +741,10 @@ function ContextMeter({ usage }: { usage: SessionUsage | null }) {
     new Intl.NumberFormat(undefined, { style: "currency", currency: cost.currency }).format(cost.amount);
   const spend = money ?? (credits !== undefined ? `${credits.toFixed(2)} credits this turn` : "");
 
+  // One decimal in the tooltip: a short turn moves a 200k window by a tenth
+  // of a percent, and the rounded figure would look stuck.
   const title = percentOnly
-    ? `${leftPct}% of the context window left${spend ? ` · ${spend}` : ""}`
+    ? `${(100 - used).toFixed(1)}% of the context window left${spend ? ` · ${spend}` : ""}`
     : `${(size - used).toLocaleString()} of ${size.toLocaleString()} tokens left ` +
       `(${used.toLocaleString()} used)${spend ? ` · ${spend}` : ""}`;
 
