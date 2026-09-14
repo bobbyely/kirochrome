@@ -174,6 +174,12 @@ All of these were real races, found the hard way.
 
 - **`white-space: pre-wrap` must not reach markdown rows.** It renders the
   newlines between block elements literally, double-spacing every paragraph.
+- **A failed re-check request is not a passing check.** The setup card kept its
+  stored "Ready" pill while a banner said the re-check had been refused, because
+  the request's failure went to page-level state and the card's result was
+  never touched. A request that did not run leaves the provider *unverified* —
+  the stored result is still shown as the last check that did run, but it is
+  not presented as current, and it does not count toward "N of M ready".
 - **Vite must not be allowed to drift ports.** The server trusts exactly
   `5173` in dev mode. Vite's default when that port is busy — a dev server left
   running in another worktree, say — is to start on `5174` and carry on, so
