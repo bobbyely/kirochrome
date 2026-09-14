@@ -1208,3 +1208,7 @@ kbd {
 .room-msg-user { align-items: flex-end; }
 .room-msg-name { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); padding: 0 var(--sp-1); }
 .room-msg .msg { max-width: 80%; }
+
+/* The last check could not be re-run: not failed, not ready — unknown. */
+.pill-unverified { border-color: var(--warn); color: var(--warn); }
+.card.status-unverified { border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }

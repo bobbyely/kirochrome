@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { CHECK_STAGES } from "@kirochrome/shared";
-import type { CheckStage, HostPlatform, ProviderCheckResult, ProviderView } from "@kirochrome/shared";
+import type { CheckStage, HostPlatform, KcError, ProviderCheckResult, ProviderView } from "@kirochrome/shared";
 import { ApiError, fetchProviders, runCheck, updateProvider } from "./api.js";
+import { cardStatus, isReady } from "./providerStatus.js";
 import { applyTheme, effectiveTheme, loadTheme, type Theme } from "./theme.js";
 
 export function Setup() {
@@ -9,6 +10,13 @@ export function Setup() {
   const [platform, setPlatform] = useState<HostPlatform>("other");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [running, setRunning] = useState<Set<string>>(new Set());
+  /**
+   * A check whose *request* failed — the server refused it, or was unreachable —
+   * as opposed to a check that ran and reported a failing rung. Kept per
+   * provider: the last result is still the last known result, but the card must
+   * not present it as current when the attempt to refresh it never ran.
+   */
+  const [checkErrors, setCheckErrors] = useState<Record<string, KcError>>({});
 
   const load = useCallback(async () => {
     try {
@@ -27,14 +35,19 @@ export function Setup() {
 
   const check = useCallback(async (id: string) => {
     setRunning((prev) => new Set(prev).add(id));
+    setCheckErrors((prev) => {
+      const { [id]: _, ...rest } = prev;
+      return rest;
+    });
     try {
       const { result } = await runCheck(id);
       setProviders((prev) =>
         prev?.map((p) => (p.id === id ? { ...p, lastCheck: result } : p)) ?? prev,
       );
     } catch (err) {
-      const message = err instanceof ApiError ? err.kc.message : String(err);
-      setLoadError(message);
+      const error: KcError =
+        err instanceof ApiError ? err.kc : { code: "INTERNAL", message: String(err) };
+      setCheckErrors((prev) => ({ ...prev, [id]: error }));
     } finally {
       setRunning((prev) => {
         const next = new Set(prev);
@@ -44,7 +57,7 @@ export function Setup() {
     }
   }, []);
 
-  const ready = providers?.filter((p) => p.lastCheck?.status === "ok").length ?? 0;
+  const ready = providers?.filter((p) => isReady(checkErrors[p.id] ?? null, p.lastCheck)).length ?? 0;
 
   return (
     <div className="page">
@@ -74,6 +87,7 @@ export function Setup() {
             key={provider.id}
             provider={provider}
             running={running.has(provider.id)}
+            checkError={checkErrors[provider.id] ?? null}
             platform={platform}
             onCheck={() => void check(provider.id)}
             onReload={load}
@@ -233,18 +247,20 @@ function Shortcuts() {
 function ProviderCard({
   provider,
   running,
+  checkError,
   platform,
   onCheck,
   onReload,
 }: {
   provider: ProviderView;
   running: boolean;
+  checkError: KcError | null;
   platform: HostPlatform;
   onCheck: () => void;
   onReload: () => Promise<void>;
 }) {
   const check = provider.lastCheck;
-  const status = running ? "running" : (check?.status ?? "unchecked");
+  const status = cardStatus(running, checkError, check);
 
   return (
     <section className={`card status-${status}`}>
@@ -263,6 +279,22 @@ function ProviderCard({
 
         </div>
       </div>
+
+      {checkError && (
+        <div className="error">
+          <div className="error-head">
+            <span className="code">{checkError.code}</span>
+            <span>Could not re-check: {checkError.message}</span>
+          </div>
+          {checkError.remediation && <p className="remediation">{checkError.remediation}</p>}
+          <Details label="Error detail" json={checkError.detail} />
+          {check && (
+            <p className="muted">
+              The result below is from the last check that did run, and has not been re-verified.
+            </p>
+          )}
+        </div>
+      )}
 
       <Ladder result={check} running={running} />
 
@@ -350,6 +382,7 @@ const LABELS: Record<string, string> = {
   ok: "Ready",
   failed: "Failed",
   stale: "Needs re-check",
+  unverified: "Unverified",
   unchecked: "Not checked",
   running: "Checking",
 };
