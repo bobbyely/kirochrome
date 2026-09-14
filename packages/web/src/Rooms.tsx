@@ -26,6 +26,7 @@ export function Rooms({ onOpenRoom }: { onOpenRoom: (id: string) => void }) {
   const [providers, setProviders] = useState<ProviderView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [pending, setPending] = useState(false);
   const { connected, workspaces, listWorkspaces } = useChat();
 
   const refresh = useCallback(async () => {
@@ -63,14 +64,21 @@ export function Rooms({ onOpenRoom }: { onOpenRoom: (id: string) => void }) {
         <RoomForm
           providers={providers}
           workspaces={workspaces ?? []}
+          pending={pending}
           onCancel={() => setCreating(false)}
           onSave={async (input) => {
+            // Creating spawns an agent per participant, which takes seconds;
+            // without this the button invited a second and third room.
+            if (pending) return;
+            setPending(true);
             try {
               const { room } = await createRoom(input);
               setCreating(false);
               onOpenRoom(room.id);
             } catch (err) {
               setError(describe(err));
+            } finally {
+              setPending(false);
             }
           }}
         />
@@ -118,11 +126,13 @@ export function Rooms({ onOpenRoom }: { onOpenRoom: (id: string) => void }) {
 function RoomForm({
   providers,
   workspaces,
+  pending,
   onSave,
   onCancel,
 }: {
   providers: ProviderView[];
   workspaces: string[];
+  pending: boolean;
   onSave: (input: RoomInput) => void;
   onCancel: () => void;
 }) {
@@ -233,10 +243,10 @@ function RoomForm({
       </p>
 
       <div className="schedule-actions">
-        <button type="submit" className="primary">
-          Create and open
+        <button type="submit" className="primary" disabled={pending}>
+          {pending ? "Starting the agents…" : "Create and open"}
         </button>
-        <button type="button" onClick={onCancel}>
+        <button type="button" onClick={onCancel} disabled={pending}>
           Cancel
         </button>
       </div>
