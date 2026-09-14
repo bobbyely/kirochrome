@@ -8,8 +8,10 @@ import type {
 } from "@kirochrome/shared";
 import { Composer } from "./Composer.js";
 import { KSpinner } from "./KSpinner.js";
+import { ChangesPane } from "./ChangesPane.js";
+import { CodeBlock, DiffView } from "./DiffView.js";
 import { MarkdownBody } from "./Markdown.js";
-import { collapseContext, countChanges, lineDiff } from "./diff.js";
+import { countChanges, lineDiff } from "./diff.js";
 import { buildRows, languageFor, toolContent, toolSubtitle, type Row, type ToolDiff } from "./timeline.js";
 import { useChat } from "./useChat.js";
 
@@ -84,6 +86,7 @@ export function Chat({
 
   const allRows = useMemo(() => buildRows(events), [events]);
   const [windowSize, setWindowSize] = useState(INITIAL_ROWS);
+  const [changesOpen, setChangesOpen] = useState(false);
 
   // Long conversations render every row otherwise, and each agent message is a
   // full markdown parse. Show the most recent slice and let the reader ask for
@@ -129,6 +132,7 @@ export function Chat({
   useEffect(() => {
     setWindowSize(INITIAL_ROWS);
     setFollowing(true);
+    setChangesOpen(false);
     landed.current = false;
   }, [sessionId, providerId, adopt?.agentSessionId]);
 
@@ -164,6 +168,15 @@ export function Chat({
             Export
           </a>
         )}
+        {session && (
+          <button
+            className={`head-action ${changesOpen ? "active" : ""}`}
+            onClick={() => setChangesOpen((v) => !v)}
+            title="Files the agent has changed this conversation"
+          >
+            Changes
+          </button>
+        )}
         {/* Live sessions always show it; a restored one shows it whenever its
             log holds usage, since that history is still meaningful. */}
         {(session?.live || usage) && <ContextMeter usage={usage} />}
@@ -198,6 +211,8 @@ export function Chat({
           <div ref={bottom} />
         </div>
       </div>
+
+      {changesOpen && <ChangesPane events={events} onClose={() => setChangesOpen(false)} />}
 
       {!following && (
         <button className="jump-latest" onClick={jumpToLatest}>
@@ -438,47 +453,6 @@ function diffSummary(diffs: ToolDiff[]): string {
     removed += counts.removed;
   }
   return `+${added} −${removed}`;
-}
-
-/** A file edit, rendered as a diff rather than two blobs of JSON. */
-function DiffView({ diff }: { diff: ToolDiff }) {
-  const lines = lineDiff(diff.oldText, diff.newText);
-  if (!lines) {
-    // Too large for the quadratic LCS; show the result rather than nothing.
-    return (
-      <div className="diff">
-        <div className="diff-head">{diff.path} <span className="muted">(too large to diff)</span></div>
-        <CodeBlock text={diff.newText} language={languageFor(diff.path)} />
-      </div>
-    );
-  }
-
-  const rows = collapseContext(lines);
-  const { added, removed } = countChanges(lines);
-  return (
-    <div className="diff">
-      <div className="diff-head">
-        <code>{diff.path}</code>
-        <span className="diff-stat">+{added} −{removed}</span>
-      </div>
-      <pre className="diff-body">
-        {rows.map((row, i) =>
-          row.kind === "gap" ? (
-            <span key={i} className="diff-gap">{`⋯ ${row.count} unchanged line${row.count === 1 ? "" : "s"}\n`}</span>
-          ) : (
-            <span key={i} className={`diff-line diff-${row.kind}`}>
-              {`${row.kind === "add" ? "+" : row.kind === "del" ? "-" : " "} ${row.text}\n`}
-            </span>
-          ),
-        )}
-      </pre>
-    </div>
-  );
-}
-
-/** Tool text output, highlighted when we can guess the language. */
-function CodeBlock({ text, language }: { text: string; language: string }) {
-  return <MarkdownBody>{`\`\`\`${language}\n${text}\n\`\`\``}</MarkdownBody>;
 }
 
 /** The agent is blocked on this request until the user answers it. */
