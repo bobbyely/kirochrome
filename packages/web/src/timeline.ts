@@ -300,6 +300,9 @@ export function buildRows(events: KcEvent[]): Row[] {
         });
         break;
 
+      case "interrupted":
+        rows.push({ kind: "note", seq: event.seq, label: "Interrupted — the next message was sent now" });
+        break;
       case "turn_end":
         if (rows.length > 0) rows.push({ kind: "divider", seq: event.seq });
         break;

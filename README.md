@@ -30,6 +30,8 @@ parser.
 - conversations you started in the agent's own CLI listed and continued here,
   where the agent supports it
 - refresh or crash mid-turn without losing anything
+- messages typed mid-turn queue up, or **Interrupt & send** cuts the turn
+  short for one that cannot wait
 - hung commands killed cleanly, with no orphaned processes
 - **Schedules**: a saved prompt the server runs every N minutes or daily at a
   time. Each run is an ordinary conversation, reached from the schedule's log

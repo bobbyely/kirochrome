@@ -18,6 +18,7 @@ export function Composer({
   commandOptions,
   requestCommandOptions,
   onPrompt,
+  onInterrupt,
   onCancel,
   onSetAutoApprove,
   onSetConfigOption,
@@ -31,6 +32,8 @@ export function Composer({
   commandOptions: Record<string, CommandOption[]>;
   requestCommandOptions: (command: string, partial: string) => void;
   onPrompt: (text: string, images: Array<{ mime: string; data: string }>) => void;
+  /** Like `onPrompt`, but cancels the running turn first. */
+  onInterrupt: (text: string, images: Array<{ mime: string; data: string }>) => void;
   onCancel: () => void;
   onSetAutoApprove: (enabled: boolean) => void;
   onSetConfigOption: (configId: string, value: string | boolean) => void;
@@ -46,12 +49,13 @@ export function Composer({
   const queued = session?.queued ?? [];
   const canAttach = session?.supportsImages === true;
 
-  const submit = () => {
+  const submit = (mode: "queue" | "now" = "queue") => {
     const text = draft.trim();
     // Deliberately allowed while busy: the server queues it and sends it when
-    // the current turn ends.
+    // the current turn ends — or, with "now", cuts the turn short for it.
     if (!text && images.length === 0) return;
-    onPrompt(text, images.map(({ mime, data }) => ({ mime, data })));
+    const send = mode === "now" ? onInterrupt : onPrompt;
+    send(text, images.map(({ mime, data }) => ({ mime, data })));
     setDraft("");
     setImages([]);
   };
@@ -190,7 +194,8 @@ export function Composer({
           }
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            submit();
+            // Cmd/Ctrl+Enter while the agent works: do not wait for it.
+            submit((e.metaKey || e.ctrlKey) && busy ? "now" : "queue");
           }
         }}
         rows={3}
@@ -217,9 +222,18 @@ export function Composer({
         </div>
         <div className="composer-buttons">
           {busy && <button onClick={onCancel}>Stop</button>}
+          {busy && (
+            <button
+              onClick={() => submit("now")}
+              disabled={!draft.trim() && images.length === 0}
+              title="Cancel the current turn and send this now (Cmd/Ctrl+Enter). What the agent was doing is abandoned."
+            >
+              Interrupt &amp; send
+            </button>
+          )}
           <button
             className="primary"
-            onClick={submit}
+            onClick={() => submit()}
             disabled={(!draft.trim() && images.length === 0) || !session}
           >
             {busy ? "Queue" : "Send"}

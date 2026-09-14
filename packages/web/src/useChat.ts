@@ -269,6 +269,19 @@ export function useChat() {
     [send],
   );
 
+  const interrupt = useCallback(
+    (text: string, images: Array<{ mime: string; data: string }> = []) => {
+      if (!sessionId.current) return;
+      send({
+        type: "interrupt",
+        sessionId: sessionId.current,
+        text,
+        ...(images.length > 0 ? { images } : {}),
+      });
+    },
+    [send],
+  );
+
   const cancel = useCallback(() => {
     if (sessionId.current) send({ type: "cancel", sessionId: sessionId.current });
   }, [send]);
@@ -301,6 +314,7 @@ export function useChat() {
     answerElicitation,
     setAutoApprove,
     prompt,
+    interrupt,
     cancel,
   };
 }

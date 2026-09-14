@@ -284,5 +284,10 @@ async function dispatch(
       await sessions.requireLive(msg.sessionId).cancel();
       return;
     }
+
+    case "interrupt": {
+      await sessions.requireLive(msg.sessionId).interrupt(msg.text, msg.images ?? []);
+      return;
+    }
   }
 }
