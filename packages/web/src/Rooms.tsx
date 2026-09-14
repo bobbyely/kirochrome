@@ -492,7 +492,15 @@ export function RoomView({
           {speaking && (
             <div className="room-msg">
               <span className="room-msg-name">{speaking.name}</span>
-              {room.speakingText ? (
+              {room.awaitingInput ? (
+                <div className="msg msg-agent">
+                  {speaking.name} is waiting for your answer — it asked a question only its own conversation can take.{" "}
+                  <button className="room-link" onClick={() => speaking.sessionId && onOpenSession(speaking.sessionId)}>
+                    Open it
+                  </button>
+                  .
+                </div>
+              ) : room.speakingText ? (
                 <div className="msg msg-agent">
                   <MarkdownBody>{room.speakingText}</MarkdownBody>
                 </div>

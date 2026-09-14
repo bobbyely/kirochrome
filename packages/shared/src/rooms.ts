@@ -85,6 +85,8 @@ export interface RoomView extends Room {
   speaking: string | null;
   /** What it has said so far this turn — its reply, streaming. */
   speakingText: string;
+  /** The speaker is blocked on a permission or elicitation prompt, which only its own conversation can answer. */
+  awaitingInput: boolean;
   /** Agent turns taken in the current round. */
   turnsThisRound: number;
 }

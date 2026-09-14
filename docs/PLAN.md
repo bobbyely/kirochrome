@@ -237,39 +237,14 @@ a skipped review.
 Wrong, not deferred. Debt below is a decision; this is a defect.
 
 Found by the reviews — see [REVIEWS.md](REVIEWS.md). Fixed ones become traps in
-[GOTCHAS.md](GOTCHAS.md), which is where a fixed bug belongs; the third review
+[GOTCHAS.md](GOTCHAS.md), which is where a fixed bug belongs. The third review
 pass cleared the session-core, security and validation findings from both
-earlier reviews. What remains is the rooms and scheduler batch, which belongs
-together, plus one platform note.
+earlier reviews, and the fourth cleared the rooms and scheduler batch: the
+turn cap, hold-release and cut-in on a running round, message fencing, the
+participant leak, the per-minute `skipped` rows and the serial tick. Windows
+reaping is no longer silent; it is a named limitation under *Recorded debt*.
 
-- **A room turn has no cap.** The scheduler has `RUN_CAP_MS`; a room turn has
-  nothing, and the room never surfaces `awaitingInput`, so a participant
-  raising a permission or elicitation request blocks the round for ever —
-  invariant 10. `withTimeout` around the prompt, and stop the room with a
-  typed error.
-- **Releasing a hold before the turn ends stalls the round.** `rooms.ts`
-  restarts only if `runtime.resumable`, which the loop sets after the turn in
-  flight — so type-then-clear within one turn leaves the room idle until
-  Continue. The test sleeps past the turn and never hits it.
-- **Cut in does not start a fresh round.** The code says it does, but
-  `round()` returns because the old round is still running; the budget and
-  the pass count carry over.
-- **Room messages are concatenated verbatim into other agents' prompts.** A
-  reply containing `\n\n[You] …` impersonates the user to the next agent.
-  Inherent to prompting, but fence each message and say that only the room
-  inserts speaker tags.
-- **A failed participant spawn leaks the ones before it.** Participants open
-  in turn before `upsertRoom`; if the third fails, two stay live under a room
-  id that never exists. Killable at shutdown, leaked until then. Detach in a
-  catch.
-- **The scheduler writes a `skipped` row every minute** while a run overlaps
-  its own next due time, and `tick` awaits each run in series, so one long
-  run delays every other schedule's check.
-- **Orphan reaping is a silent no-op on Windows.** `processLedger.ts` shells
-  out to `ps` for a start time, which does not exist there, so every ledger
-  row records a blank one and `reapOrphans` declines them all. Windows is
-  best-effort by design — but doing nothing quietly is worse than not
-  supporting it.
+Nothing open.
 
 #### Recorded debt
 
@@ -284,6 +259,13 @@ than a surprise. Each entry says what would go wrong if it is left.
   are watching the server's output. Surfacing `problems` in
   `ProvidersResponse` and rendering it on the setup page is the fix, and is
   small; it was left out to keep the validation change to the boundary itself.
+- **Orphan reaping does not run on Windows.** The ledger's identity check is
+  a `ps` start time, and Windows has no `ps`. It used to fail silently; now
+  `reapOrphans` logs once at startup that it is unsupported there and does
+  nothing. Agents a crashed server leaves behind on Windows must be ended by
+  hand. A PowerShell `Get-Process` start time is the fix, about fifteen lines,
+  left until someone with a Windows machine can run it — code that "should
+  work" is not the standard here.
 - **No formatter or linter.** Half the conventions section is mechanically
   enforceable and currently is not.
 - **`spike/` is misnamed and load-bearing.** Its README says "throwaway", but
@@ -327,9 +309,10 @@ than a surprise. Each entry says what would go wrong if it is left.
   file's review section are stale, and the AGENTS.md code map omits
   `startOptions.ts` and describes the web side in prose where the server side
   has a table.
-- **Tests the second review asked for.** Release-before-turn-ends and cut-in
-  budget reset in rooms; `nextClockRun` across a DST boundary (it uses local
-  `setHours`/`setDate`); the Changes pane with `oldText` omitted versus empty.
+- **Tests the second review asked for.** `nextClockRun` across a DST boundary
+  (it uses local `setHours`/`setDate`); the Changes pane with `oldText`
+  omitted versus empty. (The two room cases it asked for landed with the
+  rooms fixes.)
 - **One `useReadyProviders()` hook.** `Rooms.tsx`, `Schedules.tsx` and
   `NewChat.tsx` each fetch and filter providers by `lastCheck.status === "ok"`
   with two different error idioms.

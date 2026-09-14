@@ -145,6 +145,12 @@ Two consequences worth knowing:
 
 There is no reply. Awaiting one makes Stop hang forever.
 
+It also carries an obligation the other way: the client MUST answer every
+pending `session/request_permission` with the `cancelled` outcome when it
+cancels. The agent is blocked on our reply, not on the notification, so a
+cancel that forgets this leaves it stuck. We answer elicitations with
+`cancel` on the same path.
+
 ### Auth is a real rung, not a formality
 
 Agents advertise `authMethods` in the `initialize` response and return JSON-RPC

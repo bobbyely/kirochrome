@@ -14,10 +14,18 @@ import { dataDir } from "./paths.js";
  *
  * Reaping runs ONCE at server startup. It must never run per-session: that
  * would kill processes belonging to sessions that are still alive.
+ *
+ * Not on Windows. The identity check below is a `ps` start time, which does
+ * not exist there, so every entry would be declined and nothing reaped. That
+ * is said once at startup rather than left to look like it works.
  */
 const ledgerPath = () => join(dataDir(), "processes.tsv");
 
+/** Windows has no `ps`; see the note above. */
+const REAPING_SUPPORTED = process.platform !== "win32";
+
 export function recordProcess(pid: number, command: string): void {
+  if (!REAPING_SUPPORTED) return;
   try {
     mkdirSync(dataDir(), { recursive: true });
     // The start time is the identity check. Command text is recorded only for
@@ -51,6 +59,10 @@ function startTime(pid: number): string | null {
  * first, and skipped when it does not match.
  */
 export function reapOrphans(): void {
+  if (!REAPING_SUPPORTED) {
+    console.warn("[processes] orphan reaping is not supported on Windows: agents a crashed server leaves behind must be ended by hand.");
+    return;
+  }
   let entries: Array<{ pid: number; started: string; command: string }>;
   try {
     entries = readFileSync(ledgerPath(), "utf8")

@@ -74,7 +74,8 @@ browser (React) ──WebSocket──▶ local server ──JSON-RPC/stdio──
 
 The server is the ACP client. It owns the agent process and the turn, so a
 dropped socket costs nothing; the browser only renders an append-only event
-log. Localhost only, by design. macOS and Linux; Windows best-effort.
+log. Localhost only, by design. macOS and Linux; Windows best-effort — it
+runs, but agents a crashed server leaves behind are not cleaned up there.
 
 ## Docs
 
