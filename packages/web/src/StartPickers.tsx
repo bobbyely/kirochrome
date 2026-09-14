@@ -22,10 +22,14 @@ export function StartPickers({
 }) {
   const options = provider?.lastCheck?.options ?? [];
   const values = value.configValues ?? {};
+  // A check from before the list was kept has nothing to offer; say so
+  // rather than showing an empty row.
+  const stale = provider?.lastCheck?.status === "ok" && provider.lastCheck.options === undefined;
   const set = (id: string, v: string | boolean) => onChange({ ...value, configValues: { ...values, [id]: v } });
 
   return (
     <div className={`start-pickers ${compact ? "compact" : ""}`}>
+      {stale && <span className="start-stale">Re-run this provider&rsquo;s check on Setup to choose a model here.</span>}
       {options.map((option) => (
         <label className="start-picker" key={option.id} title={option.description}>
           <span className="start-picker-label">{option.name}</span>
