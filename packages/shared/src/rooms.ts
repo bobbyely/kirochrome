@@ -69,6 +69,8 @@ export interface RoomView extends Room {
   messages: RoomMessage[];
   /** Which participant is being prompted right now, if any. */
   speaking: string | null;
+  /** What it has said so far this turn — its reply, streaming. */
+  speakingText: string;
   /** Agent turns taken in the current round. */
   turnsThisRound: number;
 }
