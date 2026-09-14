@@ -1,190 +1,74 @@
 # KiroChrome
 
-A browser-based chat UI for CLI coding agents — the ergonomics of desktop apps
-like Claude Code and Codex, in a browser, backed by [Kiro CLI](https://kiro.dev).
+**A browser chat UI for CLI coding agents.** The feel of the Claude Code and
+Codex desktop apps, in a tab, for any agent that speaks the
+[Agent Client Protocol](https://agentclientprotocol.com) — Kiro CLI, Claude
+Code, Gemini CLI, Codex.
 
-**Status:** working. Setup, streaming chat, tool calls, persistence, resume
-and search all run; see [docs/PLAN.md](docs/PLAN.md) for what is next.
+Your agent runs on your machine, in your project, as it always has. KiroChrome
+gives it a proper window: streamed answers with real markdown, tool calls and
+diffs as things you can read, permissions and questions as things you can
+click, and every conversation kept, searchable and resumable.
+
+```bash
+git clone https://github.com/bobbyely/kirochrome.git && cd kirochrome
+npm install && npm start        # http://127.0.0.1:4711
+```
+
+Needs Node 22.5+. Press **Check** on an agent, then **New chat**. No agent
+installed yet? A built-in mock agent lets you try the chat anyway.
+
+## What you get
+
+**A real transcript.** Streaming markdown and highlighted code. Tool calls
+fold into one line while the agent works and open on demand. File edits show
+as diffs. Permission prompts and the agent's structured questions are forms,
+not prose to parse.
+
+**Changes at a glance.** A pane beside the conversation lists every file the
+agent has edited, with its net diff — no hunting the transcript for the tool
+call that did it.
+
+**Nothing lost.** Every conversation is persisted as it happens. Refresh,
+close the tab, restart the server: reopen it and pick up where it was. Search
+across all of them. Conversations you started in the agent's own terminal can
+be continued here too.
+
+**Stay in control mid-turn.** Type while the agent works and the message
+queues for when it finishes — or **Interrupt & send** to cut the turn short
+for something that cannot wait. Stop kills a runaway turn cleanly, with no
+orphaned processes left behind.
+
+**Schedules.** Save a prompt and have the server run it every N minutes or
+daily at a time — a nightly review, a CI check, a morning brief. Each run is an
+ordinary conversation you can open and continue. The browser can be closed;
+the server cannot.
+
+**Context you can see.** A meter shows how much of the agent's window is used,
+and what the conversation has cost where the agent reports it.
+
+**Any ACP agent.** Adding one is a config entry, not code. A setup page checks
+each agent before you rely on it and names exactly what is wrong when it fails.
+
+**Something to do while you wait.** Two word games in the corner. A game in
+progress survives switching conversations.
 
 ## How it works
 
-Kiro CLI speaks the [Agent Client Protocol](https://agentclientprotocol.com)
-(ACP) — JSON-RPC 2.0 over stdio, the "LSP for coding agents". So KiroChrome is
-an ACP client with a web front end:
-
 ```
-browser (React) ──WebSocket──▶ local server ──JSON-RPC/stdio──▶ kiro-cli acp
+browser (React) ──WebSocket──▶ local server ──JSON-RPC/stdio──▶ your agent
 ```
 
-Because ACP is a standard, the same UI drives Gemini CLI natively, and Claude
-Code or Codex through adapters. Adding a provider is a config entry, not a
-parser.
-
-## What it gives you
-
-- streaming responses with real markdown and code rendering
-- tool calls, file diffs and permission prompts as UI, not terminal scrollback
-- structured questions from the agent answered as a form, not guessed at in prose
-- a setup page that verifies each configured agent before you rely on it
-- every session persisted, resumable and searchable
-- conversations you started in the agent's own CLI listed and continued here,
-  where the agent supports it
-- refresh or crash mid-turn without losing anything
-- a **Changes** drawer: every file the agent has edited this conversation,
-  with its net diff, without hunting the transcript for the tool call
-- messages typed mid-turn queue up, or **Interrupt & send** cuts the turn
-  short for one that cannot wait
-- hung commands killed cleanly, with no orphaned processes
-- **Schedules**: a saved prompt the server runs every N minutes or daily at a
-  time. Each run is an ordinary conversation, reached from the schedule's log
-  rather than the sidebar — the browser can be closed, the server cannot
-- two word games in the corner for while the agent is busy — **Play**,
-  bottom right; a game in progress survives switching conversations
+The server is the ACP client. It owns the agent process and the turn, so a
+dropped socket costs nothing; the browser only renders an append-only event
+log. Localhost only, by design. macOS and Linux; Windows best-effort.
 
 ## Docs
 
-- [AGENTS.md](AGENTS.md) — the rules, for anyone (or anything) writing code here
-- [AGENTS.local.md](AGENTS.local.md) — your own preferences, layered over those
-  rules and blank by default. Put your style, habits and shortcuts in it; it
-  takes precedence over AGENTS.md for everything except the invariants
-- [docs/DESIGN.md](docs/DESIGN.md) — architecture and the reasoning behind it
-- [docs/PLAN.md](docs/PLAN.md) — what is next, and recorded debt
-- [docs/PROTOCOL.md](docs/PROTOCOL.md) — what we implement of ACP, and how it behaves
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — running from a checkout, hot
+  reload, worktrees, provider config, environment variables, diagnostics
 - [docs/PROVIDERS.md](docs/PROVIDERS.md) — adding an agent, and what has been run
-- [docs/GOTCHAS.md](docs/GOTCHAS.md) — traps that already cost someone a day
-
-## Development
-
-Requires **Node 22.5+** (for the built-in `node:sqlite`). See `.nvmrc`.
-
-```bash
-git clone https://github.com/bobbyely/kirochrome.git
-cd kirochrome
-npm install
-npm start                 # builds everything, serves http://127.0.0.1:4711
-```
-
-Open <http://127.0.0.1:4711>, press **Check** on a provider, and once it passes,
-**New chat**.
-
-If the agent keeps conversations of its own — Claude Code and Kiro both do — the
-new-chat page offers to **browse** them, so a conversation you started in the
-terminal can be continued in the browser. It says so where it matters: the
-transcript above the seam is whatever the agent replays, and KiroChrome's own
-log starts where you opened it.
-
-### Development with hot reload
-
-```bash
-npm run dev
-```
-
-One command, three watchers: the UI hot-reloads on <http://127.0.0.1:5173>
-without losing your place, and the server rebuilds and restarts on change.
-Ctrl-C stops all of it.
-
-Vite proxies `/api` and `/ws` through to the server on :4711, so use the 5173
-URL — the 4711 one serves the last built bundle, not your edits.
-
-A server restart detaches running agents. Conversations are persisted, so
-reopening one and pressing **Resume conversation** picks it back up.
-
-### Working on several features at once
-
-Each change gets its own git worktree, beside the repo rather than inside it:
-
-```bash
-npm run wt -- new <topic>     # branch + ../kirochrome-worktrees/<topic> + install
-git worktree list             # what is in flight
-npm run wt -- prune           # remove everything merged (--yes to go ahead)
-```
-
-`prune` asks GitHub whether each PR was merged, because rebase-merging means
-`git branch --merged` never says so. It refuses on uncommitted or unpushed work,
-and prints what it would remove unless you pass `--yes`.
-
-Everything in between is ordinary git and `gh`; see the pull request section of
-[AGENTS.md](AGENTS.md) for the sequence.
-
-Only run one dev server at a time — worktrees share ports 4711 and 5173, and a
-single database.
-
-### On a new machine
-
-`.git/config` does not travel with a clone, so set your commit identity before
-your first commit — otherwise commits are attributed to whatever global identity
-that machine has (a corporate one, on a work laptop):
-
-```bash
-git config user.name  "bobbyely"
-git config user.email "robert.w.ely@gmail.com"
-```
-
-Verify with `git log -1 --format='%an <%ae>'` after committing. Getting it right
-at commit time is the only fix that works: a `.mailmap` would canonicalise the
-display for git's own tooling, but GitHub ignores it for the contributor graph.
-
-### Providers
-
-Configured in `<dataDir>/config.json`, seeded on first run with Kiro, Claude
-Code, Gemini CLI, Codex, and — when running from a checkout — an offline mock
-agent that always passes, so you can try the chat with no agent installed.
-
-Adding another is a config entry, not code:
-[docs/PROVIDERS.md](docs/PROVIDERS.md) has the recipe and an honest table of
-which ones have actually been run.
-
-The file is checked when it is read. An entry with a mistake in it — `args` as
-a string, a missing `command`, an id used twice — is skipped with a warning on
-the server's output, so the rest of your providers still load and the setup
-page still works. Only a file with nothing usable left in it is an error, and
-that error names each problem. Delete the file to get the defaults back.
-
-| OS | Data directory |
-|---|---|
-| macOS | `~/Library/Application Support/kirochrome/` |
-| Linux | `~/.local/share/kirochrome/` |
-
-`KIROCHROME_DATA_DIR` overrides it. `KIROCHROME_PORT` changes the port.
-`KIROCHROME_TRACE=1` logs every JSON-RPC frame to a JSONL file in the data
-directory. `KIROCHROME_DEV=1` additionally trusts Vite's origin on port 5173 —
-`npm run dev` sets it for you, and a normal run should not: 5173 is Vite's
-default port, so trusting it means trusting any project you happen to have
-running there.
-
-If a provider fails, the setup page names the rung it failed on and what to do
-about it. Two common ones:
-
-- **`AGENT_NOT_FOUND`** — set an absolute path in `config.json`. Kiro installs
-  to `~/.local/bin/kiro-cli`, which a GUI-launched process often cannot see.
-- **Claude Code refuses to start** — its ACP adapter will not run nested inside
-  an existing Claude Code session. Use a plain terminal.
-
-### What did the agent actually send?
-
-```bash
-node scripts/diagnose.mjs
-```
-
-Lists every conversation with the ACP updates it received and whether the agent
-reported context usage. Counts only — no conversation content is printed. Use it
-when something is missing from the UI and you want to know whether the agent
-sent it at all.
-
-### Probing an agent directly
-
-To see raw ACP traffic without the UI — useful when a provider misbehaves, or to
-check what a new agent advertises:
-
-```bash
-cd spike && npm install
-node handshake.mjs kiro          # or: claude-code, mock
-```
-
-## Prior art
-
-[Kirodex](https://github.com/thabti/kirodex) solves the same problem as a Tauri
-desktop app, also over ACP. See [docs/PRIOR-ART.md](docs/PRIOR-ART.md) for what
-to borrow and what not to port.
-
-Runs on macOS and Linux; Windows best-effort. Localhost only by design.
+- [docs/DESIGN.md](docs/DESIGN.md) — the architecture and the reasoning behind it
+- [docs/PLAN.md](docs/PLAN.md) — what is next
+- [AGENTS.md](AGENTS.md) — the rules, for anyone (or anything) writing code here
+- [docs/PROTOCOL.md](docs/PROTOCOL.md) · [docs/GOTCHAS.md](docs/GOTCHAS.md)
