@@ -289,6 +289,9 @@ async function handleRooms(req: IncomingMessage, res: ServerResponse, url: URL, 
     case "resume":
       rooms.resume(id);
       break;
+    case "reconnect":
+      await rooms.reconnect(id);
+      break;
     case "stop":
       rooms.stop(id);
       break;

@@ -133,6 +133,12 @@ export class RoomManager {
     void this.round(id);
   }
 
+  /** Re-attaches every participant's agent now, rather than on its next turn. */
+  async reconnect(id: string): Promise<void> {
+    const room = this.require(id);
+    for (const participant of room.participants) await this.ensureLive(room, participant);
+  }
+
   /** Starts, or resumes, a round without the user saying anything. */
   resume(id: string): void {
     const room = this.require(id);
@@ -348,6 +354,7 @@ export class RoomManager {
     return {
       ...room,
       messages: this.store.roomMessages(room.id),
+      live: room.participants.filter((p) => p.sessionId && this.sessions.getLive(p.sessionId)).map((p) => p.id),
       speaking: runtime.speaking,
       speakingText: speaker ? saidSince(speaker, runtime.speakingFrom) : "",
       turnsThisRound: runtime.turnsThisRound,

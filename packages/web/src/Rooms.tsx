@@ -299,7 +299,7 @@ export function RoomView({
     bottom.current?.scrollIntoView({ block: "end" });
   }, [room?.messages.length, room?.speakingText.length]);
 
-  const verb = async (name: "say" | "hold" | "resume" | "stop", body?: unknown) => {
+  const verb = async (name: "say" | "hold" | "resume" | "stop" | "reconnect", body?: unknown) => {
     try {
       setRoom((await roomVerb(roomId, name, body)).room);
       setError(null);
@@ -347,6 +347,7 @@ export function RoomView({
 
   const speaking = room.participants.find((p) => p.id === room.speaking);
   const busy = room.status === "running" || room.status === "held";
+  const detached = room.participants.filter((p) => !room.live.includes(p.id));
 
   return (
     <div className="chat room">
@@ -367,16 +368,30 @@ export function RoomView({
       </header>
 
       <div className="room-people">
-        {room.participants.map((p) => (
-          <button
-            key={p.id}
-            className={`chip ${p.id === room.speaking ? "chip-on" : ""}`}
-            title={`${p.role} — open its own transcript`}
-            onClick={() => p.sessionId && onOpenSession(p.sessionId)}
-          >
-            {p.name}
-          </button>
-        ))}
+        {room.participants.map((p) => {
+          const live = room.live.includes(p.id);
+          return (
+            <button
+              key={p.id}
+              className={`chip ${p.id === room.speaking ? "chip-on" : ""}`}
+              title={`${p.role} — ${live ? "agent attached" : "agent detached; re-attaches when spoken to"}. Click for its own transcript.`}
+              onClick={() => p.sessionId && onOpenSession(p.sessionId)}
+            >
+              <span className={`status ${p.id === room.speaking ? "status-working" : live ? "status-idle" : "status-detached"}`} />
+              {p.name}
+            </button>
+          );
+        })}
+        {detached.length > 0 && !busy && (
+          <span className="room-detached">
+            {detached.map((p) => p.name).join(" and ")} {detached.length === 1 ? "is" : "are"} detached — they re-attach when
+            spoken to, or{" "}
+            <button className="room-link" onClick={() => verb("reconnect")}>
+              reconnect now
+            </button>
+            .
+          </span>
+        )}
       </div>
 
       <div className="transcript">
