@@ -91,6 +91,24 @@ describe("a turn", () => {
   });
 });
 
+describe("start options", () => {
+  it("apply a chosen model and send the opening message before anything else", async () => {
+    const session = await sessions.open(provider, "/tmp", {
+      configValues: { model: "mock-small", ghost: "nope" },
+      opening: "hello",
+    });
+    const off = autoApprove(session);
+    const model = session.summary().configOptions.find((o) => o.id === "model");
+    assert.equal(model?.currentValue, "mock-small");
+    void session.prompt("second");
+    await until(() => session.eventsSince(0).filter((e) => e.type === "turn_end").length === 2, 10_000);
+    const said = session.eventsSince(0).filter((e) => e.type === "user_message").map((e) => e.text);
+    assert.deepEqual(said, ["hello", "second"], "the opening went first");
+    off();
+    session.close();
+  });
+});
+
 describe("Kiro's usage notification", () => {
   it("is logged as an update under its own method name", async () => {
     const session = await sessions.open(provider, "/tmp");

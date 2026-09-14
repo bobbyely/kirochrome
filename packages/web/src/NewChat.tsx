@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import type { AgentSessionInfo, AgentSessionsResponse, KcError, ProviderView } from "@kirochrome/shared";
+import type { AgentSessionInfo, AgentSessionsResponse, KcError, ProviderView, StartOptions } from "@kirochrome/shared";
 import { advertisesLoadSession, advertisesSessionList } from "@kirochrome/shared";
 import { ApiError, fetchAgentSessions, fetchProviders } from "./api.js";
+import { chosen, StartPickers } from "./StartPickers.js";
 import { useChat } from "./useChat.js";
 
 /** What the parent needs to open a conversation the agent owns. */
@@ -25,7 +26,7 @@ export function NewChat({
   onOpenSession,
   onNeedsSetup,
 }: {
-  onStart: (providerId: string, cwd: string) => void;
+  onStart: (providerId: string, cwd: string, start: StartOptions) => void;
   onAdopt: (providerId: string, target: AdoptTarget) => void;
   onOpenSession: (sessionId: string) => void;
   onNeedsSetup: () => void;
@@ -33,6 +34,10 @@ export function NewChat({
   const [providers, setProviders] = useState<ProviderView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cwd, setCwd] = useState("");
+  // Clicking a provider used to start at once; now it selects, so a model
+  // can be chosen first. Start is the button below the pickers.
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  const [start, setStart] = useState<StartOptions>({});
   const { connected, workspaces, currentWorkspace, listWorkspaces } = useChat();
 
   useEffect(() => {
@@ -50,6 +55,7 @@ export function NewChat({
   }, [cwd, currentWorkspace]);
 
   const ready = useMemo(() => providers?.filter((p) => p.lastCheck?.status === "ok") ?? [], [providers]);
+  const chosenProvider = ready.find((p) => p.id === chosenId);
   // Offered only where the agent said it can list its own sessions — the check
   // already recorded what it advertised, so nothing is assumed or hardcoded.
   const listers = useMemo(
@@ -106,9 +112,11 @@ export function NewChat({
         {ready.map((provider) => (
           <button
             key={provider.id}
-            className="provider-choice"
-            disabled={!cwd.trim()}
-            onClick={() => onStart(provider.id, cwd.trim())}
+            className={`provider-choice ${provider.id === chosenId ? "chosen" : ""}`}
+            onClick={() => {
+              setChosenId(provider.id);
+              setStart({});
+            }}
           >
             <strong>{provider.name}</strong>
             <span className="muted">
@@ -117,6 +125,18 @@ export function NewChat({
           </button>
         ))}
       </div>
+      {chosenProvider && (
+        <div className="start-block">
+          <StartPickers provider={chosenProvider} value={start} onChange={setStart} />
+          <button
+            className="primary"
+            disabled={!cwd.trim()}
+            onClick={() => onStart(chosenProvider.id, cwd.trim(), chosen(chosenProvider, start))}
+          >
+            Start chat
+          </button>
+        </div>
+      )}
 
       {listers.length > 0 && (
         <>

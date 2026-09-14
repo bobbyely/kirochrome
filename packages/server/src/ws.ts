@@ -140,7 +140,7 @@ async function dispatch(
       if (!provider) {
         throw kcError("PROVIDER_UNKNOWN", `No provider configured with id '${msg.providerId}'.`);
       }
-      const session = await sessions.open(provider, msg.cwd);
+      const session = await sessions.open(provider, msg.cwd, msg.start);
       send({ type: "session_opened", session: session.summary() });
       return;
     }

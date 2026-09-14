@@ -1,4 +1,5 @@
 import type { KcError } from "./errors.js";
+import type { StartOptions } from "./events.js";
 
 /**
  * A prompt the server runs on its own, on an interval. Each firing is an
@@ -28,6 +29,8 @@ export interface Schedule {
    * parks it until the cap kills it.
    */
   autoApprove: boolean;
+  /** Model, mode and an opening message for each run's session. */
+  start: StartOptions;
   status: "active" | "paused";
   createdAt: number;
   updatedAt: number;
@@ -36,7 +39,7 @@ export interface Schedule {
 /** What a client may send to create or change a schedule. */
 export type ScheduleInput = Pick<
   Schedule,
-  "name" | "providerId" | "cwd" | "prompt" | "everyMinutes" | "at" | "weekdaysOnly" | "keepRuns" | "autoApprove"
+  "name" | "providerId" | "cwd" | "prompt" | "everyMinutes" | "at" | "weekdaysOnly" | "keepRuns" | "autoApprove" | "start"
 >;
 
 export const SCHEDULE_MIN_MINUTES = 1;

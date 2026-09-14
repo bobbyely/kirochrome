@@ -6,6 +6,7 @@ import {
   type KcEvent,
   type ProviderConfig,
   type SessionSummary,
+  type StartOptions,
 } from "@kirochrome/shared";
 import { Session } from "./session.js";
 import type { Store } from "./store.js";
@@ -75,9 +76,9 @@ export class SessionManager {
     broadcast();
   }
 
-  async open(provider: ProviderConfig, cwd?: string): Promise<Session> {
+  async open(provider: ProviderConfig, cwd?: string, start?: StartOptions): Promise<Session> {
     const session = await this.staleOnFailure(provider, () =>
-      Session.open(randomUUID(), provider, this.store, cwd),
+      Session.open(randomUUID(), provider, this.store, cwd, start),
     );
     this.track(session);
     return session;

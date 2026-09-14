@@ -6,11 +6,12 @@ import type {
   KcEvent,
   SearchHit,
   SessionSummary,
+  StartOptions,
 } from "./events.js";
 
 /** Browser → server. */
 export type ClientMessage =
-  | { type: "open"; providerId: string; cwd?: string }
+  | { type: "open"; providerId: string; cwd?: string; start?: StartOptions }
   /**
    * Take over a conversation the agent already has, found via `session/list`.
    *
@@ -133,6 +134,15 @@ const images: Field = {
     Array.isArray(v) &&
     v.every((img) => isRecord(img) && isImageMime(img.mime) && typeof img.data === "string"),
 };
+const startOptions: Field = {
+  expected: "an object with optional configValues (strings or booleans by id) and opening (a string)",
+  check: (v) =>
+    isRecord(v) &&
+    (v["configValues"] === undefined ||
+      (isRecord(v["configValues"]) &&
+        Object.values(v["configValues"]).every((x) => typeof x === "string" || typeof x === "boolean"))) &&
+    (v["opening"] === undefined || typeof v["opening"] === "string"),
+};
 const elicitationContent: Field = {
   expected: "an object of strings, numbers, booleans or string arrays",
   check: (v) =>
@@ -156,7 +166,7 @@ interface MessageSpec {
  * adding a message without a spec is a type error rather than a hole.
  */
 const CLIENT_MESSAGE_SPECS: Record<ClientMessage["type"], MessageSpec> = {
-  open: { required: { providerId: str }, optional: { cwd: str } },
+  open: { required: { providerId: str }, optional: { cwd: str, start: startOptions } },
   // `cwd` is required here, unlike `open`: it is the listed session's own
   // directory as the agent reported it, not a choice the user is making.
   adopt: { required: { providerId: str, agentSessionId: str, cwd: str }, optional: { title: str } },

@@ -113,6 +113,7 @@ describe("inbound frame validation", () => {
     const valid = [
       { type: "open", providerId: "mock" },
       { type: "open", providerId: "mock", cwd: "/tmp" },
+      { type: "open", providerId: "mock", cwd: "/tmp", start: { configValues: { model: "m", fast: true }, opening: "/effort high" } },
       { type: "adopt", providerId: "mock", agentSessionId: "cli-1", cwd: "/tmp" },
       { type: "adopt", providerId: "mock", agentSessionId: "cli-1", cwd: "/tmp", title: "First" },
       { type: "subscribe", sessionId: "s1", sinceSeq: 0 },

@@ -11,6 +11,7 @@ import {
   type ScheduleInput,
   type ScheduleRun,
   type ScheduleView,
+  type StartOptions,
 } from "@kirochrome/shared";
 import type { SessionManager } from "./sessionManager.js";
 import type { Store } from "./store.js";
@@ -158,6 +159,7 @@ export class Scheduler {
       keepRuns,
       providerId: input.providerId,
       autoApprove: input.autoApprove === true,
+      start: cleanStart(input.start),
     };
   }
 
@@ -217,7 +219,7 @@ export class Scheduler {
     this.running.add(schedule.id);
     this.store.upsertRun(run);
     try {
-      const session = await this.sessions.open(provider, schedule.cwd);
+      const session = await this.sessions.open(provider, schedule.cwd, schedule.start);
       session.tagSchedule(schedule.id, runTitle(schedule, run.startedAt));
       session.setAutoApprove(schedule.autoApprove);
       run.sessionId = session.id;
@@ -285,6 +287,23 @@ function lastFailure(events: ReadonlyArray<{ type: string; error?: KcError }>): 
     if (event.type === "error" && event.error) return event.error;
   }
   return null;
+}
+
+/** A browser form's StartOptions, kept to the two fields with their proper types. */
+function cleanStart(start: unknown): StartOptions {
+  if (typeof start !== "object" || start === null) return {};
+  const raw = start as { configValues?: unknown; opening?: unknown };
+  const configValues: Record<string, string | boolean> = {};
+  if (typeof raw.configValues === "object" && raw.configValues !== null) {
+    for (const [k, v] of Object.entries(raw.configValues)) {
+      if (typeof v === "string" || typeof v === "boolean") configValues[k] = v;
+    }
+  }
+  const opening = typeof raw.opening === "string" ? raw.opening.trim() : "";
+  return {
+    ...(Object.keys(configValues).length ? { configValues } : {}),
+    ...(opening ? { opening } : {}),
+  };
 }
 
 /** "Nightly review · Fri 09:00" — what a run is called in the sidebar. */

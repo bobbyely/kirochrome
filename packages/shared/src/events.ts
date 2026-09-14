@@ -318,6 +318,19 @@ export interface ConfigOption {
   options?: ConfigOptionValue[];
 }
 
+/**
+ * How to start a session: settings to apply once the agent is up, and a
+ * first message to send before anything else — a slash command such as
+ * `/effort high` for a setting the agent only exposes that way.
+ *
+ * `configValues` are keyed by `ConfigOption.id`, as advertised by the
+ * provider's last setup check; an id the agent no longer offers is skipped.
+ */
+export interface StartOptions {
+  configValues?: Record<string, string | boolean>;
+  opening?: string;
+}
+
 /** One conversation matching a search, with its best snippet. */
 export interface SearchHit {
   sessionId: string;

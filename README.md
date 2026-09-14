@@ -48,7 +48,9 @@ the server cannot.
 and what the conversation has cost where the agent reports it.
 
 **Any ACP agent.** Adding one is a config entry, not code. A setup page checks
-each agent before you rely on it and names exactly what is wrong when it fails.
+each agent before you rely on it and names exactly what is wrong when it
+fails — and remembers what it offers, so you pick the model before a chat,
+schedule or room starts, and can open with a command like `/effort high`.
 
 **Something to do while you wait.** Two word games in the corner. A game in
 progress survives switching conversations.

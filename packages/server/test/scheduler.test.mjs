@@ -23,6 +23,7 @@ const input = {
   weekdaysOnly: false,
   keepRuns: 20,
   autoApprove: true,
+  start: {},
 };
 
 before(async () => {
