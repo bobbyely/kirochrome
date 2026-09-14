@@ -59,6 +59,7 @@ export function startServer(port: number, webRoot: string | null): void {
   const scheduler = new Scheduler(store, sessions, () => loadConfig().providers);
   scheduler.start();
   const rooms = new RoomManager(store, sessions, () => loadConfig().providers);
+  rooms.start();
 
   const server = createServer(async (req, res) => {
     if (!originAllowed(req, port)) {

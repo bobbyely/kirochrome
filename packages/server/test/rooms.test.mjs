@@ -115,6 +115,21 @@ describe("a room", () => {
     rooms.delete(room.id);
   });
 
+  it("re-attaches a participant whose agent is gone, and settles rooms a restart left running", async () => {
+    const room = await rooms.create({ ...input, maxTurnsPerRound: 2 });
+    const [planner] = room.participants;
+    sessions.detach(planner.sessionId);
+    assert.equal(sessions.getLive(planner.sessionId), null);
+    store.upsertRoom({ ...store.getRoom(room.id), status: "running" });
+    new RoomManager(store, sessions, () => [provider]).start();
+    assert.equal(store.getRoom(room.id).status, "idle", "a restart settles it");
+
+    await rooms.say(room.id, "Again.");
+    assert.ok(await until(() => rooms.get(room.id).status === "idle" && rooms.get(room.id).messages.length === 3));
+    assert.equal(rooms.get(room.id).messages[1].name, "Planner", "Planner answered from a re-attached agent");
+    rooms.delete(room.id);
+  });
+
   it("stops on demand, and a credit cap stops it too", async () => {
     const room = await rooms.create({ ...input, maxTurnsPerRound: 50, pauseSeconds: 1 });
     await rooms.say(room.id, "Go.");
