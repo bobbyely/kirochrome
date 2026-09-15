@@ -11,11 +11,14 @@ export default defineConfig({
     // still says 5173. Failing to start is the honest outcome.
     port: 5173,
     strictPort: true,
+    // changeOrigin rewrites Host to the server's own port. The server rejects
+    // any other Host (a DNS-rebinding guard), and without it the proxied
+    // requests still carry Host: 127.0.0.1:5173 and every one of them is a 403.
     proxy: {
-      "/api": "http://127.0.0.1:4711",
+      "/api": { target: "http://127.0.0.1:4711", changeOrigin: true },
       // ws: true is required — without it the upgrade is not forwarded and the
       // app silently never connects.
-      "/ws": { target: "ws://127.0.0.1:4711", ws: true },
+      "/ws": { target: "ws://127.0.0.1:4711", ws: true, changeOrigin: true },
     },
   },
   build: { outDir: "dist", emptyOutDir: true },
