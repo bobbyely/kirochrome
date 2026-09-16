@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentSessionInfo, AgentSessionsResponse, KcError, ProviderView, StartOptions } from "@kirochrome/shared";
 import { advertisesLoadSession, advertisesSessionList } from "@kirochrome/shared";
 import { ApiError, fetchAgentSessions } from "./api.js";
@@ -38,15 +38,28 @@ export function NewChat({
   // can be chosen first. Start is the button below the pickers.
   const [chosenId, setChosenId] = useState<string | null>(null);
   const [start, setStart] = useState<StartOptions>({});
-  const { connected, workspaces, currentWorkspace, listWorkspaces } = useChat();
+  const { connected, workspaces, currentWorkspace, lastProviderId, listWorkspaces } = useChat();
 
   useEffect(() => {
     if (connected) listWorkspaces();
   }, [connected, listWorkspaces]);
 
+  const choose = (provider: ProviderView) => {
+    setChosenId(provider.id);
+    setStart({ opening: provider.defaults.opening });
+  };
+
+  // The page opens as the last chat was started: its directory and provider,
+  // and that provider's remembered opening. Once, so a field the user clears
+  // stays clear. The server's own directory is the fallback for a first run.
+  const seeded = useRef(false);
   useEffect(() => {
-    if (!cwd && currentWorkspace) setCwd(currentWorkspace);
-  }, [cwd, currentWorkspace]);
+    if (seeded.current || workspaces === null || ready === null) return;
+    seeded.current = true;
+    setCwd(workspaces[0] ?? currentWorkspace ?? "");
+    const last = ready.find((p) => p.id === lastProviderId);
+    if (last) choose(last);
+  }, [workspaces, currentWorkspace, lastProviderId, ready]);
 
   const chosenProvider = ready?.find((p) => p.id === chosenId);
   // Offered only where the agent said it can list its own sessions — the check
@@ -106,10 +119,7 @@ export function NewChat({
           <button
             key={provider.id}
             className={`provider-choice ${provider.id === chosenId ? "chosen" : ""}`}
-            onClick={() => {
-              setChosenId(provider.id);
-              setStart({});
-            }}
+            onClick={() => choose(provider)}
           >
             <strong>{provider.name}</strong>
             <span className="muted">
@@ -124,7 +134,13 @@ export function NewChat({
           <button
             className="primary"
             disabled={!cwd.trim()}
-            onClick={() => onStart(chosenProvider.id, cwd.trim(), chosen(chosenProvider, start))}
+            onClick={() =>
+              onStart(chosenProvider.id, cwd.trim(), {
+                ...chosen(chosenProvider, start),
+                // Sent even when empty: a cleared opening is forgotten, not kept.
+                opening: start.opening?.trim() ?? "",
+              })
+            }
           >
             Start chat
           </button>

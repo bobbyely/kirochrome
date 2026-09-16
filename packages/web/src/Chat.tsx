@@ -57,6 +57,7 @@ export function Chat({
     resumeSession,
     setConfigOption,
     switchProvider,
+    rememberOpening,
     answerPermission,
     answerElicitation,
     setAutoApprove,
@@ -295,6 +296,7 @@ export function Chat({
             onSetAutoApprove={setAutoApprove}
             onSetConfigOption={setConfigOption}
             onSwitchProvider={switchProvider}
+            onRememberOpening={rememberOpening}
             roots={roots}
             onUnqueue={unqueue}
             onEditQueued={editQueued}

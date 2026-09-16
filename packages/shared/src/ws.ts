@@ -45,6 +45,8 @@ export type ClientMessage =
   | { type: "resume"; sessionId: string; sinceSeq: number }
   | { type: "list_workspaces" }
   | { type: "set_config_option"; sessionId: string; configId: string; value: string | boolean }
+  /** Keep this as the provider's opening command for the next new chat; empty forgets it. */
+  | { type: "remember_opening"; providerId: string; opening: string }
   /** Move the conversation to another provider; see `provider_switched`. */
   | { type: "switch_provider"; sessionId: string; providerId: string }
   | { type: "permission_response"; sessionId: string; requestId: string; optionId: string | null }
@@ -75,7 +77,8 @@ export type ServerMessage =
   | { type: "sessions"; sessions: SessionSummary[] }
   | { type: "search_results"; query: string; hits: SearchHit[] }
   | { type: "command_options_result"; command: string; partial: string; options: CommandOption[] }
-  | { type: "workspaces"; workspaces: string[]; current: string }
+  /** What the new-chat page starts filled with: recent directories and the provider last chatted on. */
+  | { type: "workspaces"; workspaces: string[]; current: string; lastProviderId: string | null }
   | { type: "error"; error: KcError; sessionId?: string };
 
 /**
@@ -186,6 +189,7 @@ const CLIENT_MESSAGE_SPECS: Record<ClientMessage["type"], MessageSpec> = {
   resume: { required: { sessionId: str, sinceSeq: num } },
   list_workspaces: {},
   set_config_option: { required: { sessionId: str, configId: str, value: strOrBool } },
+  remember_opening: { required: { providerId: str, opening: str } },
   switch_provider: { required: { sessionId: str, providerId: str } },
   permission_response: { required: { sessionId: str, requestId: str, optionId: nullableStr } },
   elicitation_response: {

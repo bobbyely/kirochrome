@@ -141,6 +141,8 @@ async function dispatch(
         throw kcError("PROVIDER_UNKNOWN", `No provider configured with id '${msg.providerId}'.`);
       }
       const session = await sessions.open(provider, msg.cwd, msg.start);
+      // Only once the agent is up: a start that failed is not one to repeat.
+      sessions.rememberStart(provider.id, msg.start ?? {});
       send({ type: "session_opened", session: session.summary() });
       return;
     }
@@ -203,7 +205,17 @@ async function dispatch(
 
     case "list_workspaces": {
       // Directories previously worked in, so a new chat can be pointed at one.
-      send({ type: "workspaces", workspaces: sessions.recentWorkspaces(), current: defaultCwd() });
+      send({
+        type: "workspaces",
+        workspaces: sessions.recentWorkspaces(),
+        current: defaultCwd(),
+        lastProviderId: sessions.lastProviderId(),
+      });
+      return;
+    }
+
+    case "remember_opening": {
+      sessions.rememberStart(msg.providerId, { opening: msg.opening });
       return;
     }
 

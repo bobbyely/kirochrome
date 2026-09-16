@@ -287,6 +287,15 @@ export class SessionManager {
     this.store.renameSession(id, trimmed);
   }
 
+  /** The provider of the most recent conversation, so a new chat can start on it. */
+  lastProviderId(): string | null {
+    return this.store.listSessions(1)[0]?.providerId ?? null;
+  }
+
+  rememberStart(providerId: string, start: StartOptions): void {
+    this.store.rememberStart(providerId, start);
+  }
+
   /** Distinct directories already worked in, most recent first. */
   recentWorkspaces(limit = 10): string[] {
     const seen: string[] = [];

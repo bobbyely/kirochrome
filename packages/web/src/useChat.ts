@@ -30,6 +30,7 @@ export function useChat() {
   /** Agent-supplied argument suggestions, keyed by "command\u0000partial". */
   const [commandOptions, setCommandOptions] = useState<Record<string, CommandOption[]>>({});
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
+  const [lastProviderId, setLastProviderId] = useState<string | null>(null);
 
   const ws = useRef<WebSocket | null>(null);
   const lastSeq = useRef(0);
@@ -101,6 +102,7 @@ export function useChat() {
         case "workspaces":
           setWorkspaces(msg.workspaces);
           setCurrentWorkspace(msg.current);
+          setLastProviderId(msg.lastProviderId);
           break;
         case "error":
           setError(msg.error);
@@ -251,6 +253,10 @@ export function useChat() {
     },
     [send],
   );
+  const rememberOpening = useCallback(
+    (providerId: string, opening: string) => send({ type: "remember_opening", providerId, opening }),
+    [send],
+  );
 
   const switchProvider = useCallback(
     (providerId: string) => {
@@ -303,6 +309,7 @@ export function useChat() {
     sessions,
     workspaces,
     currentWorkspace,
+    lastProviderId,
     events,
     error,
     openSession,
@@ -310,6 +317,7 @@ export function useChat() {
     attachSession,
     resumeSession,
     switchProvider,
+    rememberOpening,
     listSessions,
     listWorkspaces,
     archiveSession,

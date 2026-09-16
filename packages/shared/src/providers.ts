@@ -1,5 +1,5 @@
 import type { CheckStage, KcError } from "./errors.js";
-import type { ConfigOption } from "./events.js";
+import type { ConfigOption, StartOptions } from "./events.js";
 
 /**
  * A provider is just "which binary to spawn". Everything else about an agent —
@@ -77,6 +77,13 @@ export interface ProviderCheckResult {
 
 export interface ProviderView extends ProviderConfig {
   lastCheck: ProviderCheckResult | null;
+  /**
+   * What a new conversation on this provider starts with unless changed: the
+   * picker values and opening command last used, on the new-chat page or in
+   * the composer. The server applies `configValues` to every new session on
+   * its own; the UI shows them so the pickers read as what will happen.
+   */
+  defaults: StartOptions;
 }
 
 /** Where the server ran, so the UI can suggest the right install command. */

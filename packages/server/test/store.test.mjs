@@ -88,6 +88,22 @@ describe("provider defaults", () => {
     assert.equal(defaults.get("verbose"), true, "booleans must survive the round trip");
     assert.equal(store.providerDefaults("other").size, 0);
   });
+
+  it("remembers how a chat was started, and forgets an opening that was cleared", () => {
+    store.rememberStart("kiro", { configValues: { model: "small" }, opening: "/effort high" });
+    assert.deepEqual(store.rememberedStart("kiro"), {
+      configValues: { model: "small", verbose: true },
+      opening: "/effort high",
+    });
+
+    store.rememberStart("kiro", { opening: "  " });
+    assert.equal(store.rememberedStart("kiro").opening, undefined, "blank means forget");
+    assert.equal(store.rememberedStart("kiro").configValues.model, "small", "pickers are untouched");
+
+    store.rememberStart("kiro", {});
+    assert.equal(store.rememberedStart("kiro").configValues.model, "small", "nothing chosen changes nothing");
+    assert.deepEqual(store.rememberedStart("other"), {});
+  });
 });
 
 describe("provider checks", () => {

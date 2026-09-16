@@ -146,6 +146,7 @@ async function handleApi(
     const providers: ProviderView[] = config.providers.map((p) => ({
       ...p,
       lastCheck: store.lastCheck(p.id),
+      defaults: store.rememberedStart(p.id),
     }));
     return sendJson(res, 200, { providers, platform: hostPlatform() });
   }
