@@ -67,7 +67,9 @@ each agent before you rely on it and names exactly what is wrong when it
 fails — and remembers what it offers, so you pick the model before a chat,
 schedule or room starts, and can open with a command like `/effort high`.
 Settings an agent exposes only as a command, like Kiro's `/effort`, sit beside
-the model picker anyway.
+the model picker anyway. New chat opens the way the last one started — same
+directory, provider, model and opening command — so a routine start is one
+click, and anything you change is what it remembers next time.
 
 **Point the agent at a file.** Type `@` and pick from the conversation's
 directories — the working directory, and any you added in the Files tab. The

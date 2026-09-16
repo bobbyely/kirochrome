@@ -21,7 +21,7 @@ export function StartPickers({
   compact?: boolean;
 }) {
   const options = provider?.lastCheck?.options ?? [];
-  const values = value.configValues ?? {};
+  const values = { ...provider?.defaults.configValues, ...value.configValues };
   // A check from before the list was kept has nothing to offer; say so
   // rather than showing an empty row.
   const stale = provider?.lastCheck?.status === "ok" && provider.lastCheck.options === undefined;
@@ -72,13 +72,17 @@ function Picker({
   );
 }
 
-/** Only the values the user actually changed from the check's defaults. */
+/**
+ * Only the values the user actually changed from what the session would start
+ * with anyway: the provider's remembered choice, else the check's default.
+ */
 export function chosen(provider: ProviderView | undefined, start: StartOptions): StartOptions {
   const options = provider?.lastCheck?.options ?? [];
+  const remembered = provider?.defaults.configValues ?? {};
   const configValues: Record<string, string | boolean> = {};
   for (const [id, v] of Object.entries(start.configValues ?? {})) {
     const option = options.find((o) => o.id === id);
-    if (option && v !== option.currentValue) configValues[id] = v;
+    if (option && v !== (remembered[id] ?? option.currentValue)) configValues[id] = v;
   }
   const opening = start.opening?.trim();
   return {

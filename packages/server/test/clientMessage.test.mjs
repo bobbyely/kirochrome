@@ -125,6 +125,8 @@ describe("inbound frame validation", () => {
       { type: "list_workspaces" },
       { type: "set_config_option", sessionId: "s1", configId: "model", value: "sonnet" },
       { type: "set_config_option", sessionId: "s1", configId: "thinking", value: true },
+      { type: "remember_opening", providerId: "mock", opening: "/effort high" },
+      { type: "remember_opening", providerId: "mock", opening: "" },
       { type: "switch_provider", sessionId: "s1", providerId: "claude" },
       { type: "permission_response", sessionId: "s1", requestId: "r", optionId: "allow" },
       { type: "permission_response", sessionId: "s1", requestId: "r", optionId: null },

@@ -26,6 +26,7 @@ export function Composer({
   onSetAutoApprove,
   onSetConfigOption,
   onSwitchProvider,
+  onRememberOpening,
   onUnqueue,
   onEditQueued,
   onMoveQueued,
@@ -45,6 +46,8 @@ export function Composer({
   onSetAutoApprove: (enabled: boolean) => void;
   onSetConfigOption: (configId: string, value: string | boolean) => void;
   onSwitchProvider: (providerId: string) => void;
+  /** A command chosen from a picker is what the next new chat on this provider opens with. */
+  onRememberOpening: (providerId: string, opening: string) => void;
   onUnqueue: (index: number) => void;
   onEditQueued: (index: number, text: string) => void;
   onMoveQueued: (from: number, to: number) => void;
@@ -262,7 +265,11 @@ export function Composer({
               command={command}
               options={commandOptions[`${command.name}\u0000`]}
               onOpen={() => requestCommandOptions(command.name, "")}
-              onChoose={(value) => onPrompt(`/${command.name} ${value}`, [], [])}
+              onChoose={(value) => {
+                const opening = `/${command.name} ${value}`;
+                onPrompt(opening, [], []);
+                onRememberOpening(session.providerId, opening);
+              }}
             />
           ))}
           {session?.configOptions.map((option) => (

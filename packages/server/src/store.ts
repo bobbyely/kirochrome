@@ -96,6 +96,14 @@ export class Store {
         PRIMARY KEY (provider_id, config_id)
       ) WITHOUT ROWID;
 
+      -- The opening command last used with a provider, offered as the next new
+      -- chat's default. Not applied by the server: unlike a picker value it is
+      -- a turn, so the user sees it in the field and sends it, or clears it.
+      CREATE TABLE IF NOT EXISTS provider_openings (
+        provider_id TEXT PRIMARY KEY,
+        opening     TEXT NOT NULL
+      ) WITHOUT ROWID;
+
       -- Prompts the server runs on a timer. Here rather than in config.json
       -- because the UI edits them.
       CREATE TABLE IF NOT EXISTS schedules (
@@ -576,6 +584,45 @@ export class Store {
       }
     }
     return defaults;
+  }
+
+  /** Keeps the opening for the next new chat on this provider; empty forgets it. */
+  setProviderOpening(providerId: string, opening: string): void {
+    const trimmed = opening.trim();
+    if (trimmed) {
+      this.db
+        .prepare(
+          `INSERT INTO provider_openings (provider_id, opening) VALUES (?, ?)
+           ON CONFLICT(provider_id) DO UPDATE SET opening = excluded.opening`,
+        )
+        .run(providerId, trimmed);
+    } else {
+      this.db.prepare(`DELETE FROM provider_openings WHERE provider_id = ?`).run(providerId);
+    }
+  }
+
+  /** Everything remembered for a provider, in the shape a new chat is started with. */
+  rememberedStart(providerId: string): StartOptions {
+    const row = this.db
+      .prepare(`SELECT opening FROM provider_openings WHERE provider_id = ?`)
+      .get(providerId) as { opening: string } | undefined;
+    const configValues = Object.fromEntries(this.providerDefaults(providerId));
+    return {
+      ...(Object.keys(configValues).length ? { configValues } : {}),
+      ...(row ? { opening: row.opening } : {}),
+    };
+  }
+
+  /**
+   * Remembers what a new chat was started with, so the next one starts the
+   * same way. Picker values chosen in the composer are remembered as they are
+   * set; this covers the ones chosen up front on the new-chat page.
+   */
+  rememberStart(providerId: string, start: StartOptions): void {
+    for (const [id, value] of Object.entries(start.configValues ?? {})) {
+      this.setProviderDefault(providerId, id, value);
+    }
+    if (start.opening !== undefined) this.setProviderOpening(providerId, start.opening);
   }
 
   // ---------- events (INSERT-only) ----------
